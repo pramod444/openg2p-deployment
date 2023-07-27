@@ -7,7 +7,7 @@ global:
 odoo:
   image:
     repository: openg2p/openg2p-odoo-package
-    tag: "15.0-develop"
+    tag: "15.0-1.1.0"
     pullPolicy: Always
 
   service:
