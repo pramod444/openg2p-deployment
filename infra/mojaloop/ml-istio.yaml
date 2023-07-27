@@ -1,0 +1,269 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-als
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-als.openg2p.sandbox.net
+  http:
+  - match:
+    - uri:
+        prefix: /oracle
+    - uri:
+        prefix: /switch
+    - uri:
+        prefix: /
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-account-lookup-service
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-als-admin
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-als-admin.openg2p.sandbox.net
+  http:
+  - route:
+    - destination:
+        host: ml-account-lookup-service-admin
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-api
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-api-adapter.openg2p.sandbox.net
+  http:
+  - match:
+    - uri:
+        prefix: /switch
+    - uri:
+        prefix: /
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-ml-api-adapter-service
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-central-ledger
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-central-ledger.openg2p.sandbox.net
+  http:
+  - route:
+    - destination:
+        host: ml-centralledger-service
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-quoting
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-quoting.openg2p.sandbox.net
+  http:
+  - match:
+    - uri:
+        prefix: /switch
+    - uri:
+        prefix: /
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-quoting-service
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-transaction-request
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-transaction.openg2p.sandbox.net
+  http:
+  - match:
+    - uri:
+        prefix: /switch
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-transaction-requests-service
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-sim-dfsp1
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-dfsp1.openg2p.sandbox.net
+  http:
+  - match:
+    - uri:
+        prefix: /api/outbound/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp1-scheme-adapter
+        port:
+          number: 4001
+  - match:
+    - uri:
+        prefix: /api/inbound/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp1-scheme-adapter
+        port:
+          number: 4000
+  - match:
+    - uri:
+        prefix: /api/sdktest/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp1-scheme-adapter
+        port:
+          number: 4002
+  - match:
+    - uri:
+        prefix: /api/sim/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp1-backend
+        port:
+          number: 3000
+  - match:
+    - uri:
+        prefix: /api/test/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp1-backend
+        port:
+          number: 3003
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp1-frontend
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-sim-dfsp2
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-dfsp2.openg2p.sandbox.net
+  http:
+  - match:
+    - uri:
+        prefix: /api/outbound/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp2-scheme-adapter
+        port:
+          number: 4001
+  - match:
+    - uri:
+        prefix: /api/inbound/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp2-scheme-adapter
+        port:
+          number: 4000
+  - match:
+    - uri:
+        prefix: /api/sdktest/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp2-scheme-adapter
+        port:
+          number: 4002
+  - match:
+    - uri:
+        prefix: /api/sim/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp2-backend
+        port:
+          number: 3000
+  - match:
+    - uri:
+        prefix: /api/test/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp2-backend
+        port:
+          number: 3003
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: ml-simulators-sim-dfsp2-frontend
+        port:
+          number: 80

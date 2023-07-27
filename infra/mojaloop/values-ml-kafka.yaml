@@ -1,0 +1,17 @@
+logRetentionBytes: _1073741824
+defaultReplicationFactor: 1
+offsetsTopicReplicationFactor: 1
+transactionStateLogReplicationFactor: 1
+replicaCount: 1
+autoCreateTopicsEnable: true
+deleteTopicEnable: true
+
+persistence:
+  enabled: true
+  size: 2Gi
+
+zookeeper:
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 1Gi

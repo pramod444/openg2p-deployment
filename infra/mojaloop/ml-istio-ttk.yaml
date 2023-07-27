@@ -1,0 +1,60 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-ttk
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-ttk.openg2p.sandbox.net
+  http:
+  - match:
+    - uri:
+        prefix: /api
+    route:
+    - destination:
+        host: ml-ttk-ml-testing-toolkit-backend
+        port:
+          number: 5050
+  - match:
+    - uri:
+        prefix: /socket.io
+    route:
+    - destination:
+        host: ml-ttk-ml-testing-toolkit-backend
+        port:
+          number: 5050
+  - match:
+    - uri:
+        prefix: /mojaloop
+    route:
+    - destination:
+        host: ml-ttk-ml-testing-toolkit-backend
+        port:
+          number: 4040
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: ml-ttk-ml-testing-toolkit-frontend
+        port:
+          number: 6060
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-ttk-specapi
+  namespace: ml
+spec:
+  gateways:
+  - istio-system/all-hosts
+  hosts:
+  - ml-ttk-specapi.openg2p.sandbox.net
+  http:
+  - route:
+    - destination:
+        host: ml-ttk-ml-testing-toolkit-backend
+        port:
+          number: 4040

@@ -1,0 +1,6 @@
+token: configure-some-token-here
+node-name: <nodename>
+node-ip: <nodeip>
+node-label: "shouldInstallIstioIngress=true"
+disable:
+  - rke2-ingress-nginx

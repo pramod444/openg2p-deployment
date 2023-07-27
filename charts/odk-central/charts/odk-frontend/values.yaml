@@ -1,0 +1,76 @@
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 80
+
+image:
+  registry: docker.io
+  repository: openg2p/odk-central-frontend
+  tag: v2023.1.0
+  pullPolicy: Always
+
+containerPort: 80
+
+startupProbe:
+  enabled: true
+  httpGet:
+    path: "/"
+    port: 80
+  initialDelaySeconds: 0
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 10
+  successThreshold: 1
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: "/"
+    port: 80
+  initialDelaySeconds: 20
+  periodSeconds: 60
+  timeoutSeconds: 5
+  failureThreshold: 2
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: "/"
+    port: 80
+  initialDelaySeconds: 0
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 2
+  successThreshold: 1
+
+command: []
+args: []
+
+resources:
+  limits: {}
+  #   cpu: 200m
+  #   memory: 256Mi
+  requests: {}
+  #   cpu: 100m
+  #   memory: 1500Mi
+
+containerSecurityContext:
+  enabled: false
+  runAsUser: odk
+  runAsNonRoot: true
+
+podSecurityContext:
+  enabled: false
+  fsGroup: 1001
+
+extraEnvVars: []
+
+extraEnvVarsCM: []
+
+extraEnvVarsSecret: []
+
+# Donot change the following. For now.
+sslType: upstream
+nginxDomain: "_"

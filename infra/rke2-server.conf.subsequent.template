@@ -1,0 +1,9 @@
+token: configure-some-token-here
+server: https://<primary-server-ip>:9345
+node-name: <nodename>
+node-ip: <nodeip>
+node-label: "shouldInstallIstioIngress=true"
+disable:
+  - rke2-ingress-nginx
+tls-san:
+  - <nodeip>

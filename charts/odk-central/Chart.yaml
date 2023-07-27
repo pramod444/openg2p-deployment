@@ -1,0 +1,33 @@
+apiVersion: v2
+name: odk-central
+description: A Helm chart for odk-central.
+type: application
+version: 0.1.0
+appVersion: ""
+dependencies: 
+  - name: odk-central-mail
+    version: 0.1.0
+    repository: file://charts/odk-mail
+    condition: odk-central-mail.enabled
+  - name: odk-central-pyxform
+    version: 0.1.0
+    repository: file://charts/odk-pyxform
+    condition: odk-central-pyxform.enabled
+  - name: odk-central-enketo
+    version: 0.1.0
+    repository: file://charts/odk-enketo
+    condition: odk-central-enketo.enabled
+  - name: odk-central-backend
+    version: 0.1.0
+    repository: file://charts/odk-backend
+    condition: odk-central-backend.enabled
+  - name: odk-central-frontend
+    version: 0.1.0
+    repository: file://charts/odk-frontend
+    condition: odk-central-frontend.enabled
+keywords:
+  - odk
+  - odk-central
+maintainers:
+  - email: kotalalith@gmail.com
+    name: lalithkota

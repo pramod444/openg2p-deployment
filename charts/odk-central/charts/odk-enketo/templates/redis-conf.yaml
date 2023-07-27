@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-redis
+data:
+  {{- $files := .Files }}
+  {{- range tuple "redis-enketo-main.conf" "redis-enketo-cache.conf" }}
+  {{ . }}: |-
+      {{ $files.Get . | nindent 6 }}
+  {{- end }}

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: openg2p
+description: A Helm chart for OpenG2P Package
+type: application
+version: 1.0.0
+appVersion: ""
+dependencies:
+- name: odk-central-mail
+  alias: mail
+  version: 0.1.0
+  repository: file://charts/mail
+  condition: mail.enabled
+- name: odoo
+  repository: https://charts.bitnami.com/bitnami
+  version: 21.6.5
+  condition: odoo.enabled

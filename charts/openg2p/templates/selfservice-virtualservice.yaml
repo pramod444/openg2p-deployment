@@ -1,0 +1,50 @@
+{{- if .Values.selfServiceIngress.enabled }}
+{{- if eq .Values.selfServiceIngress.type "istio" }}
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{ include "openg2p.fullname" . }}-self-service
+  labels:
+    {{- include "openg2p.labels" . | nindent 4 }}
+spec:
+  hosts:
+  {{- if .Values.selfServiceIngress.istio.virtualservice.host }}
+  - {{ .Values.selfServiceIngress.istio.virtualservice.host }}
+  {{- else }}
+  - {{ .Values.global.selfServiceHostname }}
+  {{- end }}
+  gateways:
+    - {{ .Values.selfServiceIngress.istio.virtualservice.gateway }}
+  http:
+  - match:
+    - uri:
+        exact: /
+    - uri:
+        exact: /my
+    - uri:
+        prefix: /my/
+    - uri:
+        exact: /web
+    - uri:
+        exact: /web/login
+    - uri:
+        exact: /web/database/selector
+    redirect:
+      uri: /selfservice
+  - match:
+    - uri:
+        prefix: /serviceprovider
+    redirect:
+      authority:
+        {{- if .Values.serviceProviderIngress.istio.virtualservice.host }}
+        {{ .Values.serviceProviderIngress.istio.virtualservice.host }}
+        {{- else }}
+        {{ .Values.global.serviceProviderHostname }}
+        {{- end }}
+  - route:
+    - destination:
+        host: {{ include "openg2p.fullname" . }}-odoo
+        port:
+          number: {{ .Values.odoo.service.port }}
+{{- end }}
+{{- end }}

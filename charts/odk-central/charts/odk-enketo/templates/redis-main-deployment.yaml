@@ -1,0 +1,30 @@
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}-redis-main
+  labels:
+    app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+    spec:
+      containers:
+        - name: redis-main
+          image: redis:5
+          imagePullPolicy: IfNotPresent
+          command: 
+          - redis-server
+          - /usr/local/etc/redis/mnt/redis-enketo-main.conf
+          volumeMounts:
+          - name: redis-conf
+            mountPath: /usr/local/etc/redis/mnt
+      volumes:
+        - name: redis-conf
+          configMap:
+            name: enketo-redis

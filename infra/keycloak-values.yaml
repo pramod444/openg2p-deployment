@@ -1,0 +1,31 @@
+service:
+  type: ClusterIP
+
+auth:
+  adminUser: admin
+
+ingress:
+  enabled: true
+  extraTls:
+  - hosts:
+    - ""
+    secretName: tls-keycloak-ingress
+
+replicaCount: 2
+
+resources:
+  limits: {}
+  requests:
+    cpu: 200m
+    memory: 1000Mi
+
+rbac:
+  create: true
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    verbs:
+    - get
+    - list

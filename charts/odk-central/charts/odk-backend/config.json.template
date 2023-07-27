@@ -1,0 +1,37 @@
+{
+  "default": {
+    "database": {
+      "host": "postgres",
+      "user": "odk",
+      "password": "odk",
+      "database": "odk"
+    },
+    "email": {
+      "serviceAccount": "${SYSADMIN_EMAIL}",
+      "transport": "smtp",
+      "transportOpts": {
+        "host": "mail",
+        "port": 25
+      }
+    },
+    "xlsform": {
+      "host": "pyxform",
+      "port": 80
+    },
+    "enketo": {
+      "url": "http://enketo:8005/-",
+      "apiKey": "${ENKETO_API_KEY}"
+    },
+    "env": {
+      "domain": "https://${DOMAIN}:${HTTPS_PORT}",
+      "sysadminAccount": "${SYSADMIN_EMAIL}"
+    },
+    "external": {
+      "sentry": {
+        "orgSubdomain": "o130137",
+        "key": "3cf75f54983e473da6bd07daddf0d2ee",
+        "project": "1298632"
+      }
+    }
+  }
+}

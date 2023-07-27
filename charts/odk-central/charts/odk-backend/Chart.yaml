@@ -1,0 +1,22 @@
+apiVersion: v2
+name: odk-central-backend
+description: A Helm chart for odk-central-backend.
+type: application
+version: 0.1.0
+appVersion: ""
+dependencies:
+- name: common
+  repository: https://charts.bitnami.com/bitnami
+  tags:
+   - bitnami-common
+  version: 1.x.x
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  tags:
+   - postgresql
+  version: 11.x.x
+  condition: postgresql.enabled
+keywords:
+  - odk
+  - odk-central
+  - odk-central-backend
