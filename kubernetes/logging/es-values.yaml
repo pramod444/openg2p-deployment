@@ -1,0 +1,18 @@
+global:
+  kibanaEnabled: true
+master:
+  replicaCount: 1
+  persistence:
+    size: 8Gi
+data:
+  replicaCount: 1
+  persistence:
+    size: 8Gi
+coordinating:
+  replicaCount: 1
+ingest:
+  replicaCount: 1
+
+kibana:
+  persistence:
+    enabled: false

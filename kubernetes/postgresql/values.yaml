@@ -1,0 +1,18 @@
+auth:
+  username: "openg2puser"
+  database: "openg2pdb"
+
+primary:
+  extendedConfiguration: |-
+    wal_level = logical
+    max_wal_senders = 20
+    max_replication_slots = 10
+
+  initdb:
+    scripts:
+      create_dbs_and_users.sh: |
+          #!/bin/bash
+          PGPASSWORD=$POSTGRES_POSTGRES_PASSWORD psql -U postgres -d postgres -c "CREATE ROLE odkuser WITH LOGIN NOSUPERUSER CREATEDB CREATEROLE INHERIT REPLICATION CONNECTION LIMIT -1 PASSWORD '"$POSTGRES_PASSWORD"';"
+          PGPASSWORD=$POSTGRES_POSTGRES_PASSWORD psql -U postgres -d postgres -c "CREATE ROLE keycloakuser WITH LOGIN NOSUPERUSER CREATEDB CREATEROLE INHERIT REPLICATION CONNECTION LIMIT -1 PASSWORD '"$POSTGRES_PASSWORD"';"
+          PGPASSWORD=$POSTGRES_POSTGRES_PASSWORD psql -U postgres -d postgres -c "CREATE DATABASE odkdb WITH OWNER = odkuser TEMPLATE = template0 ENCODING = 'UTF8' TABLESPACE = pg_default CONNECTION LIMIT = -1;"
+          PGPASSWORD=$POSTGRES_POSTGRES_PASSWORD psql -U postgres -d postgres -c "CREATE DATABASE keycloakdb WITH OWNER = keycloakuser TEMPLATE = template0 ENCODING = 'UTF8' TABLESPACE = pg_default CONNECTION LIMIT = -1;"

@@ -1,0 +1,29 @@
+redis:
+  enabled: false
+configuration:
+  content: |-
+    provider = "keycloak-oidc"
+    login_url = "https://${KEYCLOAK_HOSTNAME}/realms/${REALM_NAME}/protocol/openid-connect/auth"
+    oidc_issuer_url = "https://${KEYCLOAK_HOSTNAME}/realms/${REALM_NAME}"
+    oidc_jwks_url = "http://keycloak.keycloak/realms/${REALM_NAME}/protocol/openid-connect/certs"
+    redeem_url = "http://keycloak.keycloak/realms/${REALM_NAME}/protocol/openid-connect/token"
+    validate_url = "http://keycloak.keycloak/realms/${REALM_NAME}/protocol/openid-connect/userinfo"
+    redirect_url = "https://${KEYCLOAK_HOSTNAME}/oauth2/callback"
+    email_domains = ["*"]
+    whitelist_domains = ["*.${ROOT_HOSTNAME}"]
+    cookie_domains = ["${ROOT_HOSTNAME}"]
+    cookie_name = "_oauth2_proxy_${ROOT_HOSTNAME}"
+    upstreams = ["static://200"]
+    cookie_refresh = "60s"
+    pass_access_token = true
+    pass_authorization_header = true
+    prefer_email_to_user = true
+    reverse_proxy = true
+    silence_ping_logging = true
+    set_xauthrequest = true
+    set_authorization_header = true
+    skip_auth_preflight = true
+    skip_jwt_bearer_tokens = true
+    skip_oidc_discovery = true
+    skip_provider_button = true
+    insecure_oidc_allow_unverified_email = true

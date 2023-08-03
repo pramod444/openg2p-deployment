@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: kibana
+spec:
+  gateways:
+    - istio-system/all-hosts
+  hosts:
+    - ${KIBANA_HOSTNAME}
+  http:
+    - route:
+        - destination:
+            host: elasticsearch-kibana
+            port:
+              number: 5601
+      headers:
+        request:
+          set:
+            x-forwarded-proto: https

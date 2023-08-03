@@ -40,10 +40,6 @@ spec:
             value: 443
           - path: spec.template.spec.containers.[name:istio-proxy].ports.[containerPort:5432].hostPort
             value: 5432
-          - path: spec.template.spec.containers.[name:istio-proxy].ports.[containerPort:5433].hostPort
-            value: 5433
-          - path: spec.template.spec.containers.[name:istio-proxy].ports.[containerPort:5434].hostPort
-            value: 5434
         service:
           type: ClusterIP
           ports:
@@ -59,10 +55,4 @@ spec:
             name: http2
           - port: 5432
             targetPort: 5432
-            name: tcp-postgres01
-          - port: 5433
-            targetPort: 5433
-            name: tcp-postgres02
-          - port: 5434
-            targetPort: 5434
-            name: tcp-postgres03
+            name: tcp-postgres
