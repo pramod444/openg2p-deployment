@@ -1,0 +1,322 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: sample-ext-oauth2-filter
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        portNumber: 8080
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+            subFilter:
+              name: "envoy.filters.http.router"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.rbac
+        typed_config:
+          "@type": "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC"
+          shadow_rules:
+            action: DENY
+            policies:
+              "istio-ext-authz":
+                permissions:
+                - url_path:
+                    path:
+                      prefix: "/httpbin"
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${KIBANA_HOSTNAME}
+                      ignore_case: true
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${KAFKA_UI_HOSTNAME}
+                      ignore_case: true
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${BANK1_HOSTNAME}
+                      ignore_case: true
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${BANK2_HOSTNAME}
+                      ignore_case: true
+                principals:
+                - any: true
+          shadow_rules_stat_prefix: istio_ext_authz_
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        portNumber: 8080
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+            subFilter:
+              name: "envoy.filters.http.router"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.ext_authz
+        typed_config:
+          "@type": "type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz"
+          http_service:
+            server_uri:
+              uri: "http://oauth2-proxy.keycloak.svc.cluster.local"
+              cluster: "outbound|80||oauth2-proxy.keycloak.svc.cluster.local"
+              timeout: "600s"
+            authorization_request:
+              allowed_headers:
+                patterns:
+                - exact: authorization
+                  ignore_case: true
+                - exact: cookie
+                  ignore_case: true
+              headers_to_add:
+              - key: X-Auth-Request-Redirect
+                value: "https://%REQ(:authority)%%REQ(:path)%"
+            authorization_response:
+              allowed_upstream_headers:
+                patterns:
+                - exact: authorization
+                  ignore_case: true
+                - exact: path
+                  ignore_case: true
+              allowed_client_headers:
+                patterns:
+                - exact: content-type
+                  ignore_case: true
+                - exact: set-cookie
+                  ignore_case: true
+          transport_api_version: V3
+          filter_enabled_metadata:
+            filter: envoy.filters.http.rbac
+            path:
+            - key: istio_ext_authz_shadow_effective_policy_id
+            value:
+              string_match:
+                prefix: istio-ext-authz
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        portNumber: 8080
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+            subFilter:
+              name: "envoy.filters.http.router"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.jwt_authn
+        typed_config:
+          "@type": "type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication"
+          providers:
+            oauth2-istio-0:
+              issuer: "https://${KEYCLOAK_HOSTNAME}/realms/${REALM_NAME}"
+              audiences:
+              - istio-auth-client
+              remote_jwks:
+                http_uri:
+                  uri: https://keycloak.keycloak.svc.cluster.local/realms/${REALM_NAME}/protocol/openid-connect/certs
+                  cluster: outbound|80||keycloak.keycloak.svc.cluster.local
+                  timeout: 1s
+              payload_in_metadata: istio_jwt_payload
+              forward: true
+          rules:
+          - match:
+              prefix: "/httpbin"
+            requires:
+              provider_name: oauth2-istio-0
+          - match:
+              headers:
+              - name: ":authority"
+                string_match:
+                  exact: ${KIBANA_HOSTNAME}
+                  ignore_case: true
+              prefix: "/"
+            requires:
+              provider_name: oauth2-istio-0
+          - match:
+              headers:
+              - name: ":authority"
+                string_match:
+                  exact: ${KAFKA_UI_HOSTNAME}
+                  ignore_case: true
+              prefix: "/"
+            requires:
+              provider_name: oauth2-istio-0
+          - match:
+              headers:
+              - name: ":authority"
+                string_match:
+                  exact: ${BANK1_HOSTNAME}
+                  ignore_case: true
+              prefix: "/"
+            requires:
+              provider_name: oauth2-istio-0
+          - match:
+              headers:
+              - name: ":authority"
+                string_match:
+                  exact: ${BANK2_HOSTNAME}
+                  ignore_case: true
+              prefix: "/"
+            requires:
+              provider_name: oauth2-istio-0
+          - match:
+              headers:
+              - name: ":authority"
+                string_match:
+                  prefix: "ml-"
+              prefix: "/"
+            requires:
+              provider_name: oauth2-istio-0
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        portNumber: 8080
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+            subFilter:
+              name: "envoy.filters.http.router"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.rbac.mydeny
+        typed_config:
+          "@type": "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC"
+          rules:
+            action: DENY
+            policies:
+              "httpbinPolicy":
+                permissions:
+                - url_path:
+                    path:
+                      prefix: "/httpbin"
+                principals:
+                - not_id:
+                    metadata:
+                      filter: envoy.filters.http.jwt_authn
+                      path:
+                        - key: istio_jwt_payload
+                        - key: groups
+                      value:
+                        list_match:
+                          one_of:
+                            string_match:
+                              exact: httpbin_access
+                              ignore_case: true
+              "kibanaPolicy":
+                permissions:
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${KIBANA_HOSTNAME}
+                      ignore_case: true
+                principals:
+                - not_id:
+                    metadata:
+                      filter: envoy.filters.http.jwt_authn
+                      path:
+                        - key: istio_jwt_payload
+                        - key: groups
+                      value:
+                        list_match:
+                          one_of:
+                            string_match:
+                              exact: kibana_access
+                              ignore_case: true
+              "kafkaUiPolicy":
+                permissions:
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${KAFKA_UI_HOSTNAME}
+                      ignore_case: true
+                principals:
+                - not_id:
+                    metadata:
+                      filter: envoy.filters.http.jwt_authn
+                      path:
+                        - key: istio_jwt_payload
+                        - key: groups
+                      value:
+                        list_match:
+                          one_of:
+                            string_match:
+                              exact: kafka_ui_access
+                              ignore_case: true
+              "bank1Policy":
+                permissions:
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${BANK1_HOSTNAME}
+                      ignore_case: true
+                principals:
+                - not_id:
+                    metadata:
+                      filter: envoy.filters.http.jwt_authn
+                      path:
+                        - key: istio_jwt_payload
+                        - key: groups
+                      value:
+                        list_match:
+                          one_of:
+                            string_match:
+                              exact: bank1_access
+                              ignore_case: true
+              "bank2Policy":
+                permissions:
+                - header:
+                    name: ":authority"
+                    string_match:
+                      exact: ${BANK2_HOSTNAME}
+                      ignore_case: true
+                principals:
+                - not_id:
+                    metadata:
+                      filter: envoy.filters.http.jwt_authn
+                      path:
+                        - key: istio_jwt_payload
+                        - key: groups
+                      value:
+                        list_match:
+                          one_of:
+                            string_match:
+                              exact: bank2_access
+                              ignore_case: true
+              "mlPolicy":
+                permissions:
+                - header:
+                    name: ":authority"
+                    string_match:
+                      prefix: "ml-"
+                      ignore_case: true
+                principals:
+                - not_id:
+                    metadata:
+                      filter: envoy.filters.http.jwt_authn
+                      path:
+                        - key: istio_jwt_payload
+                        - key: groups
+                      value:
+                        list_match:
+                          one_of:
+                            string_match:
+                              exact: ml_access
+                              ignore_case: true
