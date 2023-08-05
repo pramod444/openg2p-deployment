@@ -1,8 +1,5 @@
 # OpenG2P Deployment
-This repository contains instructions and scripts to deploy OpenG2P on Kubernetes infrastructure.
+This repository contains instructions and scripts to deploy OpenG2P on Kubernetes infrastructure. Refer to [OpenG2P Docs](https://docs.openg2p.org/v/1.1) for detailed installation instructions.
 
-## Installation
-*  Refer to [Deployment Guide](https://docs.openg2p.org/guides/deployment-guide)
-
-## Licenses
+## License
 This repository is licensed under [MPL-2.0](LICENSE).
