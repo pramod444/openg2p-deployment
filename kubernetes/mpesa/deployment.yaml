@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: simple-mpesa
-          image: lalithkota/simple-mpesa:v0.1-alpha  # Replace with your Docker image URL
+          image: openg2p/simple-mpesa:v0.1-alpha  # Replace with your Docker image URL
           ports:
             - containerPort: 6700  # The port your app listens on
           volumeMounts:
