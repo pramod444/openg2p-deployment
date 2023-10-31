@@ -1,0 +1,25 @@
+envVars:
+  SPAR_CORE_DB_HOSTNAME: "postgres-postgresql.postgres"
+
+envVarsFrom:
+  SPAR_CORE_DB_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: postgres-postgresql
+        key: password
+
+postgresql:
+  enabled: false
+
+sunbird-rc-g2p-mapper-registry:
+  registry:
+    envVars:
+      connectionInfo_uri: "jdbc:postgresql://postgres-postgresql.postgres:5432/spar-mapper-registry"
+    envVarsFrom:
+      connectionInfo_password:
+        valueFrom:
+          secretKeyRef:
+            name: postgres-postgresql
+            key: password
+    postgresql:
+      enabled: false
