@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "type": "object",
+  "properties": {
+    "FinancialAddressMapper": {
+      "$ref": "#/definitions/FinancialAddressMapper"
+    }
+  },
+  "required": [
+    "FinancialAddressMapper"
+  ],
+  "title":"FinancialAddressMapper",
+  "definitions": {
+    "FinancialAddressMapper": {
+      "$id": "#/properties/FinancialAddressMapper",
+      "type": "object",
+      "title": "The FinancialAddressMapper Schema",
+      "required": [
+        "id",
+        "fa"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "^[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+$"
+        },
+        "fa": {
+          "type": "string",
+          "format": "^[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mobile_number": {
+          "type": "string"
+        },
+        "additional_info": {
+          "type": "object"
+        },
+        "locale": {
+          "type": "string",
+          "format": "^[a-z]{3,3}$"
+        }
+      }
+    }
+  },
+  "_osConfig": {
+    "privateFields": [],
+    "signedFields": [],
+    "indexFields": [],
+    "uniqueIndexFields": ["id"],
+    "systemFields": [
+      "osCreatedAt",
+      "osUpdatedAt",
+      "osCreatedBy",
+      "osUpdatedBy"
+    ],
+    "inviteRoles":["anonymous"],
+    "roles":["anonymous"]
+  }
+}
