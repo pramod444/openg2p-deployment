@@ -1,4 +1,4 @@
-logRetentionBytes: _1073741824
+logRetentionHours: "2"
 defaultReplicationFactor: 1
 offsetsTopicReplicationFactor: 1
 transactionStateLogReplicationFactor: 1
@@ -11,7 +11,11 @@ persistence:
   size: 2Gi
 
 zookeeper:
+  enabled: true
   replicaCount: 1
   persistence:
     enabled: true
     size: 1Gi
+
+kraft:
+  enabled: false

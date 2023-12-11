@@ -6,4 +6,3 @@
 COPY_UTIL=../utils/copy_cm_func.sh
 DST_NS=openg2p
 $COPY_UTIL secret postgres-postgresql postgres $DST_NS 
-
