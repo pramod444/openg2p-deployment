@@ -1,5 +1,10 @@
+global:
+  hostname: spar.openg2p.sandbox.net
+
 envVars:
   SPAR_CORE_DB_HOSTNAME: "postgres-postgresql.postgres"
+  SPAR_CORE_AUTH_DEFAULT_ISSUERS: '["https://esignet.openg2p.sandbox.net/v1/esignet"]'
+  SPAR_CORE_AUTH_DEFAULT_JWKS_URLS: '["https://esignet.openg2p.sandbox.net/v1/esignet/oauth/.well-known/jwks.json"]'
 
 envVarsFrom:
   SPAR_CORE_DB_PASSWORD:

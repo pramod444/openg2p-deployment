@@ -1,0 +1,16 @@
+global:
+  hostname: gctb.openg2p.sandbox.net
+
+envVars:
+  GCTB_CORE_DB_HOSTNAME: "postgres-postgresql.postgres"
+  GCTB_CORE_DEFAULT_ID_TOKEN_VERIFY_AT_HASH: "false"
+
+envVarsFrom:
+  GCTB_CORE_DB_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: postgres-postgresql
+        key: password
+
+postgresql:
+  enabled: false
