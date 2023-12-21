@@ -137,7 +137,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-dfsp1.openg2p.sandbox.net
+  - bank1.openg2p.sandbox.net
   http:
   - match:
     - uri:
@@ -207,7 +207,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-dfsp2.openg2p.sandbox.net
+  - bank2.openg2p.sandbox.net
   http:
   - match:
     - uri:
