@@ -1,0 +1,31 @@
+global:
+  hostname: spar.openg2p.sandbox.net
+
+envVars:
+  SPAR_CORE_DB_HOSTNAME: "postgres-postgresql.postgres"
+  SPAR_CORE_DEFAULT_ID_TOKEN_VERIFY_AT_HASH: "false"
+  SPAR_CORE_AUTH_DEFAULT_ISSUERS: '["https://esignet.openg2p.sandbox.net/v1/esignet"]'
+  SPAR_CORE_AUTH_DEFAULT_JWKS_URLS: '["https://esignet.openg2p.sandbox.net/v1/esignet/oauth/.well-known/jwks.json"]'
+
+envVarsFrom:
+  SPAR_CORE_DB_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: postgres-postgresql
+        key: password
+
+postgresql:
+  enabled: false
+
+sunbird-rc-g2p-mapper-registry:
+  registry:
+    envVars:
+      connectionInfo_uri: "jdbc:postgresql://postgres-postgresql.postgres:5432/spar-mapper-registry"
+    envVarsFrom:
+      connectionInfo_password:
+        valueFrom:
+          secretKeyRef:
+            name: postgres-postgresql
+            key: password
+    postgresql:
+      enabled: false

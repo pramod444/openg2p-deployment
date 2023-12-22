@@ -1,8 +1,9 @@
 {
 	"info": {
-		"_postman_id": "b24420ac-4c63-4152-a13b-9448a060e6ee",
+		"_postman_id": "6665054b-ce2a-48df-881d-d979833a504b",
 		"name": "MojaloopHub_Setup_simplified",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "30017727"
 	},
 	"item": [
 		{
@@ -500,7 +501,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"oracleIdType\": \"ACCOUNT_ID\",\n  \"endpoint\": {\n    \"value\": \"http://ml-oracle-accountid-simulator/oracle\",\n    \"endpointType\": \"URL\"\n  },\n  \"currency\": \"{{currency}}\",\n  \"isDefault\": true\n}"
+							"raw": "{\n  \"oracleIdType\": \"ACCOUNT_ID\",\n  \"endpoint\": {\n    \"value\": \"http://spar-social-payments-account-registry.spar/internal/mojaloop\",\n    \"endpointType\": \"URL\"\n  },\n  \"currency\": \"{{currency}}\",\n  \"isDefault\": true\n}"
 						},
 						"url": {
 							"raw": "{{HOST_ACCOUNT_LOOKUP_ADMIN}}/oracles",
@@ -557,6 +558,65 @@
 						"body": {
 							"mode": "raw",
 							"raw": "{\n  \"oracleIdType\": \"ALIAS\",\n  \"endpoint\": {\n    \"value\": \"http://ml-oracle-alias-simulator/oracle\",\n    \"endpointType\": \"URL\"\n  },\n  \"currency\": \"{{currency}}\",\n  \"isDefault\": true\n}"
+						},
+						"url": {
+							"raw": "{{HOST_ACCOUNT_LOOKUP_ADMIN}}/oracles",
+							"host": [
+								"{{HOST_ACCOUNT_LOOKUP_ADMIN}}"
+							],
+							"path": [
+								"oracles"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get all oracles",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/vnd.interoperability.participants+json;version=1"
+							},
+							{
+								"key": "Cache-Control",
+								"value": "no-cache"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/vnd.interoperability.participants+json;version=1.0"
+							},
+							{
+								"key": "Date",
+								"value": ""
+							},
+							{
+								"key": "Postman-Token",
+								"value": "003d55c1-2ebc-4e25-b9da-26bf053a8a5c"
+							},
+							{
+								"key": "cache-control",
+								"value": "no-cache"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
 						},
 						"url": {
 							"raw": "{{HOST_ACCOUNT_LOOKUP_ADMIN}}/oracles",
@@ -679,7 +739,7 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n\t\"currency\": \"{{currency}}\",\n\t\"limit\": {\n\t  \"type\": \"NET_DEBIT_CAP\",\n\t  \"value\": 100000\n\t},\n\t\"initialPosition\": 0\n}"
+											"raw": "{\n\t\"currency\": \"{{currency}}\",\n\t\"limit\": {\n\t  \"type\": \"NET_DEBIT_CAP\",\n\t  \"value\": 1000000000\n\t},\n\t\"initialPosition\": 0\n}"
 										},
 										"url": {
 											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/dfsp1/initialPositionAndLimits",
@@ -705,7 +765,7 @@
 													"var uuid = require('uuid');",
 													"var generatedUUID = uuid.v4();",
 													"pm.environment.set('fundsInPrepareTransferId', generatedUUID);",
-													"pm.environment.set('fundsInPrepareAmount', 5000);",
+													"pm.environment.set('fundsInPrepareAmount', 2000000000);",
 													"",
 													"",
 													"const hubGetStatusRequest = {",
@@ -2103,7 +2163,7 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n\t\"currency\": \"{{currency}}\",\n\t\"limit\": {\n\t  \"type\": \"NET_DEBIT_CAP\",\n\t  \"value\": 100000\n\t},\n\t\"initialPosition\": 0\n}"
+											"raw": "{\n\t\"currency\": \"{{currency}}\",\n\t\"limit\": {\n\t  \"type\": \"NET_DEBIT_CAP\",\n\t  \"value\": 1000000000\n\t},\n\t\"initialPosition\": 0\n}"
 										},
 										"url": {
 											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/dfsp2/initialPositionAndLimits",
@@ -2129,7 +2189,7 @@
 													"var uuid = require('uuid');",
 													"var generatedUUID = uuid.v4();",
 													"pm.environment.set('fundsInPrepareTransferId', generatedUUID);",
-													"pm.environment.set('fundsInPrepareAmount', 5000);",
+													"pm.environment.set('fundsInPrepareAmount', 2000000000);",
 													"",
 													"",
 													"const hubGetStatusRequest = {",
@@ -3244,7 +3304,7 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n  \"type\": \"NET_DEBIT_CAP_THRESHOLD_BREACH_EMAIL\",\n  \"value\": \"lalith@openg2p.org\"\n}"
+											"raw": "{\n  \"type\": \"NET_DEBIT_CAP_THRESHOLD_BREACH_EMAIL\",\n  \"value\": \"{{ADMIN_EMAIL}}\"\n}"
 										},
 										"url": {
 											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/dfsp2/endpoints",
@@ -3292,7 +3352,7 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n  \"type\": \"NET_DEBIT_CAP_ADJUSTMENT_EMAIL\",\n  \"value\": \"lalith@openg2p.org\"\n}"
+											"raw": "{\n  \"type\": \"NET_DEBIT_CAP_ADJUSTMENT_EMAIL\",\n  \"value\": \"{{ADMIN_EMAIL}}\"\n}"
 										},
 										"url": {
 											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/dfsp2/endpoints",
@@ -3340,7 +3400,7 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n  \"type\": \"SETTLEMENT_TRANSFER_POSITION_CHANGE_EMAIL\",\n  \"value\": \"lalith@openg2p.org\"\n}"
+											"raw": "{\n  \"type\": \"SETTLEMENT_TRANSFER_POSITION_CHANGE_EMAIL\",\n  \"value\": \"{{ADMIN_EMAIL}}\"\n}"
 										},
 										"url": {
 											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/dfsp2/endpoints",
@@ -3350,6 +3410,1368 @@
 											"path": [
 												"participants",
 												"dfsp2",
+												"endpoints"
+											]
+										},
+										"description": "Generated from a curl request: \ncurl -i -X POST     http://test-central-ledger.mojaloop.test/admin/participants/testfsp2/initialPositionAndLimits     -H 'Cache-Control: no-cache'     -H 'Content-Type: application/json'     -d '{\n    \\\"currency\\\": \\\"USD\\\",\n    \\\"limit\\\": {\n      \\\"type\\\": \\\"NET_DEBIT_CAP\\\",\n      \\\"value\\\": 1000\n    },\n    \\\"initialPosition\\\": 0\n  }'"
+									},
+									"response": []
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "walletfsp",
+					"item": [
+						{
+							"name": "accounts",
+							"item": [
+								{
+									"name": "Add payeefsp",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "{{hub_operator}}",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\"name\": \"testingtoolkitdfsp\",\"currency\": \"{{currency}}\"}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add initial position and limits - payeefsp",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "{{hub_operator}}",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n\t\"currency\": \"{{currency}}\",\n\t\"limit\": {\n\t  \"type\": \"NET_DEBIT_CAP\",\n\t  \"value\": 1000000000\n\t},\n\t\"initialPosition\": 0\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/initialPositionAndLimits",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"initialPositionAndLimits"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Deposit Funds - Payeefsp",
+									"event": [
+										{
+											"listen": "prerequest",
+											"script": {
+												"exec": [
+													"var uuid = require('uuid');",
+													"var generatedUUID = uuid.v4();",
+													"pm.environment.set('fundsInPrepareTransferId', generatedUUID);",
+													"pm.environment.set('fundsInPrepareAmount', 2000000000);",
+													"",
+													"",
+													"const hubGetStatusRequest = {",
+													"  url: pm.environment.get(\"HOST_CENTRAL_LEDGER\")+pm.environment.get(\"BASE_CENTRAL_LEDGER_ADMIN\")+'/participants/testingtoolkitdfsp/accounts',",
+													"  method: 'GET',",
+													"  header: {",
+													"      \"Authorization\":\"Bearer \"+pm.environment.get(\"HUB_OPERATOR_BEARER_TOKEN\"),",
+													"      \"FSPIOP-Source\": pm.environment.get(\"hub_operator\"),",
+													"      \"Content-Type\": \"application/json\"",
+													"  }",
+													"};",
+													"pm.sendRequest(hubGetStatusRequest, function (err, response) {",
+													"    console.log(response.json())",
+													"    var jsonData = response.json()",
+													"    for(var i in jsonData) {",
+													"        if(jsonData[i].ledgerAccountType === 'SETTLEMENT') {",
+													"            pm.environment.set(\"walletfspSettlementAccountId\",jsonData[i].id)",
+													"        }",
+													"    }",
+													"});",
+													"",
+													""
+												],
+												"type": "text/javascript"
+											}
+										},
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 202\", function () {",
+													"    pm.response.to.have.status(202);",
+													"});",
+													"",
+													"setTimeout(function () {",
+													"    const payeefspGetStatusRequest = {",
+													"      url: pm.environment.get(\"HOST_CENTRAL_LEDGER\")+pm.environment.get(\"BASE_CENTRAL_LEDGER_ADMIN\")+'/participants/'+pm.environment.get(\"payeefsp\")+'/accounts',",
+													"      method: 'GET',",
+													"      header: {",
+													"          \"Authorization\":\"Bearer \"+pm.environment.get(\"HUB_OPERATOR_BEARER_TOKEN\"),",
+													"          \"FSPIOP-Source\": pm.environment.get(\"hub_operator\"),",
+													"          \"Content-Type\": \"application/json\"",
+													"      }",
+													"    };",
+													"    pm.sendRequest(payeefspGetStatusRequest, function (err, response) {",
+													"        console.log(response.json())",
+													"        var jsonData = response.json()",
+													"        var payeefspSettlementAccountBalanceAfterFundsIn",
+													"        for(var i in jsonData) {",
+													"            if(jsonData[i].ledgerAccountType === 'SETTLEMENT') {",
+													"                payeefspSettlementAccountBalanceAfterFundsIn = jsonData[i].value",
+													"            }",
+													"        }",
+													"        var payeefspExpectedBalance = pm.environment.get('payeefspSettlementAccountBalanceBeforeFundsIn') + pm.environment.get('fundsInPrepareAmount')",
+													"        pm.test(\"Final Payeefsp Settlement Account Balance should be same as before FundsIn + fundsInPrepareAmount\", function () {",
+													"            pm.expect(payeefspSettlementAccountBalanceAfterFundsIn).to.eql(payeefspExpectedBalance);",
+													"          });    ",
+													"    ",
+													"    });",
+													"    ",
+													"    const hubGetStatusRequest = {",
+													"      url: pm.environment.get(\"HOST_CENTRAL_LEDGER\")+pm.environment.get(\"BASE_CENTRAL_LEDGER_ADMIN\")+'/participants/Hub/accounts',",
+													"      method: 'GET',",
+													"      header: {",
+													"          \"Authorization\":\"Bearer \"+pm.environment.get(\"HUB_OPERATOR_BEARER_TOKEN\"),",
+													"          \"FSPIOP-Source\": pm.environment.get(\"hub_operator\"),",
+													"          \"Content-Type\": \"application/json\"",
+													"      }",
+													"    };",
+													"    pm.sendRequest(hubGetStatusRequest, function (err, response) {",
+													"        console.log(response.json())",
+													"        var jsonData = response.json()",
+													"        var currentHubReconAccountBalance",
+													"        for(var i in jsonData) {",
+													"            if(jsonData[i].ledgerAccountType === 'HUB_RECONCILIATION') {",
+													"                hubReconAccountBalanceAfterFundsIn = jsonData[i].value",
+													"            }",
+													"        }",
+													"        var hubExpectedBalance = pm.environment.get(\"hubReconAccountBalanceBeforeFundsIn\")",
+													"        console.log(hubExpectedBalance)",
+													"        pm.test(\"Final Hub Reconciliation Account Balance should be same as before FundsIn\", function () {",
+													"            pm.expect(hubReconAccountBalanceAfterFundsIn).to.eql(hubExpectedBalance);",
+													"          });  ",
+													"    });",
+													"}, 2000)"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"type": "text",
+												"value": "{{hub_operator}}"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"transferId\": \"{{fundsInPrepareTransferId}}\",\n  \"externalReference\": \"string\",\n  \"action\": \"recordFundsIn\",\n  \"reason\": \"string\",\n  \"amount\": {\n    \"amount\": {{fundsInPrepareAmount}},\n    \"currency\": \"{{currency}}\"\n  }\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/accounts/{{walletfspSettlementAccountId}}",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"accounts",
+												"{{walletfspSettlementAccountId}}"
+											]
+										}
+									},
+									"response": []
+								}
+							],
+							"description": "##Author: Sridevi Miriyala##"
+						},
+						{
+							"name": "callbacks",
+							"item": [
+								{
+									"name": "Add payeefsp callback - AUTHORIZATIONS",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_AUTHORIZATIONS\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - PARTICIPANT PUT",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "hub_operator",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_PARTICIPANT_PUT\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/participants/{{partyIdType}}/{{partyIdentifier}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - PARTICIPANT PUT Error",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_PARTICIPANT_PUT_ERROR\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/participants/{{partyIdType}}/{{partyIdentifier}}/error\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - PARTICIPANT PUT Batch",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_PARTICIPANT_BATCH_PUT\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/participants/{{requestId}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - PARTICIPANT PUT Batch Error",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_PARTICIPANT_BATCH_PUT_ERROR\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/participants/{{requestId}}/error\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - PARTIES GET",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_PARTIES_GET\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/parties/{{partyIdType}}/{{partyIdentifier}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - PARTIES PUT",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_PARTIES_PUT\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/parties/{{partyIdType}}/{{partyIdentifier}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - PARTIES PUT Error",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_PARTIES_PUT_ERROR\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/parties/{{partyIdType}}/{{partyIdentifier}}/error\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - QUOTES",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"type": "text",
+												"value": "{{hub_operator}}"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_QUOTES\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - TXN REQUEST",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"name": "Content-Type",
+												"type": "text",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"type": "text",
+												"value": "{{hub_operator}}"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_TRX_REQ_SERVICE\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - TRANSFER POST",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json",
+												"type": "text"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "{{hub_operator}}",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_TRANSFER_POST\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/transfers\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - TRANSFER PUT",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json",
+												"type": "text"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "{{payerfsp}}",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_TRANSFER_PUT\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/transfers/{{transferId}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - TRANSFER ERROR",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json",
+												"type": "text"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "payerfsp",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_TRANSFER_ERROR\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/transfers/{{transferId}}/error\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - BULK-TRANSFER POST",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json",
+												"type": "text"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "{{hub_operator}}",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_BULK_TRANSFER_POST\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/bulkTransfers\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - BULK-TRANSFER PUT",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json",
+												"type": "text"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "{{payerfsp}}",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_BULK_TRANSFER_PUT\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/bulkTransfers/{{id}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Get payeefsp callbacks",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json",
+												"type": "text"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "payerfsp",
+												"type": "text"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"FSPIOP_CALLBACK_URL_BULK_TRANSFER_ERROR\",\n  \"value\": \"http://ml-ttk-ml-testing-toolkit-backend:4040/bulkTransfers/{{id}}/error\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Add payeefsp callback - BULK-TRANSFER ERROR",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test(\"Status code is 201\", function () {",
+													"    pm.response.to.have.status(201);",
+													"});"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "GET",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json",
+												"type": "text"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"value": "payerfsp",
+												"type": "text"
+											}
+										],
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						},
+						{
+							"name": "notification_emails",
+							"item": [
+								{
+									"name": "Set Email-NET_DEBIT_CAP_THRESHOLD_BREACH_EMAIL",
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Cache-Control",
+												"value": "no-cache"
+											},
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"type": "text",
+												"value": "{{hub_operator}}"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"NET_DEBIT_CAP_THRESHOLD_BREACH_EMAIL\",\n  \"value\": \"{{ADMIN_EMAIL}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										},
+										"description": "Generated from a curl request: \ncurl -i -X POST     http://test-central-ledger.mojaloop.test/admin/participants/testfsp2/initialPositionAndLimits     -H 'Cache-Control: no-cache'     -H 'Content-Type: application/json'     -d '{\n    \\\"currency\\\": \\\"USD\\\",\n    \\\"limit\\\": {\n      \\\"type\\\": \\\"NET_DEBIT_CAP\\\",\n      \\\"value\\\": 1000\n    },\n    \\\"initialPosition\\\": 0\n  }'"
+									},
+									"response": []
+								},
+								{
+									"name": "Set Email-NET_DEBIT_CAP_ADJUSTMENT_EMAIL",
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Cache-Control",
+												"value": "no-cache"
+											},
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"type": "text",
+												"value": "{{hub_operator}}"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"NET_DEBIT_CAP_ADJUSTMENT_EMAIL\",\n  \"value\": \"{{ADMIN_EMAIL}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
+												"endpoints"
+											]
+										},
+										"description": "Generated from a curl request: \ncurl -i -X POST     http://test-central-ledger.mojaloop.test/admin/participants/testfsp2/initialPositionAndLimits     -H 'Cache-Control: no-cache'     -H 'Content-Type: application/json'     -d '{\n    \\\"currency\\\": \\\"USD\\\",\n    \\\"limit\\\": {\n      \\\"type\\\": \\\"NET_DEBIT_CAP\\\",\n      \\\"value\\\": 1000\n    },\n    \\\"initialPosition\\\": 0\n  }'"
+									},
+									"response": []
+								},
+								{
+									"name": "Set Email-SETTLEMENT_TRANSFER_POSITION_CHANGE_EMAIL",
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{HUB_OPERATOR_BEARER_TOKEN}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Cache-Control",
+												"value": "no-cache"
+											},
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											},
+											{
+												"key": "FSPIOP-Source",
+												"type": "text",
+												"value": "{{hub_operator}}"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"type\": \"SETTLEMENT_TRANSFER_POSITION_CHANGE_EMAIL\",\n  \"value\": \"{{ADMIN_EMAIL}}\"\n}"
+										},
+										"url": {
+											"raw": "{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}/participants/testingtoolkitdfsp/endpoints",
+											"host": [
+												"{{HOST_CENTRAL_LEDGER}}{{BASE_CENTRAL_LEDGER_ADMIN}}"
+											],
+											"path": [
+												"participants",
+												"testingtoolkitdfsp",
 												"endpoints"
 											]
 										},
