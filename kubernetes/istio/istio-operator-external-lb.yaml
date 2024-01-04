@@ -26,16 +26,19 @@ spec:
         service:
           type: NodePort
           ports:
-          - port: 15021
-            name: status-port
+          - name: tcp-status-port
+            port: 15021
             targetPort: 15021
             nodePort: 30521
-            protocol: TCP
-          - port: 80
+          - name: http2
+            port: 80
             targetPort: 8080
             nodePort: 30080
-            name: http2
-          - port: 5432
+          - name: tcp-postgres
+            port: 5432
             targetPort: 5432
             nodePort: 32432
-            name: tcp-postgres
+          - name: http-redirect-https
+            port: 81
+            targetPort: 8081
+            nodePort: 30081

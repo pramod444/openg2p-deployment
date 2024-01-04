@@ -1,5 +1,7 @@
 # Payment Interoperability Layer Install on OpenG2P Sandbox
 
+LEGACY. Use G2P Cash Transfer Bridge instead.
+
 ## Instructions
 
 - Configure and deploy one dfsp-ml-payment-manager.yaml for each DFSP available; (This assumes mojaloop SDK adapter service for the DFSP is already deployed and running)

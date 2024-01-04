@@ -5,6 +5,12 @@ function keycloak_get_admin_token(){
   kubectl -n keycloak exec -it keycloak-0 -- curl -d "client_id=admin-cli" -d "username=admin" -d "password=${keycloak_admin_secret}" -d "grant_type=password" "http://keycloak.keycloak/realms/master/protocol/openid-connect/token" | jq -r '.access_token'
 }
 
+function keycloak_import_realm(){
+  auth_token="$1"
+  realm_json="$2"
+  kubectl -n keycloak exec -it keycloak-0 -- curl -H "content-type: application/json" -H "Authorization: Bearer ${auth_token}" "http://keycloak.keycloak/admin/realms" -d "${realm_json}"
+}
+
 function keycloak_create_client(){
   auth_token="$1"
   client_id="$2"

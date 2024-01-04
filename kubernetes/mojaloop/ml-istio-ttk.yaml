@@ -7,7 +7,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-ttk.openg2p.sandbox.net
+  - ${ML_TTK_HOSTNAME}
   http:
   - match:
     - uri:
