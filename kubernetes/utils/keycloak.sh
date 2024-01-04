@@ -7,8 +7,9 @@ function keycloak_get_admin_token(){
 
 function keycloak_import_realm(){
   auth_token="$1"
-  realm_json="$2"
-  kubectl -n keycloak exec -it keycloak-0 -- curl -H "content-type: application/json" -H "Authorization: Bearer ${auth_token}" "http://keycloak.keycloak/admin/realms" -d "${realm_json}"
+  realm_json_file_path="$2"
+  kubectl -n keycloak cp $realm_json_file_path keycloak-0:/tmp/new-realm.json
+  kubectl -n keycloak exec -it keycloak-0 -- curl -v -H "content-type: application/json" -H "Authorization: Bearer ${auth_token}" "http://keycloak.keycloak/admin/realms" -d @/tmp/new-realm.json
 }
 
 function keycloak_create_client(){

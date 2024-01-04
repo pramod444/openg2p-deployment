@@ -141,7 +141,6 @@
       }
     ],
     "client": {
-      "selfservice-manoj": [],
       "realm-management": [
         {
           "id": "921b6b0f-42b5-476a-a161-2f4af3666e6a",
@@ -368,7 +367,6 @@
           "attributes": {}
         }
       ],
-      "openg2p-admin-client": [],
       "account": [
         {
           "id": "44cd7acb-c967-4ae9-8fbd-a5e9b916e975",

@@ -7,9 +7,6 @@ export KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME:-openg2p}
 
 NS=keycloak
 
-helm repo add mosip https://mosip.github.io/mosip-helm
-helm repo update
-
 echo Create $NS namespace
 kubectl create ns $NS
 
@@ -23,7 +20,7 @@ if [ "$KEYCLOAK_ISTIO_ENABLED" != "false" ]; then
 fi
 
 if [ "$KEYCLOAK_INIT_ENABLED" != "false" ]; then
-  helm -n $NS install keycloak-init mosip/keycloak-init --version 12.0.2 -f values-init.yaml --wait $@
+  helm -n $NS install keycloak-init ./keycloak-init --wait $@
 
   export OPENG2P_ADMIN_CLIENT_SECRET=$(kubectl -n $NS get secret -o jsonpath={.data.openg2p_admin_client_secret} | base64 --decode)
   export OPENG2P_SELFSERVICE_CLIENT_SECRET=$(kubectl -n $NS get secret -o jsonpath={.data.openg2p_selfservice_client_secret} | base64 --decode)
@@ -32,14 +29,17 @@ if [ "$KEYCLOAK_INIT_ENABLED" != "false" ]; then
   export OPENG2P_KAFKA_CLIENT_SECRET=$(kubectl -n $NS get secret -o jsonpath={.data.openg2p_kafka_client_secret} | base64 --decode)
   export OPENG2P_KIBANA_CLIENT_SECRET=$(kubectl -n $NS get secret -o jsonpath={.data.openg2p_kibana_client_secret} | base64 --decode)
 
+  envsubst \
+    '${KEYCLOAK_HOSTNAME}
+    ${OPENG2P_ADMIN_CLIENT_SECRET}
+    ${OPENG2P_SELFSERVICE_CLIENT_SECRET}
+    ${OPENG2P_SERVICEPROVIDER_CLIENT_SECRET}
+    ${OPENG2P_MINIO_CLIENT_SECRET}
+    ${OPENG2P_KAFKA_CLIENT_SECRET}
+    ${OPENG2P_KIBANA_CLIENT_SECRET}' < ${KEYCLOAK_REALM_NAME}-realm.json > /tmp/${KEYCLOAK_REALM_NAME}-realm.json
+
   keycloak_import_realm \
     "$(keycloak_get_admin_token)" \
-    "$(envsubst \
-      '${KEYCLOAK_HOSTNAME}
-      ${OPENG2P_ADMIN_CLIENT_SECRET}
-      ${OPENG2P_SELFSERVICE_CLIENT_SECRET}
-      ${OPENG2P_SERVICEPROVIDER_CLIENT_SECRET}
-      ${OPENG2P_MINIO_CLIENT_SECRET}
-      ${OPENG2P_KAFKA_CLIENT_SECRET}
-      ${OPENG2P_KIBANA_CLIENT_SECRET}' < ${KEYCLOAK_REALM_NAME}-realm.json)"
+    "${KEYCLOAK_HOSTNAME}" \
+    "/tmp/${KEYCLOAK_REALM_NAME}-realm.json"
 fi
