@@ -10,8 +10,8 @@ declare -a components=(
     "minio"
     "openg2p"
     "odk-central"
-    "g2p-cash-transfer-bridge"
-    "social-payments-account-registry"
+    # "g2p-cash-transfer-bridge"
+    # "social-payments-account-registry"
 )
 
 for i in "${components[@]}"; do

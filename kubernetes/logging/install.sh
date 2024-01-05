@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export KIBANA_HOSTNAME=${KIBANA_HOSTNAME:-kibana.${SANDBOX_HOSTNAME:-openg2p.sandbox.net}}
+export SANDBOX_HOSTNAME=${SANDBOX_HOSTNAME:-openg2p.sandbox.net}
+export KIBANA_HOSTNAME=${KIBANA_HOSTNAME:-kibana.$SANDBOX_HOSTNAME}
 
 NS=cattle-logging-system
 

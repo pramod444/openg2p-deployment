@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export GCTB_HOSTNAME=${GCTB_HOSTNAME:-gctb.${SANDBOX_HOSTNAME:-openg2p.sandbox.net}}
+export SANDBOX_HOSTNAME=${SANDBOX_HOSTNAME:-openg2p.sandbox.net}
+export GCTB_HOSTNAME=${GCTB_HOSTNAME:-gctb.$SANDBOX_HOSTNAME}
 
 NS=gctb
 

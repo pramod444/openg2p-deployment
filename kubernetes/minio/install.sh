@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 export KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME:-openg2p}
-export OPENG2P_MINIO_CLIENT_SECRET=$(kubectl -n $NS get secret -o jsonpath={.data.openg2p_minio_client_secret} | base64 --decode)
-export MINIO_HOSTNAME=${MINIO_HOSTNAME:-minio.${SANDBOX_HOSTNAME:-openg2p.sandbox.net}}
+export OPENG2P_MINIO_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_minio_client_secret} | base64 --decode)
+export SANDBOX_HOSTNAME=${SANDBOX_HOSTNAME:-openg2p.sandbox.net}
+export MINIO_HOSTNAME=${MINIO_HOSTNAME:-minio.$SANDBOX_HOSTNAME}
 
 NS=minio
 

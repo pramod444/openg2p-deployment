@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export SPAR_HOSTNAME=${SPAR_HOSTNAME:-spar.${SANDBOX_HOSTNAME:-openg2p.sandbox.net}}
+export SANDBOX_HOSTNAME=${SANDBOX_HOSTNAME:-openg2p.sandbox.net}
+export SPAR_HOSTNAME=${SPAR_HOSTNAME:-spar.$SANDBOX_HOSTNAME}
 
 NS=spar
 echo Create $NS namespace

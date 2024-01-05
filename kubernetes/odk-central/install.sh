@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export ODK_HOSTNAME=${ODK_HOSTNAME:-odk.${SANDBOX_HOSTNAME:-openg2p.sandbox.net}}
+export SANDBOX_HOSTNAME=${SANDBOX_HOSTNAME:-openg2p.sandbox.net}
+export ODK_HOSTNAME=${ODK_HOSTNAME:-odk.$SANDBOX_HOSTNAME}
 
 NS=odk
 

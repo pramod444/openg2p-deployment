@@ -1,0 +1,9 @@
+gitRepo:
+  uri: https://github.com/lalithkota/mosip-config
+  version: develop-openg2p-standalone
+  ## Folders within the base repo where properties may be found.
+  searchFolders: ""
+  private: false
+  ## User name of user who has access to the private repo. Ignore for public repo
+  username: ""
+  token: ""

@@ -132,6 +132,86 @@
         "attributes": {}
       },
       {
+        "name": "SUBSCRIBE_CA_CERTIFICATE_UPLOADED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_OIDC_CLIENT_CREATED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_OIDC_CLIENT_UPDATED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_APIKEY_APPROVED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_APIKEY_UPDATED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_CA_CERTIFICATE_UPLOADED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_MISP_LICENSE_GENERATED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_MISP_LICENSE_UPDATED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_PARTNER_UPDATED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
+        "name": "PUBLISH_POLICY_UPDATED_GENERAL",
+        "description": "",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "6fda1fc8-16cb-4be1-9375-eb47e0fe4fc4",
+        "attributes": {}
+      },
+      {
         "name": "minio_consoleAdmin",
         "description": "",
         "composite": false,
@@ -521,7 +601,17 @@
         "GLOBAL_ADMIN",
         "PARTNER_ADMIN",
         "PMS_ADMIN",
-        "PARTNERMANAGER"
+        "PARTNERMANAGER",
+        "SUBSCRIBE_CA_CERTIFICATE_UPLOADED_GENERAL",
+        "PUBLISH_OIDC_CLIENT_CREATED_GENERAL",
+        "PUBLISH_OIDC_CLIENT_UPDATED_GENERAL",
+        "PUBLISH_APIKEY_APPROVED_GENERAL",
+        "PUBLISH_APIKEY_UPDATED_GENERAL",
+        "PUBLISH_CA_CERTIFICATE_UPLOADED_GENERAL",
+        "PUBLISH_MISP_LICENSE_GENERATED_GENERAL",
+        "PUBLISH_MISP_LICENSE_UPDATED_GENERAL",
+        "PUBLISH_PARTNER_UPDATED_GENERAL",
+        "PUBLISH_POLICY_UPDATED_GENERAL"
       ],
       "notBefore": 0,
       "groups": []
@@ -1253,7 +1343,11 @@
         "acr",
         "roles",
         "profile",
-        "email"
+        "email",
+        "update_oidc_client",
+        "add_oidc_client",
+        "get_certificate",
+        "upload_certificate"
       ],
       "optionalClientScopes": [
         "address",
@@ -3559,6 +3653,60 @@
           }
         }
       ]
+    },
+    {
+      "name": "add_oidc_client",
+      "description": "Scope required to create OIDC client",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "update_oidc_client",
+      "description": "",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "get_certificate",
+      "description": "Scope required to create OIDC client",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "upload_certificate",
+      "description": "",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "sending_binding_otp",
+      "description": "Scope required to create OIDC client",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "wallet_binding",
+      "description": "",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      }
     }
   ],
   "defaultDefaultClientScopes": [

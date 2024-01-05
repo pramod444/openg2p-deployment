@@ -13,6 +13,8 @@ extraEnvVars:
   value: "${OPENG2P_MINIO_CLIENT_SECRET}"
 - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
   value: groups
+- name: MINIO_IDENTITY_OPENID_SCOPES
+  value: openid,profile,email,phone,address
 - name: MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC
   value: "on"
 - name: MINIO_IDENTITY_OPENID_CLAIM_USERINFO
