@@ -1,0 +1,20 @@
+istio:
+  enabled: false
+
+extraEnvVars:
+- name: softhsm_esignet_security_pin
+  valueFrom:
+    secretKeyRef:
+      name: softhsm-esignet
+      key: security-pin
+- name: softhsm_mock_identity_system_security_pin
+  valueFrom:
+    secretKeyRef:
+      name: softhsm-mock-identity-system
+      key: security-pin
+- name: esignet_captcha_site_key
+  value: ""
+- name: esignet_captcha_secret_key
+  value: ""
+- name: mosip_esignet_misp_key
+  value: ""

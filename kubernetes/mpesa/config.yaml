@@ -7,7 +7,7 @@ metadata:
 data:
   config.yml: |
     database:
-      host: "postgres-postgresql.postgresql"
+      host: "postgres-postgresql.postgres"
       port: "5432"
       user: "mpesa"
       password: "mpesa"

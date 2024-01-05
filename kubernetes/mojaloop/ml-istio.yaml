@@ -7,7 +7,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-als.openg2p.sandbox.net
+  - ${ML_ALS_HOSTNAME}
   http:
   - match:
     - uri:
@@ -33,7 +33,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-als-admin.openg2p.sandbox.net
+  - ${ML_ALS_ADMIN_HOSTNAME}
   http:
   - route:
     - destination:
@@ -50,7 +50,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-api-adapter.openg2p.sandbox.net
+  - ${ML_API_ADAPTER_HOSTNAME}
   http:
   - match:
     - uri:
@@ -74,7 +74,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-central-ledger.openg2p.sandbox.net
+  - ${ML_CENTRAL_LEDGER_HOSTNAME}
   http:
   - route:
     - destination:
@@ -91,7 +91,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-quoting.openg2p.sandbox.net
+  - ${ML_QUOTING_HOSTNAME}
   http:
   - match:
     - uri:
@@ -115,7 +115,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - ml-transaction.openg2p.sandbox.net
+  - ${ML_TRANSACTION_HOSTNAME}
   http:
   - match:
     - uri:
@@ -137,7 +137,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - bank1.openg2p.sandbox.net
+  - ${ML_DFSP1_HOSTNAME}
   http:
   - match:
     - uri:
@@ -207,7 +207,7 @@ spec:
   gateways:
   - istio-system/all-hosts
   hosts:
-  - bank2.openg2p.sandbox.net
+  - ${ML_DFSP2_HOSTNAME}
   http:
   - match:
     - uri:

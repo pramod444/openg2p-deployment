@@ -24,13 +24,13 @@ spec:
           - name: BACKEND_TEST_URL_PROTO
             value: "https"
           - name: BACKEND_TEST_URL_HOST
-            value: "bank1.openg2p.sandbox.net"
+            value: "${ML_DFSP1_HOSTNAME}"
           - name: BACKEND_TEST_URL_PORT
             value: "443"
           - name: BACKEND_TEST_URL_PATH
             value: "/api/test"
           - name: BACKEND_SIM_URL
-            value: "https://bank1.openg2p.sanbox.net/api/sim"
+            value: "https://${ML_DFSP1_HOSTNAME}/api/sim"
 ---
 apiVersion: v1
 kind: Service
@@ -73,13 +73,13 @@ spec:
           - name: BACKEND_TEST_URL_PROTO
             value: "https"
           - name: BACKEND_TEST_URL_HOST
-            value: "bank2.openg2p.sandbox.net"
+            value: "${ML_DFSP2_HOSTNAME}"
           - name: BACKEND_TEST_URL_PORT
             value: "443"
           - name: BACKEND_TEST_URL_PATH
             value: "/api/test"
           - name: BACKEND_SIM_URL
-            value: "https://bank2.openg2p.sandbox.net/api/sim"
+            value: "https://${ML_DFSP2_HOSTNAME}/api/sim"
 ---
 apiVersion: v1
 kind: Service

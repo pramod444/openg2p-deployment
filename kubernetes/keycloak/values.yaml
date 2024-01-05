@@ -9,6 +9,8 @@ ingress:
 
 replicaCount: 2
 
+proxy: edge
+
 resources:
   limits: {}
   requests:

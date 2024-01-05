@@ -10,6 +10,14 @@ spec:
   - hosts:
     - '*'
     port:
+      name: http-redirect-https
+      number: 81
+      protocol: HTTP
+    tls:
+      httpsRedirect: true
+  - hosts:
+    - '*'
+    port:
       name: http
       number: 80
       protocol: HTTP

@@ -1,19 +1,19 @@
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: oauth2-proxy
+  name: keymanager
 spec:
   gateways:
     - istio-system/all-hosts
   hosts:
-    - ${KEYCLOAK_HOSTNAME}
+    - ${KEYMANAGER_HOSTNAME}
   http:
     - match:
-      - uri:
-          prefix: /oauth2
+        - uri:
+            prefix: /v1/keymanager
       route:
         - destination:
-            host: oauth2-proxy
+            host: keymanager
             port:
               number: 80
       headers:
