@@ -49,10 +49,12 @@ $COPY_UTIL secret conf-secrets-various $CONF_SECRETS_NS $CONFIG_SERVER_NS
 
 ./dummy_secrets.sh
 
-helm -n $CONFIG_SERVER_NS install config-server mosip/config-server -f config-server-values.yaml --version 12.0.2 --wait
+helm -n $CONFIG_SERVER_NS install config-server mosip/config-server -f config-server-values.yaml --version 12.0.2
 
-kubectl -n $CONFIG_SERVER_NS set env --keys=openg2p_admin_client_secret --from=secret/keycloak-client-secret deployment/config-server --prefix=SPRING_CLOUD_CONFIG_SERVER_OVERRIDES_
+kubectl -n $CONFIG_SERVER_NS set env --keys=openg2p_admin_client_secret --from=secret/keycloak-client-secrets deployment/config-server --prefix=SPRING_CLOUD_CONFIG_SERVER_OVERRIDES_
 kubectl -n $CONFIG_SERVER_NS set env deployment/config-server SPRING_CLOUD_CONFIG_SERVER_OVERRIDES_HUB_SECRET_ENCRYPTION_KEY-
+
+kubectl -n $CONFIG_SERVER_NS rollout status deploy/config-server
 
 echo Installing Artifactory
 helm -n $ARTIFACTORY_NS install artifactory mosip/artifactory --version 12.0.2 --wait
@@ -68,4 +70,4 @@ helm -n $KEYMANAGER_NS install kernel-keygen mosip/keygen -f keygen-values.yaml 
 echo Installing Keymanager
 helm -n $KEYMANAGER_NS install keymanager mosip/keymanager --version 12.0.2 --set istio.enabled=false --wait
 
-envsubst < istio-virtualservice.template.yaml | kubectl -n $NS apply -f -
+envsubst < istio-virtualservice.template.yaml | kubectl -n $KEYMANAGER_NS apply -f -

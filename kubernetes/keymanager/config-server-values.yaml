@@ -1,6 +1,6 @@
 gitRepo:
-  uri: https://github.com/lalithkota/mosip-config
-  version: develop-openg2p-standalone
+  uri: https://github.com/openg2p/mosip-config
+  version: develop3-v3
   ## Folders within the base repo where properties may be found.
   searchFolders: ""
   private: false
