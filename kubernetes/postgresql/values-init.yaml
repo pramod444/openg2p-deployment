@@ -1,0 +1,79 @@
+dbUserPasswords:
+  dbuserPassword: ""
+
+databases:
+  mosip_master:
+    enabled: false
+    branch: develop
+
+  mosip_audit:
+    enabled: true
+    branch: develop
+
+  mosip_keymgr:
+    enabled: true 
+    branch: develop
+
+  mosip_kernel:
+    enabled: false
+    branch: develop
+
+  mosip_idmap:
+    enabled: false
+    branch: develop
+
+  mosip_prereg:
+    enabled: false
+    branch: develop
+
+  mosip_idrepo:
+    enabled: false
+    branch: develop
+
+  mosip_ida:
+    enabled: false
+    branch: develop
+
+  mosip_credential:
+    enabled: false
+    branch: develop
+
+  mosip_regprc:
+    enabled: false
+    branch: develop
+
+  mosip_regdevice:
+    enabled: false
+    branch: develop
+   
+  mosip_authdevice:
+    enabled: false
+    branch: develop
+
+  mosip_pms:
+    enabled: false
+    branch: develop
+
+  mosip_hotlist:
+    enabled: false
+    branch: develop
+
+  mosip_resident:
+    enabled: false
+    branch: develop
+
+  mosip_toolkit:
+    enabled: false
+    branch: develop
+
+  mosip_digitalcard:
+    enabled: false
+    branch: develop
+
+  mosip_esignet:
+    enabled: true
+    branch: develop
+
+  mosip_mockidentitysystem:
+    enabled: true
+    branch: develop
