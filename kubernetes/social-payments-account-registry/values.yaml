@@ -17,7 +17,8 @@ postgresql:
 sunbird-rc-g2p-mapper-registry:
   registry:
     envVars:
-      connectionInfo_uri: "jdbc:postgresql://postgres-postgresql.postgres:5432/spar-mapper-registry"
+      connectionInfo_uri: "jdbc:postgresql://postgres-postgresql.postgres:5432/spardb"
+      connectionInfo_username: "sparuser"
     envVarsFrom:
       connectionInfo_password:
         valueFrom:

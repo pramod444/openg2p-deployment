@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: superset
+spec:
+  gateways:
+    - istio-system/all-hosts
+  hosts:
+    - ${SUPERSET_HOSTNAME}
+  http:
+    - route:
+        - destination:
+            host: superset
+            port:
+              number: 8088
+      headers:
+        request:
+          set:
+            x-forwarded-proto: https
