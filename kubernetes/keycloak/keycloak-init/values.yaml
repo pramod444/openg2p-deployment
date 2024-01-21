@@ -11,6 +11,8 @@ clientSecrets:
     secret: ""
   - name: openg2p_kibana_client_secret
     secret: ""
+  - name: openg2p_superset_client_secret
+    secret: ""
   - name: mosip_abis_client_secret
     secret: ""
   - name: mosip_admin_client_secret
