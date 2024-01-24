@@ -1,0 +1,44 @@
+path:
+  data: /bitnami/opensearch-dashboards/data
+pid:
+  file: /opt/bitnami/opensearch-dashboards/tmp/opensearch-dashboards.pid
+server:
+  host: 0.0.0.0
+  port: 5601
+opensearch:
+  hosts: https://opensearch:9200
+  username: kibanaserver
+  password: ${OPENSEARCH_DASHBOARDS_PASSWORD}
+  requestHeadersWhitelist: 
+    - authorization
+    - securitytenant
+  ssl:
+    verificationMode: none
+opensearch_security:
+  auth:
+    type:
+    # - basicauth # Enable this to allow password based auth also
+    - openid
+    multiple_auth_enabled: true
+  openid:
+    connect_url: http://keycloak.keycloak/realms/openg2p/.well-known/openid-configuration
+    client_id: openg2p-opensearch-client
+    client_secret: ${OPENSEARCH_CLIENT_SECRET}
+    base_redirect_url: https://${OPENSEARCH_HOSTNAME}
+    logout_url: ""
+  ui:
+    openid:
+      login:
+        buttonname: "Log in with Keycloak"
+  multitenancy:
+    enabled: false # Enable this if multi tenancy is needed.
+    tenants:
+      preferred: 
+      - Global
+      - Private
+  readonly_mode:
+    roles: 
+    - kibana_read_only
+
+  cookie:
+    secure: true

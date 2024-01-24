@@ -9,7 +9,7 @@ clientSecrets:
     secret: ""
   - name: openg2p_kafka_client_secret
     secret: ""
-  - name: openg2p_kibana_client_secret
+  - name: openg2p_opensearch_client_secret
     secret: ""
   - name: openg2p_superset_client_secret
     secret: ""

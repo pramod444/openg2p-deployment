@@ -550,6 +550,15 @@
           "containerId": "6b0b1458-dc39-498a-a4c6-a6916ab650ef",
           "attributes": {}
         }
+      ],
+      "openg2p-opensearch-client": [
+        {
+          "name": "admin",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "be449dec-3675-4a0b-8b6e-a32d3715f079",
+          "attributes": {}
+        }
       ]
     }
   },
@@ -699,11 +708,11 @@
     {
       "id": "be449dec-3675-4a0b-8b6e-a32d3715f079",
       "createdTimestamp": 1699248524251,
-      "username": "service-account-openg2p-kibana-client",
+      "username": "service-account-openg2p-opensearch-client",
       "enabled": true,
       "totp": false,
       "emailVerified": false,
-      "serviceAccountClientId": "openg2p-kibana-client",
+      "serviceAccountClientId": "openg2p-opensearch-client",
       "disableableCredentialTypes": [],
       "requiredActions": [],
       "realmRoles": [
@@ -2823,8 +2832,8 @@
       ]
     },
     {
-      "clientId": "openg2p-kibana-client",
-      "name": "OpenG2P Kibana",
+      "clientId": "openg2p-opensearch-client",
+      "name": "OpenG2P OpenSearch",
       "description": "",
       "rootUrl": "",
       "adminUrl": "",
@@ -2833,7 +2842,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "${OPENG2P_KIBANA_CLIENT_SECRET}",
+      "secret": "${OPENG2P_OPENSEARCH_CLIENT_SECRET}",
       "redirectUris": [
         "*"
       ],
@@ -2988,7 +2997,7 @@
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.client.audience": "openg2p-kibana-client",
+            "included.client.audience": "openg2p-opensearch-client",
             "id.token.claim": "true",
             "access.token.claim": "true"
           }
@@ -3150,17 +3159,20 @@
           }
         },
         {
-          "name": "groups",
+          "name": "client roles",
           "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
           "consentRequired": false,
           "config": {
-            "multivalued": "true",
-            "user.attribute": "foo",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "groups",
-            "jsonType.label": "String"
+              "introspection.token.claim": "true",
+              "multivalued": "true",
+              "userinfo.token.claim": "true",
+              "user.attribute": "foo",
+              "id.token.claim": "true",
+              "access.token.claim": "true",
+              "claim.name": "groups",
+              "jsonType.label": "String",
+              "usermodel.clientRoleMapping.clientId": "openg2p-opensearch-client"
           }
         }
       ],

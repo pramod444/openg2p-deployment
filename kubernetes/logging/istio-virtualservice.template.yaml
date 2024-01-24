@@ -1,16 +1,16 @@
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
-  name: kibana
+  name: opensearch
 spec:
   gateways:
     - istio-system/all-hosts
   hosts:
-    - ${KIBANA_HOSTNAME}
+    - ${OPENSEARCH_HOSTNAME}
   http:
     - route:
         - destination:
-            host: elasticsearch-kibana
+            host: opensearch-dashboards
             port:
               number: 5601
       headers:
