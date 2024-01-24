@@ -1,0 +1,21 @@
+apiVersion: logging.banzaicloud.io/v1beta1
+kind: ClusterFlow
+metadata:
+  name: all-logs
+  namespace: cattle-logging-system
+spec:
+  filters:
+    - parser:
+        key_name: message
+        parse:
+          type: json
+        remove_key_name_field: true
+        replace_invalid_sequence: true
+        reserve_data: true
+  globalOutputRefs:
+    - opensearch
+  match:
+    - select:
+        labels:
+          # TODO: For now this only selects spar
+          app.kubernetes.io/name: social-payments-account-registry

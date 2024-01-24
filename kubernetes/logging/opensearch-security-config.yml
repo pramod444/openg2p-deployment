@@ -1,0 +1,30 @@
+_meta:
+  type: "config"
+  config_version: 2
+
+config:
+  dynamic:
+    authc:
+      basic_internal_auth_domain:
+        http_enabled: true
+        transport_enabled: true
+        order: 0
+        http_authenticator:
+          type: basic
+          challenge: false
+        authentication_backend:
+          type: internal
+      openid_auth_domain:
+        http_enabled: true
+        transport_enabled: true
+        order: 1
+        http_authenticator:
+          type: openid
+          challenge: false
+          config:
+            subject_key: preferred_username
+            roles_key: groups
+            openid_connect_url: http://keycloak.keycloak/realms/openg2p/.well-known/openid-configuration
+        authentication_backend:
+          type: noop
+    authz: {}

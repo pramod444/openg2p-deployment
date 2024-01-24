@@ -1,0 +1,22 @@
+apiVersion: logging.banzaicloud.io/v1beta1
+kind: ClusterOutput
+metadata:
+  name: opensearch
+  namespace: cattle-logging-system
+spec:
+  opensearch:
+    scheme: https
+    host: opensearch
+    port: 9200
+    ssl_verify: false
+    user: logstash
+    password:
+      valueFrom:
+        secretKeyRef:
+          key: logstash-password
+          name: opensearch
+    logstash_format: true
+    suppress_type_name: true
+    buffer:
+      flush_interval: 10s
+      flush_mode: interval

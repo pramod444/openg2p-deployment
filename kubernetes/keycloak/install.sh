@@ -34,7 +34,7 @@ if [ "$KEYCLOAK_INIT_ENABLED" != "false" ]; then
   export OPENG2P_SERVICEPROVIDER_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_serviceprovider_client_secret} | base64 --decode)
   export OPENG2P_MINIO_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_minio_client_secret} | base64 --decode)
   export OPENG2P_KAFKA_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_kafka_client_secret} | base64 --decode)
-  export OPENG2P_KIBANA_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_kibana_client_secret} | base64 --decode)
+  export OPENG2P_OPENSEARCH_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_opensearch_client_secret} | base64 --decode)
   export OPENG2P_SUPERSET_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_superset_client_secret} | base64 --decode)
 
   envsubst \
@@ -44,7 +44,7 @@ if [ "$KEYCLOAK_INIT_ENABLED" != "false" ]; then
     ${OPENG2P_SERVICEPROVIDER_CLIENT_SECRET}
     ${OPENG2P_MINIO_CLIENT_SECRET}
     ${OPENG2P_KAFKA_CLIENT_SECRET}
-    ${OPENG2P_KIBANA_CLIENT_SECRET}
+    ${OPENG2P_OPENSEARCH_CLIENT_SECRET}
     ${OPENG2P_SUPERSET_CIENT_SECRET}' < ${KEYCLOAK_REALM_NAME}-realm.json > /tmp/${KEYCLOAK_REALM_NAME}-realm.json
 
   keycloak_import_realm \
