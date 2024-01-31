@@ -3,27 +3,39 @@ envVars:
   SPAR_CORE_DEFAULT_ID_TOKEN_VERIFY_AT_HASH: "false"
   SPAR_CORE_AUTH_DEFAULT_ISSUERS: '["https://esignet.openg2p.sandbox.net/v1/esignet"]'
   SPAR_CORE_AUTH_DEFAULT_JWKS_URLS: '["https://esignet.openg2p.sandbox.net/v1/esignet/oauth/.well-known/jwks.json"]'
+  # Uncomment the if using Sunbird Mapper Registry.
+  # SPAR_CONNECTOR_G2PCONNECT_MAPPER_RESOLVE_URL: "http://mapper/v0.1.0/mapper/resolve"
+  # SPAR_CONNECTOR_G2PCONNECT_MAPPER_LINK_URL: "http://mapper/v0.1.0/mapper/link"
+  # SPAR_CONNECTOR_G2PCONNECT_MAPPER_UPDATE_URL: "http://mapper/v0.1.0/mapper/update"
 
 envVarsFrom:
   SPAR_CORE_DB_PASSWORD:
-    valueFrom:
-      secretKeyRef:
-        name: postgres-postgresql
-        key: password
+    secretKeyRef:
+      name: postgres-postgresql
+      key: password
 
 postgresql:
   enabled: false
 
+# Enable only one of the following mappers.
+# Defaults is SPAR Mapper
+spar-g2pconnect-id-mapper:
+  enabled: true
+  envVars:
+    SPAR_G2PCONNECT_MAPPER_DB_HOSTNAME: "postgres-postgresql.postgres"
+  envVarsFrom:
+    SPAR_G2PCONNECT_MAPPER_DB_PASSWORD:
+      secretKeyRef:
+        name: "postgres-postgresql"
+        key: password
+
 sunbird-rc-g2p-mapper-registry:
+  enabled: false
   registry:
     envVars:
       connectionInfo_uri: "jdbc:postgresql://postgres-postgresql.postgres:5432/spardb"
-      connectionInfo_username: "sparuser"
     envVarsFrom:
       connectionInfo_password:
-        valueFrom:
-          secretKeyRef:
-            name: postgres-postgresql
-            key: password
-    postgresql:
-      enabled: false
+        secretKeyRef:
+          name: postgres-postgresql
+          key: password
