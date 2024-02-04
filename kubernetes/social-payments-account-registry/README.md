@@ -1,5 +1,3 @@
 ## Social Payments Account Registry
 
-TBD
-
-- Refer to [deployment instructions](#)
+- Refer to [SPAR deployment instructions](https://docs.openg2p.org/deployment/openg2p-modules-deployment/spar-deployment)

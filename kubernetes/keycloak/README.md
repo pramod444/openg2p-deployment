@@ -1,3 +1,3 @@
 ## Keycloak
 
-- Refer to [deployment instructions](https://docs.openg2p.org/guides/deployment-guide/deployment-on-kubernetes#keycloak)
+- Refer to [Keycloak deployment instructions](https://docs.openg2p.org/deployment/external-components-setup/keycloak-deployment)

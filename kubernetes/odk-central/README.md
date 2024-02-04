@@ -1,3 +1,3 @@
 ## ODK Central
 
-- Refer to [deployment instructions](https://docs.openg2p.org/guides/deployment-guide/deployment-on-kubernetes#odk)
+- Refer to [ODK Central deployment instructions](https://docs.openg2p.org/deployment/external-components-setup/odk-central-deployment)

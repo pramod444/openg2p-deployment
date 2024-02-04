@@ -1,3 +1,3 @@
 ## Minio
 
-- Refer to [deployment instructions](https://docs.openg2p.org/guides/deployment-guide/deployment-on-kubernetes#minio)
+- Refer to [Minio deployment instructions](https://docs.openg2p.org/deployment/external-components-setup/minio-deployment)
