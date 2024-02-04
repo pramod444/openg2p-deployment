@@ -1,9 +1,3 @@
 # Wireguard Server
 
-This folder contains instructions to setup wireguard server for vpn and access.
-
-## Prerequisites:
-- docker
-
-## Installation
-- Copy the `wg.sh` file into wireguard node, and run it. (TODO: Elaborate)
+- Refer to [Wireguard Server Setup](https://docs.openg2p.org/deployment/infrastructure-setup/wireguard-server-setup)

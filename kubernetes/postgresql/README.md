@@ -1,3 +1,3 @@
 ## PostgreSQL
 
-- Refer to [deployment instructions](https://docs.openg2p.org/guides/deployment-guide/deployment-on-kubernetes#postgresql)
+- Refer to [PostgreSQL server deployment](https://docs.openg2p.org/deployment/external-components-setup/postgresql-server-deployment)

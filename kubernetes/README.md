@@ -1,3 +1,3 @@
 # Kubernetes Deployment Artifacts
 
-Refer to [Deployment Guide](https://docs.openg2p.org/guides/deployment-guide).
+Refer to [Deployment Architecture](https://docs.openg2p.org/deployment/deployment-architecture).
