@@ -5,10 +5,9 @@ envVars:
 
 envVarsFrom:
   GCTB_CORE_DB_PASSWORD:
-    valueFrom:
-      secretKeyRef:
-        name: postgres-postgresql
-        key: password
+    secretKeyRef:
+      name: postgres-postgresql
+      key: password
 
 postgresql:
   enabled: false
