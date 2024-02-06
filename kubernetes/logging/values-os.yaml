@@ -2,13 +2,6 @@ dashboards:
   enabled: true
   replicaCount: 1
 
-  extraEnvVars:
-  - name: OPENSEARCH_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: opensearch
-        key: opensearch-dashboards-password
-
   extraVolumes:
   - name: dashboards-config
     configMap:

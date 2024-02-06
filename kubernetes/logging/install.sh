@@ -14,7 +14,7 @@ $COPY_UTIL secret keycloak-client-secrets keycloak $NS
 export OPENSEARCH_CLIENT_SECRET=$(kubectl -n $NS get secret keycloak-client-secrets -o jsonpath={.data.openg2p_opensearch_client_secret} | base64 --decode)
 
 export OPENSEARCH_DASHBOARDS_PASSWORD=$(kubectl -n $NS get secret opensearch -o jsonpath={.data.opensearch-dashboards-password} | base64 --decode)
-if [ -z $OPENSEARCH_DASHBOARDS_PASSWORD ]; then
+if [ -z "$OPENSEARCH_DASHBOARDS_PASSWORD" ]; then
   export OPENSEARCH_DASHBOARDS_PASSWORD=$(generate_random_secret)
 fi
 
@@ -30,7 +30,7 @@ helm -n $NS upgrade --install \
   oci://registry-1.docker.io/bitnamicharts/opensearch \
   --version 0.8.0 \
   --wait \
-  --set security.logstashPassword=$OPENSEARCH_DASHBOARDS_PASSWORD \
+  --set dashboards.password=$OPENSEARCH_DASHBOARDS_PASSWORD \
   $@ \
   -f values-os.yaml
 
