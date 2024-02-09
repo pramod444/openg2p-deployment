@@ -14,7 +14,7 @@ kubectl create ns $NS
 
 ./copy_secrets.sh
 
-helm -n $NS install social-registry openg2p/openg2p-social-registry \
+helm -n $NS upgrade --install social-registry openg2p/openg2p-social-registry \
     --version ${VERSION} \
     --set fullnameOverride=social-registry \
     --set global.hostname=$SOCIAL_REGISTRY_HOSTNAME \
