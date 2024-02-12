@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+. ../utils/common.sh
+
 export SANDBOX_HOSTNAME=${SANDBOX_HOSTNAME:-openg2p.sandbox.net}
 export OPENSEARCH_HOSTNAME=${OPENSEARCH_HOSTNAME:-opensearch.$SANDBOX_HOSTNAME}
 
