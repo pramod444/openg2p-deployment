@@ -19,5 +19,5 @@ helm -n $NS upgrade --install social-registry openg2p/openg2p-social-registry \
     --set fullnameOverride=social-registry \
     --set global.hostname=$SOCIAL_REGISTRY_HOSTNAME \
     --set odoo.image.repository=${SOCIAL_REGISTRY_ODOO_IMAGE_REPO:-openg2p/openg2p-social-registry-odoo-package} \
-    --set odoo.image.tag=${SOCIAL_REGISTRY_ODOO_IMAGE_TAG:-17.0-develop} \
+    --set odoo.image.tag=${SOCIAL_REGISTRY_ODOO_IMAGE_TAG:-17.0-develop-social-registry} \
     --wait $@
