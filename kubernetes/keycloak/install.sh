@@ -45,7 +45,7 @@ if [ "$KEYCLOAK_INIT_ENABLED" != "false" ]; then
     ${OPENG2P_MINIO_CLIENT_SECRET}
     ${OPENG2P_KAFKA_CLIENT_SECRET}
     ${OPENG2P_OPENSEARCH_CLIENT_SECRET}
-    ${OPENG2P_SUPERSET_CIENT_SECRET}' < ${KEYCLOAK_REALM_NAME}-realm.json > /tmp/${KEYCLOAK_REALM_NAME}-realm.json
+    ${OPENG2P_SUPERSET_CLIENT_SECRET}' < ${KEYCLOAK_REALM_NAME}-realm.json > /tmp/${KEYCLOAK_REALM_NAME}-realm.json
 
   keycloak_import_realm \
     "$(keycloak_get_admin_token)" \
