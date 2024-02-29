@@ -6,8 +6,8 @@ data:
   installation-name: openg2p
   installation-domain: ${SANDBOX_HOSTNAME}
   mosip-version: develop
-  mosip-api-host: api.${SANDBOX_HOSTNAME}
-  mosip-api-internal-host: api-internal.${SANDBOX_HOSTNAME}
+  mosip-api-host: ${SANDBOX_HOSTNAME}
+  mosip-api-internal-host: ${SANDBOX_HOSTNAME}
   mosip-prereg-host: prereg.${SANDBOX_HOSTNAME}
   mosip-activemq-host: activemq.${SANDBOX_HOSTNAME}
   mosip-kibana-host: kibana.${SANDBOX_HOSTNAME}

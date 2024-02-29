@@ -1,6 +1,9 @@
 istio:
   enabled: false
 
+metrics:
+  enabled: false
+
 extraEnvVars:
 - name: softhsm_esignet_security_pin
   valueFrom:
