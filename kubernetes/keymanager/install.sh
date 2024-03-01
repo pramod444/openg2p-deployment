@@ -32,10 +32,10 @@ kubectl label ns $KEYMANAGER_NS istio-injection=disabled --overwrite
 envsubst < global-conf-map.yaml | kubectl apply -f -
 
 echo Installing Softhsm for Kernel
-helm -n $SOFTHSM_NS install softhsm-kernel mosip/softhsm -f softhsm-values.yaml --version 12.0.2 --wait
+helm -n $SOFTHSM_NS install softhsm-kernel mosip/softhsm -f softhsm-values.yaml --version 12.0.1-B2 --wait
 
 echo Installing Secrets required by config-server
-helm -n $CONF_SECRETS_NS install conf-secrets mosip/conf-secrets --version 12.0.2 --wait
+helm -n $CONF_SECRETS_NS install conf-secrets mosip/conf-secrets --version 12.0.1-B4 --wait
 
 echo Installing Config Server
 $COPY_UTIL configmap global default $CONFIG_SERVER_NS
@@ -49,7 +49,7 @@ $COPY_UTIL secret conf-secrets-various $CONF_SECRETS_NS $CONFIG_SERVER_NS
 
 ./dummy_secrets.sh
 
-helm -n $CONFIG_SERVER_NS install config-server mosip/config-server -f config-server-values.yaml --version 12.0.2
+helm -n $CONFIG_SERVER_NS upgrade --install config-server mosip/config-server -f config-server-values.yaml --version 12.0.1-B4
 
 kubectl -n $CONFIG_SERVER_NS set env --keys=openg2p_admin_client_secret --from=secret/keycloak-client-secrets deployment/config-server --prefix=SPRING_CLOUD_CONFIG_SERVER_OVERRIDES_
 kubectl -n $CONFIG_SERVER_NS set env deployment/config-server SPRING_CLOUD_CONFIG_SERVER_OVERRIDES_HUB_SECRET_ENCRYPTION_KEY-
@@ -57,7 +57,7 @@ kubectl -n $CONFIG_SERVER_NS set env deployment/config-server SPRING_CLOUD_CONFI
 kubectl -n $CONFIG_SERVER_NS rollout status deploy/config-server
 
 echo Installing Artifactory
-helm -n $ARTIFACTORY_NS install artifactory mosip/artifactory --version 12.0.2 --wait
+helm -n $ARTIFACTORY_NS upgrade --install artifactory mosip/artifactory --version 12.0.1-B7 --wait
 
 echo Installing kernel Keygen
 $COPY_UTIL configmap global default $KEYMANAGER_NS
@@ -65,9 +65,9 @@ $COPY_UTIL configmap artifactory-share $ARTIFACTORY_NS $KEYMANAGER_NS
 $COPY_UTIL configmap config-server-share $CONFIG_SERVER_NS $KEYMANAGER_NS
 $COPY_UTIL configmap softhsm-kernel-share $SOFTHSM_NS $KEYMANAGER_NS
 
-helm -n $KEYMANAGER_NS install kernel-keygen mosip/keygen -f keygen-values.yaml --version 12.0.2 --wait --wait-for-jobs
+helm -n $KEYMANAGER_NS install kernel-keygen mosip/keygen -f keygen-values.yaml --version 12.0.1-B3 --wait --wait-for-jobs
 
 echo Installing Keymanager
-helm -n $KEYMANAGER_NS install keymanager mosip/keymanager --version 12.0.2 --set istio.enabled=false --wait
+helm -n $KEYMANAGER_NS upgrade --install keymanager mosip/keymanager --version 12.0.1-B3 --set istio.enabled=false --wait
 
 envsubst < istio-virtualservice.template.yaml | kubectl -n $KEYMANAGER_NS apply -f -
