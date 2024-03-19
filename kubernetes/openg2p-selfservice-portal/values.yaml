@@ -1,0 +1,15 @@
+envVars:
+  PORTAL_DEFAULT_ID_TOKEN_VERIFY_AT_HASH: "false"
+  # Replace the following URLs with available e-Signet issuer url and JWKS url.
+  PORTAL_AUTH_DEFAULT_ISSUERS: '["https://esignet.openg2p.sandbox.net/v1/esignet"]'
+  PORTAL_AUTH_DEFAULT_JWKS_URLS: '["https://esignet.openg2p.sandbox.net/v1/esignet/oauth/.well-known/jwks.json"]'
+
+
+# Uncomment the following if you donot have istio installed already.
+# istio:
+#   enabled: false
+# ingress:
+#   enabled: true
+
+# For more values checkout the full helm chart at
+# https://github.com/OpenG2P/openg2p-helm/blob/main/charts/openg2p-self-service-portal-api/values.yaml
