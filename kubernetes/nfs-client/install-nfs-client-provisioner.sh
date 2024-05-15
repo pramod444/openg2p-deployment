@@ -34,6 +34,7 @@ helm install nfs-client-provisioner -n $NS  \
 --set image.tag=v4.0.0 \
 --set nfs.server="$NFS_SERVER" \
 --set nfs.path="$NFS_PATH" \
+--set storageClass.reclaimPolicy="Retain" \
 --set storageClass.defaultClass=true \
 --wait \
 stable/nfs-client-provisioner
