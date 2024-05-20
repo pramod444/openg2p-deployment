@@ -36,6 +36,10 @@ spec:
   - route:
     - destination:
         host: rancher
+    headers:
+      request:
+        set:
+          x-forwarded-proto: https
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
@@ -50,3 +54,7 @@ spec:
   - route:
     - destination:
         host: keycloak
+    headers:
+      request:
+        set:
+          x-forwarded-proto: https
