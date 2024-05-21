@@ -29,3 +29,6 @@ rbac:
     verbs:
     - get
     - list
+
+ingress:
+  enabled: false

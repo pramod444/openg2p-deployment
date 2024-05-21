@@ -1,26 +1,47 @@
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
-  name: all-hosts
-  namespace: istio-system
+  name: internal
+  namespace: ${NS}
 spec:
   selector:
     istio: ingressgateway
   servers:
   - hosts:
-    - '*'
+    - ${WILDCARD_HOSTNAME}
     port:
-      name: http
-      number: 80
+      name: http-redirect-https
+      number: 81
       protocol: HTTP
     tls:
       httpsRedirect: true
   - hosts:
-    - '*'
+    - ${WILDCARD_HOSTNAME}
     port:
-      name: https
-      number: 443
-      protocol: HTTPS
+      name: http
+      number: 80
+      protocol: HTTP
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: public
+  namespace: ${NS}
+spec:
+  selector:
+    istio: ingressgateway-public
+  servers:
+  - hosts:
+    - ${WILDCARD_HOSTNAME}
+    port:
+      name: http-redirect-https
+      number: 81
+      protocol: HTTP
     tls:
-      credentialName: tls-openg2p-ingress
-      mode: SIMPLE
+      httpsRedirect: true
+  - hosts:
+    - ${WILDCARD_HOSTNAME}
+    port:
+      name: http
+      number: 80
+      protocol: HTTP

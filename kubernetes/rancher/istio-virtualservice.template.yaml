@@ -1,0 +1,60 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: internal
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - hosts:
+    - ${RANCHER_HOSTNAME}
+    - ${KEYCLOAK_HOSTNAME}
+    port:
+      name: http-redirect-https
+      number: 81
+      protocol: HTTP
+    tls:
+      httpsRedirect: true
+  - hosts:
+    - ${RANCHER_HOSTNAME}
+    - ${KEYCLOAK_HOSTNAME}
+    port:
+      name: http
+      number: 80
+      protocol: HTTP
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rancher
+spec:
+  gateways:
+  - internal
+  hosts:
+  - ${RANCHER_HOSTNAME}
+  http:
+  - route:
+    - destination:
+        host: rancher
+    headers:
+      request:
+        set:
+          x-forwarded-proto: https
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: keycloak
+spec:
+  gateways:
+  - internal
+  hosts:
+  - ${KEYCLOAK_HOSTNAME}
+  http:
+  - route:
+    - destination:
+        host: keycloak
+    headers:
+      request:
+        set:
+          x-forwarded-proto: https
