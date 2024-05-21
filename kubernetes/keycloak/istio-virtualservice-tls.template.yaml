@@ -9,17 +9,20 @@ spec:
   - hosts:
     - ${KEYCLOAK_HOSTNAME}
     port:
-      name: http-redirect-https
-      number: 81
+      name: http
+      number: 80
       protocol: HTTP
     tls:
       httpsRedirect: true
   - hosts:
     - ${KEYCLOAK_HOSTNAME}
     port:
-      name: http
-      number: 80
-      protocol: HTTP
+      name: https
+      number: 443
+      protocol: HTTPS
+    tls:
+      credentialName: tls-keycloak-ingress
+      mode: SIMPLE
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService

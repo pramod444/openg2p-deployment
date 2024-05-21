@@ -9,8 +9,6 @@ ingress:
 
 replicaCount: 2
 
-proxy: edge
-
 resources:
   limits: {}
   requests:
@@ -28,12 +26,5 @@ rbac:
     - get
     - list
 
-postgresql:
-  enabled: false
-
-externalDatabase:
-  host: postgres-postgresql.postgres
-  database: keycloakdb
-  user: keycloakuser
-  existingSecret: postgres-postgresql
-  existingSecretPasswordKey: password
+proxy: edge
+production: true
