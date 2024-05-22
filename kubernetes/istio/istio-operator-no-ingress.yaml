@@ -15,4 +15,6 @@ spec:
         ISTIO_META_IDLE_TIMEOUT: 0s
       holdApplicationUntilProxyStarts: true
   components:
-    ingressGateways: []
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: false

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 export RANCHER_HOSTNAME=${RANCHER_HOSTNAME:-rancher.openg2p.net}
+export RANCHER_ISTIO_OPERATOR=${RANCHER_ISTIO_OPERATOR:-true}
 export TLS=${TLS:-false}
-export ISTIO_OPERATOR=${ISTIO_OPERATOR:-true}
 export NS=${NS:-cattle-system}
 
 kubectl create ns $NS
@@ -14,8 +14,7 @@ helm -n $NS upgrade --install rancher rancher-latest/rancher \
     --set ingress.enabled=false \
     --set tls=external
 
-if [[ "$ISTIO_OPERATOR" == "true" ]]; then
-    kubectl apply -f base-istio-operator.yaml
+if [[ "$RANCHER_ISTIO_OPERATOR" == "true" ]]; then
     kubectl apply -f istio-operator.yaml
 fi
 

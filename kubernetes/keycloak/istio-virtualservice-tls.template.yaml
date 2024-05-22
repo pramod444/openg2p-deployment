@@ -9,16 +9,16 @@ spec:
   - hosts:
     - ${KEYCLOAK_HOSTNAME}
     port:
-      name: http
-      number: 80
-      protocol: HTTP
+      name: http2
+      number: 8080
+      protocol: HTTP2
     tls:
       httpsRedirect: true
   - hosts:
     - ${KEYCLOAK_HOSTNAME}
     port:
       name: https
-      number: 443
+      number: 8443
       protocol: HTTPS
     tls:
       credentialName: tls-keycloak-ingress
