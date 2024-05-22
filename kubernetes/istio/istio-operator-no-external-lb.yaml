@@ -20,6 +20,8 @@ spec:
       enabled: true
       label:
         istio: ingressgateway
+        istio-rancher: ingressgateway
+        istio-keycloak: ingressgateway
       k8s:
         nodeSelector:
           shouldInstallIstioIngress: "true"
@@ -45,16 +47,13 @@ spec:
         service:
           type: ClusterIP
           ports:
-          - port: 15021
-            name: status-port
-            targetPort: 15021
-            protocol: TCP
-          - port: 443
-            targetPort: 8443
-            name: https
-          - port: 80
+          - name: tcp-status-port
+            port: 15021
+          - name: http2
+            port: 80
             targetPort: 8080
-            name: http2
-          - port: 5432
-            targetPort: 5432
-            name: tcp-postgres
+          - name: https
+            port: 443
+            targetPort: 8443
+          - name: tcp-postgres
+            port: 5432
