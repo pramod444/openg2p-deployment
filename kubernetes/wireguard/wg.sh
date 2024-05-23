@@ -7,6 +7,13 @@ if [ $USER != "root" ]; then
   exit 1
 fi
 
+if [ -z $WG_MODE ]; then
+  export WG_MODE=docker
+elif [ *$WG_MODE* != "docker k8s" ]; then
+  echo "Unsupported WG_MODE. defaulting to docker"
+  export WG_MODE=docker
+fi
+
 if [ $# -lt 3 ]; then
   echo "Usage: ./wg.sh <wireguard name> <subnet for this wireguard> <port for this wireguard> [no of peers] [clients allowed ips]"
   exit 1
@@ -53,20 +60,15 @@ chmod +x /postdown.rules.sh
 iptables -A FORWARD -i wg0 -j ACCEPT
 iptables -A FORWARD -o wg0 -j ACCEPT
 
-#iptables -A FORWARD -m iprange --src-range 10.13.13.2-10.13.13.51 -d 172.31.35.104 -j ACCEPT
-#iptables -A FORWARD -m iprange --dst-range 10.13.13.2-10.13.13.51 -s 172.31.35.104 -j ACCEPT
-
-#iptables -A FORWARD -m iprange --src-range 10.13.13.2-10.13.13.51 -d 172.31.31.67 -j ACCEPT
-#iptables -A FORWARD -m iprange --dst-range 10.13.13.2-10.13.13.51 -s 172.31.31.67 -j ACCEPT
-
 iptables -A POSTROUTING -t nat -o eth0 -j MASQUERADE
 ' > /etc/$WG_NAME/rules.sh
 chmod +x /etc/$WG_NAME/rules.sh
 
+if [ $WG_MODE = "docker" ]; then
+
 docker run -d \
   --name=$WG_NAME \
   --cap-add=NET_ADMIN \
-  --cap-add=SYS_MODULE \
   -e PUID=1000 \
   -e PGID=1000 \
   -e TZ=Asia/Calcutta\
@@ -77,10 +79,65 @@ docker run -d \
   -e SERVERPORT=$WG_PORT \
   -p ${WG_PORT}:${WG_PORT}/udp \
   -v /etc/$WG_NAME/:/config \
-  -v /lib/modules:/lib/modules \
   --restart unless-stopped \
-  ghcr.io/linuxserver/wireguard
+  ghcr.io/linuxserver/wireguard || \
+{ echo "Error starting Docker"; exit 1; }
 
 WG_CONT_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $WG_NAME)
+
+elif [ $WG_MODE = "k8s" ]; then
+
+kubectl create ns wireguard-system --dry-run=client -o yaml | kubectl apply -f -
+echo \
+'apiVersion: v1
+kind: Pod
+metadata:
+  name: '"$WG_NAME"'
+  namespace: wireguard-system
+spec:
+  nodeName: node1
+  containers:
+  - name: wireguard
+    image: ghcr.io/linuxserver/wireguard
+    securityContext:
+      capabilities:
+        add:
+          - NET_ADMIN
+    env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "Asia/Calcutta"
+    - name: PEERS
+      value: '"${WG_PEERS}"'
+    - name: PEERDNS
+      value: ""
+    - name: INTERNAL_SUBNET
+      value: "'"${WG_SUBNET_SPLIT_ARR[0]}"'"
+    - name: ALLOWEDIPS
+      value: "'"$WG_ALLOWED_IPS"'"
+    - name: SERVERPORT
+      value: "'"$WG_PORT"'"
+    ports:
+    - containerPort: '"$WG_PORT"'
+      hostPort: '"$WG_PORT"'
+      protocol: UDP
+    volumeMounts:
+    - mountPath: /config
+      name: wg-configs
+  volumes:
+  - name: wg-configs
+    hostPath:
+      path: /etc/'"$WG_NAME"'
+' | kubectl apply -f - && \
+kubectl -n wireguard-system wait --for=condition=ready pod $WG_NAME || \
+{ echo "Error starting Pod"; exit 1; }
+
+WG_CONT_IP=$(kubectl -n wireguard-system get pod $WG_NAME --template '{{.status.podIP}}')
+
+fi
+
 ip route add $WG_SUBNET via $WG_CONT_IP
 
