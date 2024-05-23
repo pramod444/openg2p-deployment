@@ -9,7 +9,7 @@ fi
 
 if [ -z $WG_MODE ]; then
   export WG_MODE=docker
-elif [ *$WG_MODE* != "docker k8s" ]; then
+elif [ $WG_MODE != "docker" ] && [ $WG_MODE != "k8s" ]; then
   echo "Unsupported WG_MODE. defaulting to docker"
   export WG_MODE=docker
 fi
@@ -80,64 +80,72 @@ docker run -d \
   -p ${WG_PORT}:${WG_PORT}/udp \
   -v /etc/$WG_NAME/:/config \
   --restart unless-stopped \
+  --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
+  --sysctl="net.ipv4.ip_forward=1" \
   ghcr.io/linuxserver/wireguard || \
 { echo "Error starting Docker"; exit 1; }
 
-WG_CONT_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $WG_NAME)
-
 elif [ $WG_MODE = "k8s" ]; then
 
-kubectl create ns wireguard-system --dry-run=client -o yaml | kubectl apply -f -
+kubectl create ns wireguard-system || echo "Namespace Already Exists"
 echo \
-'apiVersion: v1
-kind: Pod
+'apiVersion: apps/v1
+kind: DaemonSet
 metadata:
-  name: '"$WG_NAME"'
+  name: '"${WG_NAME//_/-}"'
   namespace: wireguard-system
 spec:
-  nodeName: node1
-  containers:
-  - name: wireguard
-    image: ghcr.io/linuxserver/wireguard
-    securityContext:
-      capabilities:
-        add:
-          - NET_ADMIN
-    env:
-    - name: PUID
-      value: "1000"
-    - name: PGID
-      value: "1000"
-    - name: TZ
-      value: "Asia/Calcutta"
-    - name: PEERS
-      value: '"${WG_PEERS}"'
-    - name: PEERDNS
-      value: ""
-    - name: INTERNAL_SUBNET
-      value: "'"${WG_SUBNET_SPLIT_ARR[0]}"'"
-    - name: ALLOWEDIPS
-      value: "'"$WG_ALLOWED_IPS"'"
-    - name: SERVERPORT
-      value: "'"$WG_PORT"'"
-    ports:
-    - containerPort: '"$WG_PORT"'
-      hostPort: '"$WG_PORT"'
-      protocol: UDP
-    volumeMounts:
-    - mountPath: /config
-      name: wg-configs
-  volumes:
-  - name: wg-configs
-    hostPath:
-      path: /etc/'"$WG_NAME"'
-' | kubectl apply -f - && \
-kubectl -n wireguard-system wait --for=condition=ready pod $WG_NAME || \
+  selector:
+    matchLabels:
+      app: '"${WG_NAME//_/-}"'
+  template:
+    metadata:
+      labels:
+        app: '"${WG_NAME//_/-}"'
+    spec:
+      nodeName: node1
+      securityContext:
+        sysctls:
+          - name: net.ipv4.conf.all.src_valid_mark
+            value: "1"
+          - name: net.ipv4.ip_forward
+            value: "1"
+      containers:
+      - name: wireguard
+        image: ghcr.io/linuxserver/wireguard
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Asia/Calcutta"
+        - name: PEERS
+          value: "'"${WG_PEERS}"'"
+        - name: PEERDNS
+          value: ""
+        - name: INTERNAL_SUBNET
+          value: "'"${WG_SUBNET_SPLIT_ARR[0]}"'"
+        - name: ALLOWEDIPS
+          value: "'"$WG_ALLOWED_IPS"'"
+        - name: SERVERPORT
+          value: "'"$WG_PORT"'"
+        ports:
+        - containerPort: '"$WG_PORT"'
+          hostPort: '"$WG_PORT"'
+          protocol: UDP
+        volumeMounts:
+        - mountPath: /config
+          name: wg-configs
+      volumes:
+      - name: wg-configs
+        hostPath:
+          path: /etc/'"$WG_NAME"'
+' | kubectl apply -f - || \
 { echo "Error starting Pod"; exit 1; }
 
-WG_CONT_IP=$(kubectl -n wireguard-system get pod $WG_NAME --template '{{.status.podIP}}')
-
 fi
-
-ip route add $WG_SUBNET via $WG_CONT_IP
-
