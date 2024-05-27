@@ -8,7 +8,7 @@ spec:
     istio: ingressgateway
   servers:
   - hosts:
-    - ${WILDCARD_HOSTNAME}
+    - "${WILDCARD_HOSTNAME}"
     port:
       name: http2
       number: 8080
@@ -16,11 +16,11 @@ spec:
     tls:
       httpsRedirect: true
   - hosts:
-    - ${WILDCARD_HOSTNAME}
+    - "${WILDCARD_HOSTNAME}"
     port:
       name: https
       number: 8443
-      protocol: HTTP2
+      protocol: HTTPS
     tls:
-      credentialName: tls-openg2p-ingress
+      credentialName: tls-openg2p-${NS}-ingress
       mode: SIMPLE
