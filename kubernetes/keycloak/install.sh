@@ -8,7 +8,8 @@ export NS=${NS:-keycloak-system}
 kubectl create ns $NS
 
 helm -n $NS upgrade --install keycloak oci://registry-1.docker.io/bitnamicharts/keycloak \
-    -f values-keycloak.yaml
+    -f values-keycloak.yaml \
+    $@
 
 if [[ "$KEYCLOAK_ISTIO_OPERATOR" == "true" ]]; then
     kubectl apply -f istio-operator.yaml

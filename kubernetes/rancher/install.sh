@@ -12,7 +12,8 @@ helm repo update
 
 helm -n $NS upgrade --install rancher rancher-latest/rancher \
     --set ingress.enabled=false \
-    --set tls=external
+    --set tls=external \
+    $@
 
 if [[ "$RANCHER_ISTIO_OPERATOR" == "true" ]]; then
     kubectl apply -f istio-operator.yaml
