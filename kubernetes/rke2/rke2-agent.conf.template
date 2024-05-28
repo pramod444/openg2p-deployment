@@ -5,3 +5,5 @@ node-ip: <node internal ip>
 node-label: "shouldInstallIstioIngress=true"
 disable:
   - rke2-ingress-nginx
+kubelet-arg:
+  - --allowed-unsafe-sysctls=net.ipv4.conf.all.src_valid_mark,net.ipv4.ip_forward

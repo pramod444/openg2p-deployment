@@ -8,7 +8,7 @@ spec:
     istio: ingressgateway
   servers:
   - hosts:
-    - ${WILDCARD_HOSTNAME}
+    - "${WILDCARD_HOSTNAME}"
     port:
       name: http2-redirect-https
       number: 8081
@@ -16,7 +16,7 @@ spec:
     tls:
       httpsRedirect: true
   - hosts:
-    - ${WILDCARD_HOSTNAME}
+    - "${WILDCARD_HOSTNAME}"
     port:
       name: http2
       number: 8080
@@ -32,7 +32,7 @@ spec:
     istio: ingressgateway-public
   servers:
   - hosts:
-    - ${WILDCARD_HOSTNAME}
+    - "${WILDCARD_HOSTNAME}"
     port:
       name: http2-redirect-https
       number: 8081
@@ -40,7 +40,7 @@ spec:
     tls:
       httpsRedirect: true
   - hosts:
-    - ${WILDCARD_HOSTNAME}
+    - "${WILDCARD_HOSTNAME}"
     port:
       name: http2
       number: 8080
