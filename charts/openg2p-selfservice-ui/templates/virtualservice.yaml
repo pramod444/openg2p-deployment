@@ -1,0 +1,61 @@
+{{- if .Values.istio.enabled }}
+{{- if .Values.istio.virtualservice.enabled }}
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{ include "portal.fullname" . }}
+  labels:
+    {{- include "portal.labels" . | nindent 4 }}
+spec:
+  hosts:
+  {{- if .Values.istio.virtualservice.host }}
+  - {{ .Values.istio.virtualservice.host }}
+  {{- else }}
+  - {{ .Values.global.hostname }}
+  {{- end }}
+  gateways:
+    {{- if not .Values.istio.virtualservice.gateway }}
+    - {{ include "openg2p.fullname" . }}
+    {{- else }}
+    - {{ .Values.istio.virtualservice.gateway }}
+    {{- end }}
+  http:
+  {{- if .Values.istio.virtualservice.apiPrefix }}
+  - match:
+    - uri:
+        prefix: {{ .Values.istio.virtualservice.apiPrefix }}
+    {{- if .Values.istio.virtualservice.apiRewriteUri }}
+    rewrite:
+      uri: {{ .Values.istio.virtualservice.apiRewriteUri }}
+    {{- end }}
+    route:
+    - destination:
+        {{- if .Values.istio.virtualservice.apiServicePath }}
+        host: {{ .Values.istio.virtualservice.apiServicePath }}
+        {{- else }}
+        host: {{ include "portal.fullname" . | replace "ui" "api" }}
+        {{- end }}
+        port:
+          number: {{ .Values.service.port }}
+  {{- end }}
+  - match:
+    - uri:
+        prefix: {{ .Values.istio.virtualservice.prefix }}
+    {{- if .Values.istio.virtualservice.rewriteUri }}
+    rewrite:
+      uri: {{ .Values.istio.virtualservice.rewriteUri }}
+    {{- end }}
+    route:
+    - destination:
+        host: {{ include "portal.fullname" . }}
+        port:
+          number: {{ .Values.service.port }}
+  {{- if .Values.istio.virtualservice.redirectToSelfServiceEnabled }}
+  - match:
+    - uri:
+        exact: "/"
+    redirect:
+      uri: {{ .Values.istio.virtualservice.prefix }}
+  {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,239 @@
+global:
+  odkHostname: ""
+  mailname: ""
+  sysAdminEmail: ""
+  supportEmail: ""
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8383
+
+image:
+  registry: docker.io
+  repository: openg2p/odk-central-backend
+  tag: v2024.1.0
+  pullPolicy: Always
+
+containerPort: 8383
+
+startupProbe:
+  enabled: true
+  tcpSocket:
+    port: 8383
+  initialDelaySeconds: 0
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 10
+  successThreshold: 1
+
+livenessProbe:
+  enabled: true
+  tcpSocket:
+    port: 8383
+  initialDelaySeconds: 20
+  periodSeconds: 60
+  timeoutSeconds: 5
+  failureThreshold: 2
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  tcpSocket:
+    port: 8383
+  initialDelaySeconds: 0
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 2
+  successThreshold: 1
+
+command: ["bash"]
+args: ["-c", "wait-for-it ${DB_HOST}:5432 -- ./start-odk.sh"]
+
+resources:
+  limits: {}
+  #   cpu: 200m
+  #   memory: 256Mi
+  requests: {}
+  #   cpu: 100m
+  #   memory: 1500Mi
+
+containerSecurityContext:
+  enabled: false
+  runAsUser: odk
+  runAsNonRoot: true
+
+podSecurityContext:
+  enabled: false
+  fsGroup: 1001
+
+envVars:
+  DOMAIN: '{{ .Values.global.odkHostname }}'
+  SYSADMIN_EMAIL: '{{ .Values.global.sysAdminEmail }}'
+  NODE_OPTIONS: ''
+
+  DB_HOST: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+  DB_USER: '{{ .Values.postgresql.auth.username }}'
+  DB_NAME: '{{ .Values.postgresql.auth.database }}'
+  DB_SSL: "null"
+
+  ENKETO_HOST: '{{ .Release.Name }}-odk-central-enketo'
+  ENKETO_PORT: "8005"
+
+  PYXFORM_HOST: '{{ .Release.Name }}-odk-central-pyxform'
+  PYXFORM_PORT: "80"
+
+  EMAIL_FROM: 'no-reply@{{ .Values.global.odkHostname }}'
+  EMAIL_HOST: '{{ .Release.Name }}-odk-central-mail'
+  EMAIL_PORT: "25"
+  EMAIL_SECURE: "false"
+  EMAIL_IGNORE_TLS: "true"
+  EMAIL_USER: ""
+  EMAIL_PASSWORD: ""
+
+  OIDC_ENABLED: "true"
+  OIDC_ISSUER_URL: ""
+  OIDC_CLIENT_ID: ""
+  OIDC_CLIENT_SECRET: ""
+
+  SENTRY_ORG_SUBDOMAIN: "o130137"
+  SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
+  SENTRY_PROJECT: "1298632"
+envVarsFrom:
+  DB_PASSWORD:
+    secretKeyRef:
+      name: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+      key: password
+  ENKETO_API_KEY:
+    secretKeyRef:
+      name: '{{ .Release.Name }}-odk-central-enketo'
+      key: enketo-api-key
+
+postgresql:
+  # any other postgres helm chart configuration here
+  enabled: true
+  auth:
+    username: odkuser
+    database: odkdb
+  primary:
+    extendedConfiguration: |-
+      wal_level = logical
+      max_wal_senders = 20
+      max_replication_slots = 10
+  istio:
+    enabled: false
+    virtualservice:
+      enabled: true
+      host: "*"
+      gateway: ""
+      matchPort: 5432
+      destination: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+      destinationPort: "5432"
+    gateway:
+      enabled: true
+      port: 5432
+      host: "*"
+      ingressController:
+        istio: ingressgateway
+      tls:
+        enabled: false
+        mode: SIMPLE
+        credentialName: ""
+
+configJsonTemplate: |-
+  {
+    "default": {
+      "database": {
+        "host": "${DB_HOST}",
+        "user": "${DB_USER}",
+        "password": "${DB_PASSWORD}",
+        "database": "${DB_NAME}",
+        "ssl": ${DB_SSL}
+      },
+      "email": {
+        "serviceAccount": "${EMAIL_FROM}",
+        "transport": "smtp",
+        "transportOpts": {
+          "host": "${EMAIL_HOST}",
+          "port": ${EMAIL_PORT},
+          "secure": ${EMAIL_SECURE},
+          "ignoreTLS": ${EMAIL_IGNORE_TLS},
+          "auth": {
+            "user": "${EMAIL_USER}",
+            "pass": "${EMAIL_PASSWORD}"
+          }
+        }
+      },
+      "xlsform": {
+        "host": "${PYXFORM_HOST}",
+        "port": ${PYXFORM_PORT}
+      },
+      "enketo": {
+        "url": "http://${ENKETO_HOST}:${ENKETO_PORT}/-",
+        "apiKey": "${ENKETO_API_KEY}"
+      },
+      "env": {
+        "domain": "https://${DOMAIN}",
+        "sysadminAccount": "${SYSADMIN_EMAIL}"
+      },
+      "oidc": {
+        "enabled": ${OIDC_ENABLED},
+        "issuerUrl": "${OIDC_ISSUER_URL}",
+        "clientId": "${OIDC_CLIENT_ID}",
+        "clientSecret": "${OIDC_CLIENT_SECRET}"
+      },
+      "external": {
+        "sentry": {
+          "orgSubdomain": "${SENTRY_ORG_SUBDOMAIN}",
+          "key": "${SENTRY_KEY}",
+          "project": "${SENTRY_PROJECT}"
+        }
+      }
+    }
+  }
+
+startOdkScript: |-
+  #!/usr/bin/env bash
+
+  # This file is taken from https://github.com/getodk/central/tree/v2024.1.0/files/service/scripts
+  # And modified the config template generation line.
+
+  echo "generating local service configuration.."
+  envsubst < /usr/share/odk/config.json.template > /usr/odk/config/local.json
+
+  export SENTRY_RELEASE="$(cat sentry-versions/server)"
+  export SENTRY_TAGS="{ \"version.central\": \"$(cat sentry-versions/central)\", \"version.client\": \"$(cat sentry-versions/client)\" }"
+
+  echo "running migrations.."
+  node ./lib/bin/run-migrations
+
+  echo "checking migration success.."
+  node ./lib/bin/check-migrations
+
+  if [ $? -eq 1 ]; then
+    echo "*** Error starting ODK! ***"
+    echo "After attempting to automatically migrate the database, we have detected unapplied migrations, which suggests a problem with the database migration step. Please look in the console above this message for any errors and post what you find in the forum: https://forum.getodk.org/"
+    exit 1
+  fi
+
+  echo "starting cron.."
+  cron -f &
+
+  if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+    MEMTOT=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+  elif [ "$(cat /sys/fs/cgroup/memory.max)" != "max" ]; then
+    MEMTOT=$(cat /sys/fs/cgroup/memory.max)
+  else
+    MEMTOT=$(vmstat -s | grep 'total memory' | awk '{ print $1 }')
+  fi
+
+  if [ "$MEMTOT" -gt "1100000" ]; then
+    export WORKER_COUNT=4
+  else
+    export WORKER_COUNT=1
+  fi
+  echo "using $WORKER_COUNT worker(s) based on available memory ($MEMTOT).."
+
+  echo "starting server."
+  exec npx pm2-runtime ./pm2.config.js

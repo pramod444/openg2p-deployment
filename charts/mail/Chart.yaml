@@ -1,0 +1,13 @@
+apiVersion: v2
+name: mail
+description: A Helm chart for mail/smtp server.
+type: application
+version: "1.2.0"
+appVersion: ""
+dependencies:
+- name: common
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 2.x.x
+keywords:
+  - mail
+  - smtp
