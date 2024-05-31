@@ -1,3 +1,3 @@
-# Wireguard Server
+# Wireguard Bastion
 
-- Refer to [Wireguard Server Setup](https://docs.openg2p.org/deployment/infrastructure-setup/wireguard-server-setup)
+- Refer to [Wireguard Bastion](https://docs.openg2p.org/deployment/base-infrastructure/wireguard-bastion) docs.
