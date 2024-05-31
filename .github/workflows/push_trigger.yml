@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SKIP: 'FALSE'
-      RANCHER_CHART_FILTER: 'catalog.cattle.io/display-name'
+      RANCHER_CHART_FILTER: "openg2p.org/add-to-rancher"
     defaults:
       run:
         shell: bash
@@ -50,7 +50,7 @@ jobs:
             chartname=$(basename "$chartpath")
             echo "Chartname: $chartname"
             helm package charts/$chartpath
-            is_rancher_chart=$(grep "$RANCHER_CHART_FILTER" charts/${chartname}/Chart.yaml)
+            is_rancher_chart=$(grep "$RANCHER_CHART_FILTER" charts/${chartpath%*/}/Chart.yaml)
             if [ -n "$is_rancher_chart" ]; then
               RANCHER_CHARTS+=("$chartname")
             fi
