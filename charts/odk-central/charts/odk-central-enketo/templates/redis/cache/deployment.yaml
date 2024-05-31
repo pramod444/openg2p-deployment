@@ -1,0 +1,35 @@
+{{- if .Values.redis.cache.enabled }}
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}-redis-cache
+  labels:
+    app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-cache
+spec:
+  replicas: {{ .Values.redis.cache.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-cache
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-cache
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.cache.image }}
+          imagePullPolicy: {{ .Values.redis.cache.imagePullPolicy }}
+          {{- with .Values.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+          - containerPort: {{ .Values.redis.cache.containerPort }}
+          volumeMounts:
+          - name: redis-conf
+            mountPath: {{ .Values.redis.cache.confMountPath }}
+      volumes:
+        - name: redis-conf
+          configMap:
+            name: {{ include "common.names.fullname" . }}-redis-cache
+{{- end }}

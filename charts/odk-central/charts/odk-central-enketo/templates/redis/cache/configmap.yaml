@@ -1,0 +1,9 @@
+{{- if .Values.redis.cache.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-redis-cache
+data:
+  redis-enketo-cache.conf: |-
+    {{- tpl .Values.redisCacheConf $ | nindent 4 }}
+{{- end }}

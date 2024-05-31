@@ -12,4 +12,4 @@ envVars:
 #   enabled: true
 
 # For more values checkout the full helm chart at
-# https://github.com/OpenG2P/openg2p-helm/blob/main/charts/openg2p-self-service-portal-api/values.yaml
+# https://github.com/OpenG2P/openg2p-deployment/blob/main/charts/openg2p-self-service-portal-api/values.yaml

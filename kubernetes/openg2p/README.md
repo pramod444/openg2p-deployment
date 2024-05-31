@@ -1,3 +1,3 @@
-## OpenG2P
+## OpenG2P PBMS
 
-- Refer to [OpenG2P PBMS deployment instructions](https://docs.openg2p.org/deployment/openg2p-modules-deployment/pbms-deployment)
+This can now be installed directly. Refer to [OpenG2P PBMS deployment](https://docs.openg2p.org/pbms/deployment).

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}
+data:
+  config.json.template: |-
+    {{- tpl .Values.configJsonTemplate $ | nindent 4 }}
+  start-odk.sh: |-
+    {{- tpl .Values.startOdkScript $ | nindent 4 }}

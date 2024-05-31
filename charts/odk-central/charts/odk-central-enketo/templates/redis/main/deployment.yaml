@@ -1,0 +1,35 @@
+{{- if .Values.redis.main.enabled }}
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}-redis-main
+  labels:
+    app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+spec:
+  replicas: {{ .Values.redis.main.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.main.image }}
+          imagePullPolicy: {{ .Values.redis.main.imagePullPolicy }}
+          {{- with .Values.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+          - containerPort: {{ .Values.redis.main.containerPort }}
+          volumeMounts:
+          - name: redis-conf
+            mountPath: {{ .Values.redis.main.confMountPath }}
+      volumes:
+        - name: redis-conf
+          configMap:
+            name: {{ include "common.names.fullname" . }}-redis-main
+{{- end }}

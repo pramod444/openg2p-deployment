@@ -1,0 +1,16 @@
+{{- if .Values.redis.main.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "common.names.fullname" . }}-redis-main
+  labels:
+    app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+spec:
+  type: {{ .Values.redis.main.service.type }}
+  ports:
+    - name: tcp-redis
+      port: {{ .Values.redis.main.service.port }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
+{{- end }}

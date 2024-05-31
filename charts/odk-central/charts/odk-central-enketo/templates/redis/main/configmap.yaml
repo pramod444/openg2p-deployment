@@ -1,0 +1,9 @@
+{{- if .Values.redis.main.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-redis-main
+data:
+  redis-enketo-main.conf: |-
+    {{- tpl .Values.redisMainConf $ | nindent 4 }}
+{{- end }}

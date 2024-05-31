@@ -1,0 +1,301 @@
+global:
+  odkHostname: ""
+  mainname: ""
+  sysAdminEmail: ""
+  supportEmail: ""
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8005
+
+image:
+  registry: docker.io
+  repository: openg2p/odk-central-enketo
+  tag: v2024.1.0
+  pullPolicy: Always
+
+containerPort: 8005
+
+startupProbe:
+  enabled: true
+  tcpSocket:
+    port: 8005
+  initialDelaySeconds: 0
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 10
+  successThreshold: 1
+
+livenessProbe:
+  enabled: true
+  tcpSocket:
+    port: 8005
+  initialDelaySeconds: 20
+  periodSeconds: 60
+  timeoutSeconds: 5
+  failureThreshold: 2
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  tcpSocket:
+    port: 8005
+  initialDelaySeconds: 0
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 2
+  successThreshold: 1
+
+command: []
+args: []
+
+resources:
+  limits: {}
+  #   cpu: 200m
+  #   memory: 256Mi
+  requests: {}
+  #   cpu: 100m
+  #   memory: 1500Mi
+
+containerSecurityContext:
+  enabled: false
+  runAsUser: odk
+  runAsNonRoot: true
+
+podSecurityContext:
+  enabled: false
+  fsGroup: 1001
+
+envVars:
+  DOMAIN: '{{ .Values.global.odkHostname }}'
+  SUPPORT_EMAIL: '{{ .Values.global.supportEmail }}'
+  ENKETO_PORT: "8005"
+  REDIS_MAIN_HOST: '{{ include "common.names.fullname" . }}-redis-main'
+  REDIS_CACHE_HOST: '{{ include "common.names.fullname" . }}-redis-cache'
+envVarsFrom:
+  ENKETO_SECRET:
+    secretKeyRef:
+      name: '{{ include "common.names.fullname" . }}'
+      key: enketo-secret
+  ENKETO_LESS_SECRET:
+    secretKeyRef:
+      name: '{{ include "common.names.fullname" . }}'
+      key: enketo-less-secret
+  ENKETO_API_KEY:
+    secretKeyRef:
+      name: '{{ include "common.names.fullname" . }}'
+      key: enketo-api-key
+
+redis:
+  main:
+    enabled: true
+    image: redis:7.2
+    imagePullPolicy: IfNotPresent
+    replicaCount: 1
+    confMountPath: /usr/local/etc/redis/mnt
+    command:
+    - redis-server
+    - /usr/local/etc/redis/mnt/redis-enketo-main.conf
+    containerPort: 6379
+    service:
+      type: ClusterIP
+      port: 6379
+  cache:
+    enabled: true
+    image: redis:7.2
+    imagePullPolicy: IfNotPresent
+    replicaCount: 1
+    confMountPath: /usr/local/etc/redis/mnt
+    command:
+    - redis-server
+    - /usr/local/etc/redis/mnt/redis-enketo-cache.conf
+    containerPort: 6379
+    service:
+      type: ClusterIP
+      port: 6379
+
+startEnketoScript: |-
+  #!/bin/sh
+
+  CONFIG_PATH=${ENKETO_SRC_DIR}/config/config.json
+  echo "generating enketo configuration..."
+
+  envsubst < "$CONFIG_PATH.template" > "$CONFIG_PATH"
+
+  echo "starting enketo..."
+  exec yarn workspace enketo-express start
+
+configJsonTemplate: |-
+  {
+    "app name": "Enketo",
+    "base path": "-",
+    "encryption key": "${ENKETO_SECRET}",
+    "id length": 31,
+    "less secure encryption key": "${ENKETO_LESS_SECRET}",
+    "linked form and data server": {
+        "api key": "${ENKETO_API_KEY}",
+        "authentication": {
+          "type": "cookie",
+          "url": "https://${DOMAIN}/#/login?next={RETURNURL}"
+        },
+        "name": "ODK Central",
+        "server url": "${DOMAIN}"
+    },
+    "logo": {
+      "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "href": ""
+    },
+    "offline enabled": true,
+    "payload limit": "1mb",
+    "port": "${ENKETO_PORT}",
+    "query parameter to pass to submission": "st",
+    "redis": {
+      "main": {
+        "host": "${REDIS_MAIN_HOST}",
+        "port": "6379"
+      },
+      "cache": {
+        "host": "${REDIS_CACHE_HOST}",
+        "port": "6379"
+      }
+    },
+    "support": {
+      "email": "${SUPPORT_EMAIL}"
+    },
+    "text field character limit": 1000000,
+    "exclude non-relevant": true
+  }
+
+redisMainConf: |-
+  # Redis configuration for Enketo main database instance
+
+  #supervised systemd
+
+  #daemonize yes
+
+  #pidfile /var/run/redis-enketo-cache/redis-server.pid
+
+  port 6379
+
+  bind 0.0.0.0
+
+  timeout 0
+
+  tcp-keepalive 0
+
+  loglevel notice
+
+  #logfile /var/log/redis/redis-enketo-main.log
+
+  databases 16
+
+  save 300 1
+
+  stop-writes-on-bgsave-error yes
+
+  rdbcompression yes
+
+  rdbchecksum yes
+
+  dbfilename enketo-main.rdb
+
+  #dir /var/lib/redis/
+
+  slave-serve-stale-data yes
+  slave-read-only yes
+  repl-disable-tcp-nodelay no
+  slave-priority 100
+
+  appendonly no
+
+  lua-time-limit 5000
+
+  slowlog-log-slower-than 10000
+
+  slowlog-max-len 128
+
+  notify-keyspace-events ""
+
+  hash-max-ziplist-entries 512
+  hash-max-ziplist-value 64
+  list-max-ziplist-entries 512
+  list-max-ziplist-value 64
+  set-max-intset-entries 512
+  zset-max-ziplist-entries 128
+  zset-max-ziplist-value 64
+  activerehashing yes
+  client-output-buffer-limit normal 0 0 0
+  client-output-buffer-limit slave 256mb 64mb 60
+  client-output-buffer-limit pubsub 32mb 8mb 60
+  hz 10
+  aof-rewrite-incremental-fsync yes
+
+  #include /etc/redis/conf.d/local.conf
+
+redisCacheConf: |-
+  # Redis configuration for Enketo XSLT Cache
+
+  #supervised systemd
+
+  #daemonize yes
+
+  #pidfile /var/run/redis-enketo-cache/redis-server.pid
+
+  port 6379
+
+  bind 0.0.0.0
+
+  timeout 0
+
+  tcp-keepalive 0
+
+  loglevel notice
+
+  #logfile /var/log/redis/redis-enketo-cache.log
+
+  databases 16
+
+  save 3600 1
+
+  stop-writes-on-bgsave-error yes
+
+  rdbcompression yes
+
+  rdbchecksum yes
+
+  dbfilename enketo-cache.rdb
+
+  #dir /var/lib/redis/
+
+  slave-serve-stale-data yes
+  slave-read-only yes
+  repl-disable-tcp-nodelay no
+  slave-priority 100
+
+  appendonly no
+
+  lua-time-limit 5000
+
+  slowlog-log-slower-than 10000
+
+  slowlog-max-len 128
+
+  notify-keyspace-events ""
+
+  hash-max-ziplist-entries 512
+  hash-max-ziplist-value 64
+  list-max-ziplist-entries 512
+  list-max-ziplist-value 64
+  set-max-intset-entries 512
+  zset-max-ziplist-entries 128
+  zset-max-ziplist-value 64
+  activerehashing yes
+  client-output-buffer-limit normal 0 0 0
+  client-output-buffer-limit slave 256mb 64mb 60
+  client-output-buffer-limit pubsub 32mb 8mb 60
+  hz 10
+  aof-rewrite-incremental-fsync yes
+
+  #include /etc/redis/conf.d/local.conf

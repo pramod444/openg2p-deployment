@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "common.names.fullname" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: tcp-smtp
+      port: {{ .Values.service.port }}
+      protocol: TCP
+      targetPort: {{ .Values.containerPort }}
+  selector:
+    app.kubernetes.io/name: {{ include "common.names.fullname" . }}
