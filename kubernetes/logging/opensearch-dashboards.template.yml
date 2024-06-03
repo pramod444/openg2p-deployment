@@ -9,7 +9,7 @@ opensearch:
   hosts: https://opensearch:9200
   username: kibanaserver
   password: ${OPENSEARCH_DASHBOARDS_PASSWORD}
-  requestHeadersWhitelist: 
+  requestHeadersAllowlist:
     - authorization
     - securitytenant
   ssl:
@@ -21,8 +21,8 @@ opensearch_security:
     - openid
     multiple_auth_enabled: true
   openid:
-    connect_url: http://keycloak.keycloak/realms/openg2p/.well-known/openid-configuration
-    client_id: openg2p-opensearch-client
+    connect_url: ${KEYCLOAK_ISSUER_URL}/.well-known/openid-configuration
+    client_id: ${OPENSEARCH_CLIENT_ID}
     client_secret: ${OPENSEARCH_CLIENT_SECRET}
     base_redirect_url: https://${OPENSEARCH_HOSTNAME}
     logout_url: ""

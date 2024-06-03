@@ -4,7 +4,7 @@ metadata:
   name: opensearch
 spec:
   gateways:
-    - istio-system/all-hosts
+    - internal
   hosts:
     - ${OPENSEARCH_HOSTNAME}
   http:

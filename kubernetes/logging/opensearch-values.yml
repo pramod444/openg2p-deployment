@@ -9,21 +9,26 @@ dashboards:
 
   extraVolumeMounts:
   - name: dashboards-config
-    mountPath: /opt/bitnami/opensearch-dashboards/config/opensearch_dashboards.yml
-    subPath: opensearch_dashboards.yml  
+    mountPath: /opt/bitnami/opensearch-dashboards/config.default/opensearch_dashboards.yml
+    subPath: opensearch_dashboards.yml
 
 master:
   replicaCount: 1
   persistence:
     size: 8Gi
+  heapSize: 256m
+  masterOnly: false
+
 data:
-  replicaCount: 1
-  persistence:
-    size: 8Gi
+  replicaCount: 0
+  # persistence:
+  #   size: 8Gi
+
 coordinating:
-  replicaCount: 1
+  replicaCount: 0
+
 ingest:
-  replicaCount: 1
+  replicaCount: 0
 
 extraVolumes:
 - name: security-config
@@ -32,7 +37,7 @@ extraVolumes:
 
 extraVolumeMounts:
 - name: security-config
-  mountPath: /opt/bitnami/opensearch/config/opensearch-security/config.yml
+  mountPath: /opt/bitnami/opensearch/config.default/opensearch-security/config.yml
   subPath: opensearch-security-config.yml
 
 security:
