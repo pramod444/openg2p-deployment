@@ -1,4 +1,6 @@
 #!/bin/sh
+# This script is useful while releasing of packages where version number 
+# in Odoo packages has to be updated enmasse.
 # ./update_readmes.sh <repo name>
 
 SED=gsed
