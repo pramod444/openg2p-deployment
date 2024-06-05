@@ -5,7 +5,7 @@ metadata:
 spec:
   opensearch:
     scheme: https
-    host: opensearch
+    host: opensearch.${NS}
     port: 9200
     ssl_verify: false
     user: logstash

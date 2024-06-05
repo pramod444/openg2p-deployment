@@ -44,5 +44,5 @@ if [ "$OPENSEARCH_ISTIO_ENABLED" != "false" ]; then
 fi
 
 if [ "$OPENSEARCH_LOGGING_ENABLED" != "false" ]; then
-  envsubst < opensearch-logging-output.yml | kubectl -n $NS apply -f -
+  envsubst < opensearch-logging-output.template.yml | kubectl -n $NS apply -f -
 fi
