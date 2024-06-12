@@ -1,6 +1,5 @@
 questions:
 - variable: global.odkHostname
-  default: odk.sandbox.openg2p.net
   description: Hostname under which ODK Central should be accessible
   type: string
   label: "ODK Central Hostname"

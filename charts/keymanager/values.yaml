@@ -1,0 +1,649 @@
+## Global Docker image parameters
+## Please, note that this will override the image parameters, including dependencies, configured to use the global value
+## Current available global Docker image parameters: imageRegistry and imagePullSecrets
+##
+# global:
+#   imageRegistry: myRegistryName
+#   imagePullSecrets:
+#     - myRegistryKeySecretName
+#   storageClass: myStorageClass
+global:
+  keymanagerHostname: keymanager.openg2p.sandbox.net
+
+## Add labels to all the deployed resources
+##
+commonLabels:
+  app.kubernetes.io/component: mosip
+
+## Add annotations to all the deployed resources
+##
+commonAnnotations: {}
+
+## Extra objects to deploy (value evaluated as a template)
+##
+extraDeploy: []
+
+## Number of nodes
+##
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 80
+  ## loadBalancerIP for the SuiteCRM Service (optional, cloud specific)
+  ## ref: http://kubernetes.io/docs/user-guide/services/#type-loadbalancer
+  ##
+  ## loadBalancerIP:
+  ##
+  ## nodePorts:
+  ##   http: <to set explicitly, choose port between 30000-32767>
+  ##   https: <to set explicitly, choose port between 30000-32767>
+  ##
+
+  nodePorts:
+    http: ""
+    https: ""
+  ## Enable client source IP preservation
+  ## ref http://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
+  ##
+  externalTrafficPolicy: Cluster
+
+image:
+  registry: docker.io
+  repository: mosipid/kernel-keymanager-service
+  tag: 1.2.0.1-B3
+  ## Specify a imagePullPolicy
+  ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+  ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ##
+  pullPolicy: Always
+  ## Optionally specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the namespace.
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ##
+  # pullSecrets:
+  #   - myRegistryKeySecretName
+
+## Port on which this particular spring service module is running.
+springServicePort: 8088
+
+## Configure extra options for liveness and readiness probes
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+##
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /v1/keymanager/actuator/health
+    port: 8088
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+  successThreshold: 1
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /v1/keymanager/actuator/health
+    port: 8088
+  initialDelaySeconds: 20
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /v1/keymanager/actuator/health
+    port: 8088
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+## Command and args for running the container (set to default if not set). Use array form
+##
+command: []
+args: []
+
+## Deployment pod host aliases
+## https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/
+##
+hostAliases: []
+
+## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+##
+## We usually recommend not to specify default resources and to leave this as a conscious
+## choice for the user. This also increases chances charts run on environments with little
+## resources, such as Minikube. If you do want to specify resources, uncomment the following
+## lines, adjust them as necessary, and remove the curly braces after 'resources:'. Example:
+# resources:
+#   limits:
+#     cpu: 1000m
+#     memory: 500Mi
+#   requests:
+#     cpu: 200m
+#     memory: 200Mi
+resources: {}
+
+## Specify any JAVA_OPTS string here. These typically will be specified in conjunction with above resources
+## Example: javaOpts: "-Xms500M -Xmx500M"
+javaOpts: ""
+
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
+## Clamav container already runs as 'mosip' user, so we may not need to enable this
+containerSecurityContext:
+  enabled: false
+  runAsUser: mosip
+  runAsNonRoot: true
+
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
+##
+podSecurityContext:
+  enabled: false
+  fsGroup: 1001
+
+## Pod affinity preset
+## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity
+## Allowed values: soft, hard
+##
+podAffinityPreset: ""
+
+## Pod anti-affinity preset
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity
+## Allowed values: soft, hard
+##
+podAntiAffinityPreset: soft
+
+## Node affinity preset
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#node-affinity
+## Allowed values: soft, hard
+##
+nodeAffinityPreset:
+  ## Node affinity type
+  ## Allowed values: soft, hard
+  ##
+  type: ""
+  ## Node label key to match
+  ## E.g.
+  ## key: "kubernetes.io/e2e-az-name"
+  ##
+  key: ""
+  ## Node label values to match
+  ## E.g.
+  ## values:
+  ##   - e2e-az1
+  ##   - e2e-az2
+  ##
+  values: []
+
+## Affinity for pod assignment. Evaluated as a template.
+## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+##
+affinity: {}
+
+## Node labels for pod assignment. Evaluated as a template.
+## ref: https://kubernetes.io/docs/user-guide/node-selection/
+##
+nodeSelector: {}
+
+## Tolerations for pod assignment. Evaluated as a template.
+## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+##
+tolerations: []
+
+## Pod extra labels
+## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+##
+podLabels: {}
+
+## Annotations for server pods.
+## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+##
+podAnnotations: {}
+
+##  pods' priority.
+## ref: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
+##
+# priorityClassName: ""
+
+## lifecycleHooks for the  container to automate configuration before or after startup.
+##
+lifecycleHooks: {}
+
+## Custom Liveness probes for
+##
+customLivenessProbe: {}
+
+## Custom Rediness probes
+##
+customReadinessProbe: {}
+
+## Update strategy - only really applicable for deployments with RWO PVs attached
+## If replicas = 1, an update can get "stuck", as the previous pod remains attached to the
+## PV, and the "incoming" pod can never start. Changing the strategy to "Recreate" will
+## terminate the single previous pod, so that the new, incoming pod can attach to the PV
+##
+updateStrategy:
+  type: RollingUpdate
+
+## Add init containers to the  pods.
+## Example:
+## initContainers:
+##   - name: your-image-name
+##     image: your-image
+##     imagePullPolicy: Always
+##     ports:
+##       - name: portname
+##         containerPort: 1234
+##
+initContainers: {}
+
+## Add sidecars to the  pods.
+## Example:
+## sidecars:username
+##   - name: your-image-name
+##     image: your-image
+##     imagePullPolicy: Always
+##     ports:
+##       - name: portname
+##         containerPort: 1234
+##
+sidecars: {}
+
+persistence:
+  enabled: false
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack).
+  ##
+  # storageClass: "-"
+  ##
+  ## If you want to reuse an existing claim, you can pass the name of the PVC using
+  ## the existingClaim variable
+  # existingClaim: your-claim
+  ## ReadWriteMany not supported by AWS gp2
+  storageClass:
+  accessModes:
+    - ReadWriteOnce
+  size: 10M
+  existingClaim:
+  # Dir where config and keys are written inside container
+  mountDir:
+
+## Init containers parameters:
+## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
+##
+volumePermissions:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnami/bitnami-shell
+    tag: "10"
+    pullPolicy: Always
+    ## Optionally specify an array of imagePullSecrets.
+    ## Secrets must be manually created in the namespace.
+    ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+    ##
+    pullSecrets: []
+    ##   - myRegistryKeySecretName
+  ## Init containers' resource requests and limits
+  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  ##
+  resources:
+    ## We usually recommend not to specify default resources and to leave this as a conscious
+    ## choice for the user. This also increases chances charts run on environments with little
+    ## resources, such as Minikube. If you do want to specify resources, uncomment the following
+    ## lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    ##
+    limits: {}
+    ##   cpu: 100m
+    ##   memory: 128Mi
+    ##
+    requests: {}
+    ##   cpu: 100m
+    ##   memory: 128Mi
+    ##
+
+## Specifies whether RBAC resources should be created
+##
+rbac:
+  create: true
+
+## Specifies whether a ServiceAccount should be created
+##
+serviceAccount:
+  create: true
+  ## The name of the ServiceAccount to use.
+  ## If not set and create is true, a name is generated using the fullname template
+  ##
+  name:
+
+## Prometheus Metrics
+##
+metrics:
+  enabled: false
+  ## Prometheus pod annotations
+  ## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+  ##
+  podAnnotations:
+    prometheus.io/scrape: "true"
+
+  endpointPath: /v1/keymanager/actuator/prometheus
+
+  ## Prometheus Service Monitor
+  ## ref: https://github.com/coreos/prometheus-operator
+  ##
+  serviceMonitor:
+    ## If the operator is installed in your cluster, set to true to create a Service Monitor Entry
+    ##
+    enabled: true
+    ## Specify the namespace in which the serviceMonitor resource will be created
+    ##
+    # namespace: ""
+    ## Specify the interval at which metrics should be scraped
+    ##
+    interval: 10s
+    ## Specify the timeout after which the scrape is ended
+    ##
+    # scrapeTimeout: 30s
+    ## Specify Metric Relabellings to add to the scrape endpoint
+    ##
+    # relabellings:
+    ## Specify honorLabels parameter to add the scrape endpoint
+    ##
+    honorLabels: false
+    ## Used to pass Labels that are used by the Prometheus installed in your cluster to select Service Monitors to work with
+    ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#prometheusspec
+    ##
+    additionalLabels: {}
+
+  ## Custom PrometheusRule to be defined
+  ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
+  ## ref: https://github.com/coreos/prometheus-operator#customresourcedefinitions
+  ##
+  prometheusRule:
+    enabled: false
+    additionalLabels: {}
+    namespace: ''
+    ## List of rules, used as template by Helm.
+    ## These are just examples rules inspired from https://awesome-prometheus-alerts.grep.to/rules.html
+    # rules:
+    #   - alert: RabbitmqDown
+    #     expr: rabbitmq_up{service="{{ template "rabbitmq.fullname" . }}"} == 0
+    #     for: 5m
+    #     labels:
+    #       severity: error
+    rules: []
+
+## Extra volumes to add to the deployment
+##
+extraVolumes: []
+
+## Extra volume mounts to add to the container
+##
+extraVolumeMounts: []
+
+istio:
+  enabled: true
+  virtualservice:
+    enabled: true
+    host: ""
+    gateway: "internal"
+    destination: '{{ template "common.names.fullname" . }}'
+    destinationPort: '{{ .Values.service.port }}'
+  gateway:
+    enabled: false
+    host: ""
+    ingressController:
+      istio: ingressgateway
+    httpTlsRedirect: false
+    httpEnabled: true
+    httpsEnabled: false
+    tls:
+      mode: SIMPLE
+      credentialName: ""
+
+artifactory:
+  enabled: true
+  # image:
+  #   registry: docker.io
+  #   repository: mosipid/artifactory-server
+  #   tag: 1.2.0.1-B7
+  resources: {}
+
+postgresql:
+  # any other postgres helm chart configuration here
+  enabled: true
+  auth:
+    username: keymgruser
+    database: mosip_keymgr
+  primary:
+    extendedConfiguration: |-
+      wal_level = logical
+      max_wal_senders = 20
+      max_replication_slots = 10
+  istio:
+    enabled: false
+    virtualservice:
+      enabled: true
+      host: "*"
+      gateway: ""
+      matchPort: 5432
+      destination: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+      destinationPort: "5432"
+    gateway:
+      enabled: true
+      port: 5432
+      host: "*"
+      ingressController:
+        istio: ingressgateway
+      tls:
+        enabled: false
+        mode: SIMPLE
+        credentialName: ""
+
+postgresInit:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: mosipid/postgres-init
+    tag: 1.2.0.1-B4
+    pullPolicy: Always
+  containerSecurityContext:
+    enabled: false
+  podSecurityContext:
+    enabled: false
+  command:
+    - bash
+  args:
+    - -c
+    - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
+  envVars:
+    MOSIP_DB_NAME: mosip_keymgr
+    DB_SERVERIP: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+    DB_PORT: '5432'
+    SU_USER: postgres
+    DB_USER: keymgruser
+    DML_FLAG: '1'
+    GIT_REPO_URL: https://github.com/mosip/keymanager.git
+    GIT_BRANCH: release-1.2.0.1
+  envVarsFrom:
+    SU_USER_PWD:
+      secretKeyRef:
+        name: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+        key: postgres-password
+    DBUSER_PWD:
+      secretKeyRef:
+        name: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+        key: password
+
+softhsm:
+  enabled: true
+  # Hardcoding this for now. else every upgrade will reset the pin
+  securityPIN: MTYwMzIyMjg=
+  resources: {}
+
+keygen:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: mosipid/keys-generator
+    tag: 1.2.0.1-B3
+    pullPolicy: Always
+  containerSecurityContext:
+    enabled: false
+  podSecurityContext:
+    enabled: false
+  command: []
+  args: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  envVars: {}
+  envVarsFrom: {}
+  startUpCommand: |-
+    #!/usr/bin/env bash
+
+    echo "Waiting for artifactory..."
+    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/$zip_path"; then
+      echo "Connecting with artifactory failed after max retries..."
+      exit 1
+    fi
+
+    ./configure_start.sh
+    
+    ADDL_ARGS=()
+
+    if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
+      git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
+    fi
+
+    config_locations="classpath:/bootstrap.properties,"
+    IFS=","
+    for config_name in $SPRING_CONFIG_NAMES; do
+      conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
+      if [[ -f "$conf_loc" ]]; then
+        config_locations+="${conf_loc},"
+      fi
+    done
+    unset IFS
+    ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
+    ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
+
+    ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
+    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
+    ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
+    
+    exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
+
+keycloakBaseUrl: 'https://keycloak.your.org'
+
+envVars:
+  JDK_JAVA_OPTIONS: '{{ .Values.javaOpts }}'
+  SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
+  SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
+  SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
+  mosip_api_internal_host: '{{ .Values.global.keymanagerHostname }}'
+  keycloak_internal_url: '{{ .Values.keycloakBaseUrl }}'
+  keycloak_external_url: '{{ .Values.keycloakBaseUrl }}'
+  openapi_service_server_url: '${server.servlet.path:/v1/keymanager}'
+  auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
+  mosip_kernel_database_hostname: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+  mosip_kernel_database_port: '5432'
+  mosip_kernel_tokenid_uin_salt: ''
+  mosip_kernel_tokenid_partnercode_salt: ''
+  mosip_admin_client_secret: ''
+
+envVarsFrom:
+  SPRING_CONFIG_GIT_REPO:
+    secretKeyRef:
+      name: '{{ template "common.names.fullname" . }}-git-config-secret'
+      key: repoUrl
+  SPRING_CONFIG_GIT_BRANCH:
+    secretKeyRef:
+      name: '{{ template "common.names.fullname" . }}-git-config-secret'
+      key: branch
+  artifactory_url_env:
+    configMapKeyRef:
+      name: '{{ include "common.names.fullname" .Subcharts.artifactory }}-share'
+      key: artifactory_url_env
+  iam_adapter_url_env:
+    configMapKeyRef:
+      name: '{{ include "common.names.fullname" .Subcharts.artifactory }}-share'
+      key: iam_adapter_url_env
+  zip_file_path:
+    configMapKeyRef:
+      name: '{{ include "common.names.fullname" .Subcharts.artifactory }}-share'
+      key: zip_file_path
+  db_dbuser_password:
+    secretKeyRef:
+      name: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+      key: password
+  PKCS11_PROXY_SOCKET:
+    configMapKeyRef:
+      name: '{{ include "common.names.fullname" .Subcharts.softhsm }}-share'
+      key: PKCS11_PROXY_SOCKET
+  softhsm_kernel_security_pin:
+    secretKeyRef:
+      name: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
+      key: security-pin
+
+springConfig:
+  names: application,kernel
+  profile: default
+  gitRepo:
+    enabled: true
+    repoUrl: https://github.com/openg2p/mosip-config
+    branch: develop3-v3
+  rawConfigMountPath: '/home/mosip/springConfig/application-{{ tpl .Values.springConfig.profile $ }}.properties'
+  rawConfig: ""
+
+startUpCommand: |-
+  #!/usr/bin/env bash
+
+  echo "Waiting for artifactory..."
+  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${iam_adapter_url_env}"; then
+    echo "Connecting with artifactory failed after max retries..."
+    exit 1
+  fi
+
+  # TODO: Wait for postgres
+
+  ./configure_start.sh
+  wget -q "${iam_adapter_url_env}" -O "${loader_path_env}"/kernel-auth-adapter.jar
+  
+  ADDL_ARGS=()
+  
+  if [ "$is_glowroot_env" = "present" ]; then
+    wget -q "${artifactory_url_env}"/artifactory/libs-release-local/io/mosip/testing/glowroot.zip
+    unzip glowroot.zip
+    rm -rf glowroot.zip
+    sed -i 's/<service_name>/kernel-keymanager-service/g' glowroot/glowroot.properties
+    ADDL_ARGS+=("-javaagent:glowroot/glowroot.jar -XX:HeapDumpPath=/home/")
+  fi
+
+  if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
+    git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
+  fi
+
+  config_locations="classpath:/bootstrap.properties,"
+  IFS=","
+  for config_name in $SPRING_CONFIG_NAMES; do
+    conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
+    if [[ -f "$conf_loc" ]]; then
+      config_locations+="${conf_loc},"
+    fi
+  done
+  unset IFS
+  ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
+  ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
+
+  ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
+  ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
+  ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
+  
+  exec java -jar ${ADDL_ARGS[@]} ./kernel-keymanager-service.jar

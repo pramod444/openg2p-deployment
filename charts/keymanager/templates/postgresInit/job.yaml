@@ -1,0 +1,49 @@
+{{- if .Values.postgresInit.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "common.names.fullname" . }}-postgres-init
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+    {{- if .Values.commonAnnotations }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.postgresInit.backoffLimit }}
+  backoffLimit: {{ .Values.postgresInit.backoffLimit }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ template "common.names.fullname" . }}-postgres-init
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        sidecar.istio.io/inject: "false"
+    spec:
+      {{- include "keymanager.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ template "keymanager.serviceAccountName" . }}
+      {{- if .Values.postgresInit.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.postgresInit.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      restartPolicy: Never
+      containers:
+        - name: postgres-init
+          image: {{ include "common.images.image" (dict "imageRoot" .Values.postgresInit.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.postgresInit.image.pullPolicy }}
+          {{- if .Values.postgresInit.command }}
+          command: {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.command "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.postgresInit.args }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.args "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.postgresInit.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.postgresInit.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          env:
+            {{- include "keymanager.postgresInit.envVars" . | nindent 12 }}
+{{- end }}

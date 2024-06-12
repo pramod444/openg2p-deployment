@@ -1,0 +1,15 @@
+dependencies:
+- name: common
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 2.20.2
+- name: postgresql
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 15.5.5
+- name: softhsm
+  repository: https://mosip.github.io/mosip-helm
+  version: 12.0.1-B2
+- name: artifactory
+  repository: https://mosip.github.io/mosip-helm
+  version: 12.0.1-B7
+digest: sha256:40de36fff9831410c6ac9872996c13111fabd54cc6072aa1c8d5a41a8ae93e2e
+generated: "2024-06-12T15:09:35.520047183+05:30"
