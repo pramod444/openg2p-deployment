@@ -1,9 +1,8 @@
 apiVersion: v2
-name: keymanager
-description: A Helm chart for MOSIP Keymanager module
+name: mock-identity-system
+description: A Helm chart for MOSIP Mock Identity System module
 type: application
-version: 12.0.1-B3
-appVersion: ""
+version: 0.9.2
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
@@ -18,15 +17,16 @@ dependencies:
   condition: softhsm.enabled
 - name: artifactory
   repository: https://mosip.github.io/mosip-helm
-  version: 12.0.2
+  version: 12.0.1
   condition: artifactory.enabled
+home: https://mosip.io
 keywords:
   - mosip
-  - keymanager
-  - kernel
+  - esignet
+  - mock-identity-system
 maintainers:
   - email: info@openg2p.org
     name: OpenG2P
 icon: https://openg2p.github.io/openg2p-helm/openg2p-logo.png
 annotations:
-  catalog.cattle.io/display-name: "Keymanager"
+  catalog.cattle.io/display-name: "Mock Identity System"

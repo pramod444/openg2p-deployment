@@ -1,28 +1,28 @@
 {{/*
 Return the proper  image name
 */}}
-{{- define "esignet.image" -}}
+{{- define "mock-identity-system.image" -}}
 {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
 {{- end -}}
 
 {{/*
 Return the proper image name (for the init container volume-permissions image)
 */}}
-{{- define "esignet.volumePermissions.image" -}}
+{{- define "mock-identity-system.volumePermissions.image" -}}
 {{- include "common.images.image" ( dict "imageRoot" .Values.volumePermissions.image "global" .Values.global ) -}}
 {{- end -}}
 
 {{/*
 Return the proper Docker Image Registry Secret Names
 */}}
-{{- define "esignet.imagePullSecrets" -}}
+{{- define "mock-identity-system.imagePullSecrets" -}}
 {{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image) "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "esignet.serviceAccountName" -}}
+{{- define "mock-identity-system.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create -}}
     {{ default (printf "%s" (include "common.names.fullname" .)) .Values.serviceAccount.name }}
 {{- else -}}
@@ -33,10 +33,10 @@ Create the name of the service account to use
 {{/*
 Compile all warnings into a single message.
 */}}
-{{- define "esignet.validateValues" -}}
+{{- define "mock-identity-system.validateValues" -}}
 {{- $messages := list -}}
-{{- $messages := append $messages (include "esignet.validateValues.foo" .) -}}
-{{- $messages := append $messages (include "esignet.validateValues.bar" .) -}}
+{{- $messages := append $messages (include "mock-identity-system.validateValues.foo" .) -}}
+{{- $messages := append $messages (include "mock-identity-system.validateValues.bar" .) -}}
 {{- $messages := without $messages "" -}}
 {{- $message := join "\n" $messages -}}
 
@@ -48,7 +48,7 @@ Compile all warnings into a single message.
 {{/*
 Return podAnnotations
 */}}
-{{- define "esignet.podAnnotations" -}}
+{{- define "mock-identity-system.podAnnotations" -}}
 {{- if .Values.podAnnotations }}
 {{ include "common.tplvalues.render" (dict "value" .Values.podAnnotations "context" $) }}
 {{- end }}
@@ -60,7 +60,7 @@ Return podAnnotations
 {{/*
 Render Env values section
 */}}
-{{- define "esignet.baseEnvVars" -}}
+{{- define "mock-identity-system.baseEnvVars" -}}
 {{- $context := .context }}
 {{- range $k, $v := .envVars }}
 - name: {{ $k }}
@@ -81,24 +81,24 @@ Render Env values section
 {{- end }}
 {{- end -}}
 
-{{- define "esignet.envVars" -}}
-{{- include "esignet.baseEnvVars" (dict "envVars" .Values.envVars "envVarsFrom" .Values.envVarsFrom "context" $) }}
+{{- define "mock-identity-system.envVars" -}}
+{{- include "mock-identity-system.baseEnvVars" (dict "envVars" .Values.envVars "envVarsFrom" .Values.envVarsFrom "context" $) }}
 {{- end -}}
 
-{{- define "esignet.postgresInit.envVars" -}}
-{{- include "esignet.baseEnvVars" (dict "envVars" .Values.postgresInit.envVars "envVarsFrom" .Values.postgresInit.envVarsFrom "context" $) }}
+{{- define "mock-identity-system.postgresInit.envVars" -}}
+{{- include "mock-identity-system.baseEnvVars" (dict "envVars" .Values.postgresInit.envVars "envVarsFrom" .Values.postgresInit.envVarsFrom "context" $) }}
 {{- end -}}
 
-{{- define "esignet.keygen.envVars" -}}
+{{- define "mock-identity-system.keygen.envVars" -}}
 {{- $_ := merge .Values.keygen.envVars (deepCopy .Values.envVars) }}
 {{- $_ := merge .Values.keygen.envVarsFrom (deepCopy .Values.envVarsFrom) }}
-{{- include "esignet.baseEnvVars" (dict "envVars" .Values.keygen.envVars "envVarsFrom" .Values.keygen.envVarsFrom "context" $) }}
+{{- include "mock-identity-system.baseEnvVars" (dict "envVars" .Values.keygen.envVars "envVarsFrom" .Values.keygen.envVarsFrom "context" $) }}
 {{- end -}}
 
 {{/*
 Return command
 */}}
-{{- define "esignet.commandBase" -}}
+{{- define "mock-identity-system.commandBase" -}}
 {{- if or .command .args }}
 {{- if .command }}
 command: {{- include "common.tplvalues.render" (dict "value" .command "context" .context) }}
@@ -112,10 +112,10 @@ args: []
 {{- end }}
 {{- end -}}
 
-{{- define "esignet.command" -}}
-{{- include "esignet.commandBase" (dict "command" .Values.command "args" .Values.args "startUpCommand" .Values.startUpCommand "context" $) }}
+{{- define "mock-identity-system.command" -}}
+{{- include "mock-identity-system.commandBase" (dict "command" .Values.command "args" .Values.args "startUpCommand" .Values.startUpCommand "context" $) }}
 {{- end -}}
 
-{{- define "esignet.keygen.command" -}}
-{{- include "esignet.commandBase" (dict "command" .Values.keygen.command "args" .Values.keygen.args "startUpCommand" .Values.keygen.startUpCommand "context" $) }}
+{{- define "mock-identity-system.keygen.command" -}}
+{{- include "mock-identity-system.commandBase" (dict "command" .Values.keygen.command "args" .Values.keygen.args "startUpCommand" .Values.keygen.startUpCommand "context" $) }}
 {{- end -}}

@@ -8,7 +8,7 @@
 #     - myRegistryKeySecretName
 #   storageClass: myStorageClass
 global:
-  keymanagerHostname: keymanager.openg2p.sandbox.net
+  mockidHostname: esignet.openg2p.sandbox.net
 
 ## Add labels to all the deployed resources
 ##
@@ -50,8 +50,8 @@ service:
 
 image:
   registry: docker.io
-  repository: mosipid/kernel-keymanager-service
-  tag: 1.2.0.1-B3
+  repository: mosipid/mock-identity-system
+  tag: 0.9.2
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -65,7 +65,7 @@ image:
   #   - myRegistryKeySecretName
 
 ## Port on which this particular spring service module is running.
-springServicePort: 8088
+springServicePort: 8082
 
 ## Configure extra options for liveness and readiness probes
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
@@ -73,8 +73,8 @@ springServicePort: 8088
 startupProbe:
   enabled: true
   httpGet:
-    path: /v1/keymanager/actuator/health
-    port: 8088
+    path: /v1/mock-identity-system/actuator/health
+    port: 8082
   initialDelaySeconds: 0
   periodSeconds: 10
   timeoutSeconds: 5
@@ -84,10 +84,10 @@ startupProbe:
 livenessProbe:
   enabled: true
   httpGet:
-    path: /v1/keymanager/actuator/health
-    port: 8088
+    path: /v1/mock-identity-system/actuator/health
+    port: 8082
   initialDelaySeconds: 20
-  periodSeconds: 30
+  periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 6
   successThreshold: 1
@@ -95,8 +95,8 @@ livenessProbe:
 readinessProbe:
   enabled: true
   httpGet:
-    path: /v1/keymanager/actuator/health
-    port: 8088
+    path: /v1/mock-identity-system/actuator/health
+    port: 8082
   initialDelaySeconds: 0
   periodSeconds: 10
   timeoutSeconds: 5
@@ -121,11 +121,11 @@ hostAliases: []
 ## lines, adjust them as necessary.
 # resources:
 #   limits:
-#     cpu: 1000m
-#     memory: 500Mi
+#     cpu: 500m
+#     memory: 2250Mi
 #   requests:
-#     cpu: 200m
-#     memory: 200Mi
+#     cpu: 100m
+#     memory: 1500Mi
 resources: {}
 
 ## Specify any JAVA_OPTS string here. These typically will be specified in conjunction with above resources. Example:
@@ -333,7 +333,7 @@ metrics:
   podAnnotations:
     prometheus.io/scrape: "true"
 
-  endpointPath: /v1/keymanager/actuator/prometheus
+  endpointPath: /v1/mock-identity-system/actuator/prometheus
 
   ## Prometheus Service Monitor
   ## ref: https://github.com/coreos/prometheus-operator
@@ -388,6 +388,7 @@ extraVolumes: []
 ##
 extraVolumeMounts: []
 
+## Only internal access
 istio:
   enabled: true
   virtualservice:
@@ -410,7 +411,7 @@ istio:
 
 artifactory:
   enabled: true
-  nameOverride: keymanager-artifactory
+  nameOverride: mock-id-artifactory
   image:
     registry: docker.io
     repository: mosipid/artifactory-server
@@ -420,10 +421,10 @@ artifactory:
 postgresql:
   # any other postgres helm chart configuration here
   enabled: true
-  nameOverride: keymanager-postgresql
+  nameOverride: mock-id-postgresql
   auth:
-    username: keymgruser
-    database: mosip_keymgr
+    username: mockidsystemuser
+    database: mosip_mockidentitysystem
   primary:
     extendedConfiguration: |-
       wal_level = logical
@@ -466,14 +467,14 @@ postgresInit:
     - -c
     - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
   envVars:
-    MOSIP_DB_NAME: mosip_keymgr
+    MOSIP_DB_NAME: mosip_mockidentitysystem
     DB_SERVERIP: '{{ tpl .Values.postgresqlName $ }}'
     DB_PORT: '5432'
     SU_USER: postgres
-    DB_USER: keymgruser
+    DB_USER: mockidsystemuser
     DML_FLAG: '1'
-    GIT_REPO_URL: https://github.com/mosip/keymanager.git
-    GIT_BRANCH: release-1.2.0.1
+    GIT_REPO_URL: https://github.com/mosip/esignet-mock-services
+    GIT_BRANCH: release-0.9.x
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
@@ -486,13 +487,15 @@ postgresInit:
 
 softhsm:
   enabled: true
-  nameOverride: keymanager-softhsm
+  nameOverride: mock-id-softhsm
   # Hardcoding this for now. else every upgrade will reset the pin
-  securityPIN: MTYwMzIyMjg=
+  securityPIN: OTAxNDQyMzg=
   resources: {}
 
 keygen:
-  enabled: true
+  # Key generator is not required for mock identity system.
+  # But this is still left here for future.
+  enabled: false
   image:
     registry: docker.io
     repository: mosipid/keys-generator
@@ -512,13 +515,13 @@ keygen:
     #!/usr/bin/env bash
 
     echo "Waiting for artifactory..."
-    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/$zip_path"; then
+    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/"; then
       echo "Connecting with artifactory failed after max retries..."
       exit 1
     fi
 
     ./configure_start.sh
-
+    
     ADDL_ARGS=()
 
     if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
@@ -540,31 +543,17 @@ keygen:
     ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
     ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
     ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
-
+    
     exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
-
-keycloakBaseUrl: 'https://keycloak.your.org'
 
 envVars:
   JDK_JAVA_OPTIONS: '{{ .Values.javaOpts }}'
   SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
   SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
   SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
-
-  mosip_api_internal_host: '{{ .Values.global.keymanagerHostname }}'
-
-  keycloak_internal_url: '{{ .Values.keycloakBaseUrl }}'
-  keycloak_external_url: '{{ .Values.keycloakBaseUrl }}'
-
-  auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
-
-  mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlName $ }}'
-  mosip_kernel_database_port: '5432'
-
-  # Edit the following properties only if required. OpenG2P doesnt use these properties for now.
-  mosip_kernel_tokenid_uin_salt: ''
-  mosip_kernel_tokenid_partnercode_salt: ''
-  mosip_admin_client_secret: ''
+  mosip_api_internal_host: '{{ .Values.global.mockidHostname }}'
+  mosip_mockidentitysystem_database_hostname: '{{ tpl .Values.postgresqlName $ }}'
+  mosip_mockidentitysystem_database_port: '5432'
 
 envVarsFrom:
   SPRING_CONFIG_GIT_REPO:
@@ -595,13 +584,13 @@ envVarsFrom:
     configMapKeyRef:
       name: '{{ tpl .Values.softhsmName $ }}-share'
       key: PKCS11_PROXY_SOCKET
-  softhsm_kernel_security_pin:
+  softhsm_mock_identity_system_security_pin:
     secretKeyRef:
       name: '{{ tpl .Values.softhsmName $ }}'
       key: security-pin
 
 springConfig:
-  names: application,kernel
+  names: application,mock-identity-system
   profile: default
   gitRepo:
     enabled: true
@@ -614,7 +603,7 @@ startUpCommand: |-
   #!/usr/bin/env bash
 
   echo "Waiting for artifactory..."
-  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${iam_adapter_url_env}"; then
+  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/"; then
     echo "Connecting with artifactory failed after max retries..."
     exit 1
   fi
@@ -622,15 +611,14 @@ startUpCommand: |-
   # TODO: Wait for postgres
 
   ./configure_start.sh
-  wget -q "${iam_adapter_url_env}" -O "${loader_path_env}"/kernel-auth-adapter.jar
-
+  
   ADDL_ARGS=()
-
+  
   if [ "$is_glowroot_env" = "present" ]; then
     wget -q "${artifactory_url_env}"/artifactory/libs-release-local/io/mosip/testing/glowroot.zip
     unzip glowroot.zip
     rm -rf glowroot.zip
-    sed -i 's/<service_name>/kernel-keymanager-service/g' glowroot/glowroot.properties
+    sed -i 's/<service_name>/mock-identity-system/g' glowroot/glowroot.properties
     ADDL_ARGS+=("-javaagent:glowroot/glowroot.jar -XX:HeapDumpPath=/home/")
   fi
 
@@ -653,8 +641,8 @@ startUpCommand: |-
   ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
   ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
-
-  exec java -jar ${ADDL_ARGS[@]} ./kernel-keymanager-service.jar
+  
+  exec java -jar ${ADDL_ARGS[@]} ./mock-identity-system.jar
 
 
 ## Do NOT edit the following values.
@@ -665,5 +653,5 @@ startUpCommand: |-
 ## The following can be edited only when you want to use a dependency installed externally, so that
 ## this chart will look for the dependency present in the given location.
 artifactoryName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-softhsmName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
 postgresqlName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+softhsmName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'

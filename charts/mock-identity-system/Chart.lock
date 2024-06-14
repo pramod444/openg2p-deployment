@@ -10,6 +10,6 @@ dependencies:
   version: 12.0.1-B2
 - name: artifactory
   repository: https://mosip.github.io/mosip-helm
-  version: 12.0.2
-digest: sha256:32907e3a66b0661dbb6c112557f82ee591ffd622e99f7eee4df0cdcdd7c2e5d3
-generated: "2024-06-14T18:23:03.490798141+05:30"
+  version: 12.0.1
+digest: sha256:ff600704f4e5781eb2a02a274dfd91265aacabee03665cbc5c3acc1b930d53a9
+generated: "2024-06-14T18:29:03.422302276+05:30"

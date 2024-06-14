@@ -7,6 +7,8 @@
 #   imagePullSecrets:
 #     - myRegistryKeySecretName
 #   storageClass: myStorageClass
+global:
+  esignetHostname: esignet.openg2p.sandbox.net
 
 ## Add labels to all the deployed resources
 ##
@@ -16,10 +18,6 @@ commonLabels:
 ## Add annotations to all the deployed resources
 ##
 commonAnnotations: {}
-
-## Kubernetes Cluster Domain
-##
-clusterDomain: cluster.local
 
 ## Extra objects to deploy (value evaluated as a template)
 ##
@@ -52,8 +50,8 @@ service:
 
 image:
   registry: docker.io
-  repository: mosipqa/esignet
-  tag: develop
+  repository: mosipid/esignet
+  tag: 1.4.0
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -105,9 +103,6 @@ readinessProbe:
   failureThreshold: 6
   successThreshold: 1
 
-##
-# existingConfigmap:
-
 ## Command and args for running the container (set to default if not set). Use array form
 ##
 command: []
@@ -120,22 +115,22 @@ hostAliases: []
 
 ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
 ##
-resources:
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  limits:
-    cpu: 500m
-    memory: 2250Mi
-  requests:
-    cpu: 100m
-    memory: 1500Mi
+## We usually recommend not to specify default resources and to leave this as a conscious
+## choice for the user. This also increases chances charts run on environments with little
+## resources, such as Minikube. If you do want to specify resources, uncomment the following
+## lines, adjust them as necessary.
+# resources:
+#   limits:
+#     cpu: 500m
+#     memory: 2250Mi
+#   requests:
+#     cpu: 100m
+#     memory: 1500Mi
+resources: {}
 
-additionalResources:
-  ## Specify any JAVA_OPTS string here. These typically will be specified in conjunction with above resources
-  ## Example: java_opts: "-Xms500M -Xmx500M"
-  javaOpts: "-Xms1500M -Xmx1500M"
+## Specify any JAVA_OPTS string here. These typically will be specified in conjunction with above resources. Example:
+# javaOpts: "-Xms500M -Xmx500M"
+javaOpts: ""
 
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
 ## Clamav container already runs as 'mosip' user, so we may not need to enable this
@@ -234,34 +229,6 @@ customReadinessProbe: {}
 updateStrategy:
   type: RollingUpdate
 
-## Additional environment variables to set
-## Example:
-## extraEnvVars:
-##   - name: FOO
-##     value: "bar"
-##
-extraEnvVars: []
-
-## ConfigMap with extra environment variables that used
-##
-extraEnvVarsCM:
-  - global
-  - config-server-share
-  - artifactory-share
-  - softhsm-esignet-share
-
-## Secret with extra environment variables
-##
-extraEnvVarsSecret:
-
-## Extra volumes to add to the deployment
-##
-extraVolumes: []
-
-## Extra volume mounts to add to the container
-##
-extraVolumeMounts: []
-
 ## Add init containers to the  pods.
 ## Example:
 ## initContainers:
@@ -272,38 +239,7 @@ extraVolumeMounts: []
 ##       - name: portname
 ##         containerPort: 1234
 ##
-initContainers:
-  - command:
-      - /bin/bash
-      - -c
-      - if [ "$ENABLE_INSECURE" = "true" ]; then HOST=$( env | grep "mosip-api-internal-host"
-        |sed "s/mosip-api-internal-host=//g"); if [ -z "$HOST" ]; then echo "HOST
-        $HOST is empty; EXITING"; exit 1; fi; openssl s_client -servername "$HOST"
-        -connect "$HOST":443  > "$HOST.cer" 2>/dev/null & sleep 2 ; sed -i -ne '/-BEGIN
-        CERTIFICATE-/,/-END CERTIFICATE-/p' "$HOST.cer"; cat "$HOST.cer"; /usr/local/openjdk-11/bin/keytool
-        -delete -alias "$HOST" -keystore $JAVA_HOME/lib/security/cacerts  -storepass
-        changeit; /usr/local/openjdk-11/bin/keytool -trustcacerts -keystore "$JAVA_HOME/lib/security/cacerts"
-        -storepass changeit -noprompt -importcert -alias "$HOST" -file "$HOST.cer"
-        ; if [ $? -gt 0 ]; then echo "Failed to add SSL certificate for host $host;
-        EXITING"; exit 1; fi; cp /usr/local/openjdk-11/lib/security/cacerts /cacerts;
-        fi
-    env:
-      - name: ENABLE_INSECURE
-        value: "true"
-    envFrom:
-      - configMapRef:
-          name: global
-    image: docker.io/openjdk:11-jre
-    imagePullPolicy: Always
-    name: cacerts
-    resources: {}
-    securityContext:
-      runAsUser: 0
-    terminationMessagePath: /dev/termination-log
-    terminationMessagePolicy: File
-    volumeMounts:
-      - mountPath: /cacerts
-        name: cacerts
+initContainers: []
 
 ## Add sidecars to the  pods.
 ## Example:
@@ -315,7 +251,7 @@ initContainers:
 ##       - name: portname
 ##         containerPort: 1234
 ##
-sidecars: {}
+sidecars: []
 
 persistence:
   enabled: false
@@ -333,14 +269,11 @@ persistence:
   ## ReadWriteMany not supported by AWS gp2
   storageClass:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   size: 10M
-  # existingClaim: pkcs12-keys.p12
   existingClaim:
   # Dir where config and keys are written inside container
-  mountDir: /home/mosip/config/
-  volume_name: config
-  # pvc_claim_name: pkcs12-keys.p12
+  mountDir:
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -447,15 +380,381 @@ metrics:
     #       severity: error
     rules: []
 
-esignet:
+## Extra volumes to add to the deployment
+##
+extraVolumes: []
+
+## Extra volume mounts to add to the container
+##
+extraVolumeMounts: []
+
 ## Only internal access
 istio:
   enabled: true
-  gateways:
-    - istio-system/public
-    - istio-system/internal
-  prefix: /v1/esignet/
+  virtualservice:
+    enabled: true
+    host: ""
+    gateway: "internal"
+    destination: '{{ template "common.names.fullname" . }}'
+    destinationPort: '{{ .Values.service.port }}'
+  gateway:
+    enabled: false
+    host: ""
+    ingressController:
+      istio: ingressgateway
+    httpTlsRedirect: false
+    httpEnabled: true
+    httpsEnabled: false
+    tls:
+      mode: SIMPLE
+      credentialName: ""
 
-enable_insecure: false
-springConfigNameEnv:
-activeProfileEnv:
+redis:
+  enabled: true
+  nameOverride: esignet-redis
+  architecture: standalone
+  master:
+    ports:
+      redis: 6379
+    persistence:
+      size: 3Gi
+
+kafka:
+  enabled: true
+  nameOverride: esignet-kafka
+  heapOpts: ""
+  extraConfig: |-
+    log.retention.hours=2
+    default.replication.factor=1
+    offsets.topic.replication.factor=1
+    transaction.state.log.replication.factor=1
+    auto.create.topics.enable=true
+    delete.topic.enable=true
+    num.partitions=3
+  controller:
+    heapOpts: ""
+    replicaCount: 1
+    resources: {}
+  broker:
+    heapOpts: ""
+    persistence:
+      enabled: false
+  listeners:
+    client:
+      protocol: PLAINTEXT
+    controller:
+      protocol: PLAINTEXT
+    interbroker:
+      protocol: PLAINTEXT
+    external:
+      protocol: PLAINTEXT
+  service:
+    ports:
+      client: 9092
+
+artifactory:
+  enabled: true
+  nameOverride: esignet-artifactory
+  image:
+    registry: docker.io
+    repository: mosipid/artifactory-server
+    tag: 1.4.0-ES
+  resources: {}
+
+postgresql:
+  # any other postgres helm chart configuration here
+  enabled: true
+  nameOverride: esignet-postgresql
+  auth:
+    username: esignetuser
+    database: mosip_esignet
+  primary:
+    extendedConfiguration: |-
+      wal_level = logical
+      max_wal_senders = 20
+      max_replication_slots = 10
+  istio:
+    enabled: false
+    virtualservice:
+      enabled: true
+      host: "*"
+      gateway: ""
+      matchPort: 5432
+      destination: '{{ tpl .Values.postgresqlName $ }}'
+      destinationPort: "5432"
+    gateway:
+      enabled: true
+      port: 5432
+      host: "*"
+      ingressController:
+        istio: ingressgateway
+      tls:
+        enabled: false
+        mode: SIMPLE
+        credentialName: ""
+
+postgresInit:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: mosipid/postgres-init
+    tag: 1.2.0.1-B4
+    pullPolicy: Always
+  containerSecurityContext:
+    enabled: false
+  podSecurityContext:
+    enabled: false
+  command:
+    - bash
+  args:
+    - -c
+    - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
+  envVars:
+    MOSIP_DB_NAME: mosip_esignet
+    DB_SERVERIP: '{{ tpl .Values.postgresqlName $ }}'
+    DB_PORT: '5432'
+    SU_USER: postgres
+    DB_USER: esignetuser
+    DML_FLAG: '1'
+    GIT_REPO_URL: https://github.com/mosip/esignet
+    GIT_BRANCH: release-1.4.x
+  envVarsFrom:
+    SU_USER_PWD:
+      secretKeyRef:
+        name: '{{ tpl .Values.postgresqlName $ }}'
+        key: postgres-password
+    DBUSER_PWD:
+      secretKeyRef:
+        name: '{{ tpl .Values.postgresqlName $ }}'
+        key: password
+
+softhsm:
+  enabled: true
+  nameOverride: esignet-softhsm
+  # Hardcoding this for now. else every upgrade will reset the pin
+  securityPIN: NjMzODU4NjA=
+  resources: {}
+
+mock-identity-system:
+  enabled: true
+  nameOverride: esignet-mock-identity-system
+  artifactoryName: '{{ .Release.Name }}-esignet-artifactory'
+  artifactory:
+    enabled: false
+  postgresqlName: '{{ .Release.Name }}-esignet-postgresql'
+  postgresql:
+    enabled: false
+
+keygen:
+  # Key generator is not required for esignet.
+  # But this is still left here for future.
+  enabled: false
+  image:
+    registry: docker.io
+    repository: mosipid/keys-generator
+    tag: 1.2.0.1-B3
+    pullPolicy: Always
+  containerSecurityContext:
+    enabled: false
+  podSecurityContext:
+    enabled: false
+  command: []
+  args: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  envVars: {}
+  envVarsFrom: {}
+  startUpCommand: |-
+    #!/usr/bin/env bash
+
+    echo "Waiting for artifactory..."
+    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/"; then
+      echo "Connecting with artifactory failed after max retries..."
+      exit 1
+    fi
+
+    ./configure_start.sh
+
+    ADDL_ARGS=()
+
+    if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
+      git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
+    fi
+
+    config_locations="classpath:/bootstrap.properties,"
+    IFS=","
+    for config_name in $SPRING_CONFIG_NAMES; do
+      conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
+      if [[ -f "$conf_loc" ]]; then
+        config_locations+="${conf_loc},"
+      fi
+    done
+    unset IFS
+    ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
+    ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
+
+    ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
+    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
+    ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
+
+    exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
+
+oidc-ui:
+  enabled: false
+
+keycloakBaseUrl: 'https://keycloak.your.org'
+captchaEnabled: false
+
+envVars:
+  JDK_JAVA_OPTIONS: '{{ .Values.javaOpts }}'
+  SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
+  SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
+  SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
+
+  spring_kafka_bootstrapServers: '{{ tpl .Values.kafkaName $ }}:{{ .Values.kafka.service.ports.client }}'
+
+  spring_redis_host: '{{ tpl .Values.redisName $ }}-master'
+  spring_redis_port: '{{ .Values.redis.master.ports.redis }}'
+
+  keycloak_internal_url: '{{ .Values.keycloakBaseUrl }}'
+  keycloak_external_url: '{{ .Values.keycloakBaseUrl }}'
+
+  mosip_api_internal_host: '{{ .Values.global.esignetHostname }}'
+  mosip_api_public_host: '{{ .Values.global.esignetHostname }}'
+  mosip_signup_host: '{{ .Values.global.esignetHostname }}'
+  mosip_mock_id_baseUrl: '{{ tpl .Values.mockIdentitySystemName $ }}'
+  mosip_esignet_host: '{{ .Values.global.esignetHostname }}'
+
+  mosip_esignet_database_hostname: '{{ tpl .Values.postgresqlName $ }}'
+  mosip_esignet_database_port: '5432'
+
+  mosip_esignet_captcha_required: >-
+    {{ .Values.captchaEnabled | ternary "send-otp,pwd" "" }}
+  mosip_esignet_captcha_required_authFactors: >-
+    {{ .Values.captchaEnabled | ternary "{'PWD'}" "{}" }}
+  mosip_esignet_sendOtp_captchaRequired: >-
+    {{ .Values.captchaEnabled | ternary "true" "false" }}
+  esignet_captcha_site_key: ''
+  esignet_captcha_secret_key: ''
+
+  mosip_esignet_amrAcrMappingFileUrl: 'file:///home/mosip/springConfig/amr-acr-mapping.json'
+
+  # Edit the following properties only if required. OpenG2P doesnt use these properties for now.
+  mosip_esignet_misp_key: ''
+  mosip_ida_client_secret: ''
+
+envVarsFrom:
+  SPRING_CONFIG_GIT_REPO:
+    secretKeyRef:
+      name: '{{ template "common.names.fullname" . }}-git-config-secret'
+      key: repoUrl
+  SPRING_CONFIG_GIT_BRANCH:
+    secretKeyRef:
+      name: '{{ template "common.names.fullname" . }}-git-config-secret'
+      key: branch
+
+  spring_redis_password:
+    secretKeyRef:
+      name: '{{ tpl .Values.redisName $ }}'
+      key: redis-password
+
+  artifactory_url_env:
+    configMapKeyRef:
+      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      key: artifactory_url_env
+  esignet_wrapper_url_env:
+    configMapKeyRef:
+      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      key: esignet_wrapper_url_env
+  iam_adapter_url_env:
+    configMapKeyRef:
+      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      key: iam_adapter_url_env
+  zip_file_path:
+    configMapKeyRef:
+      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      key: zip_file_path
+
+  db_dbuser_password:
+    secretKeyRef:
+      name: '{{ tpl .Values.postgresqlName $ }}'
+      key: password
+
+  PKCS11_PROXY_SOCKET:
+    configMapKeyRef:
+      name: '{{ tpl .Values.softhsmName $ }}-share'
+      key: PKCS11_PROXY_SOCKET
+  softhsm_esignet_security_pin:
+    secretKeyRef:
+      name: '{{ tpl .Values.softhsmName $ }}'
+      key: security-pin
+
+springConfig:
+  names: application,esignet
+  profile: default
+  gitRepo:
+    enabled: true
+    repoUrl: https://github.com/openg2p/mosip-config
+    branch: develop3-v3
+  rawConfigMountPath: '/home/mosip/springConfig/application-{{ tpl .Values.springConfig.profile $ }}.properties'
+  rawConfig: ""
+
+startUpCommand: |-
+  #!/usr/bin/env bash
+
+  echo "Waiting for artifactory..."
+  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/"; then
+    echo "Connecting with artifactory failed after max retries..."
+    exit 1
+  fi
+
+  # TODO: Wait for postgres
+
+  ./configure_start.sh
+
+  ADDL_ARGS=()
+
+  if [ "$is_glowroot_env" = "present" ]; then
+    wget -q "${artifactory_url_env}"/artifactory/libs-release-local/io/mosip/testing/glowroot.zip
+    unzip glowroot.zip
+    rm -rf glowroot.zip
+    sed -i 's/<service_name>/esignet-service/g' glowroot/glowroot.properties
+    ADDL_ARGS+=("-javaagent:glowroot/glowroot.jar -XX:HeapDumpPath=/home/")
+  fi
+
+  if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
+    git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
+  fi
+
+  config_locations="classpath:/bootstrap.properties,"
+  IFS=","
+  for config_name in $SPRING_CONFIG_NAMES; do
+    conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
+    if [[ -f "$conf_loc" ]]; then
+      config_locations+="${conf_loc},"
+    fi
+  done
+  unset IFS
+  ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
+  ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
+
+  ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
+  ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
+  ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
+
+  exec java -jar ${ADDL_ARGS[@]} ./esignet-service.jar
+
+
+## Do NOT edit the following values.
+##
+## If you want to change the name the dependency being installed, use
+## the nameOverride and fullnameOverride values of the dependencies.
+##
+## The following can be edited only when you want to use a dependency installed externally, so that
+## this chart will look for the dependency present in the given location.
+artifactoryName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
+postgresqlName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+redisName: '{{ include "common.names.fullname" .Subcharts.redis }}'
+kafkaName: '{{ include "common.names.fullname" .Subcharts.kafka }}'
+mockIdentitySystemName: '{{ include "common.names.fullname" (index .Subcharts "mock-identity-system") }}'
+softhsmName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'

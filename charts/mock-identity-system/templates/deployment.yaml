@@ -21,7 +21,7 @@ spec:
     metadata:
       annotations:
         {{- if or .Values.podAnnotations .Values.metrics.enabled }}
-        {{- include "esignet.podAnnotations" . | nindent 8 }}
+        {{- include "mock-identity-system.podAnnotations" . | nindent 8 }}
         {{- end }}
        
       labels: {{- include "common.labels.standard" . | nindent 8 }}
@@ -29,8 +29,8 @@ spec:
         {{- include "common.tplvalues.render" (dict "value" .Values.podLabels "context" $) | nindent 8 }}
         {{- end }}
     spec:
-      serviceAccountName: {{ template "esignet.serviceAccountName" . }}
-      {{- include "esignet.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ template "mock-identity-system.serviceAccountName" . }}
+      {{- include "mock-identity-system.imagePullSecrets" . | nindent 6 }}
       {{- if .Values.hostAliases }}
       hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.hostAliases "context" $) | nindent 8 }}
       {{- end }}
@@ -59,8 +59,8 @@ spec:
         {{- include "common.tplvalues.render" (dict "value" .Values.initContainers "context" $) | nindent 8 }}
       {{- end }}
       containers:
-        - name: esignet
-          image: {{ template "esignet.image" . }}
+        - name: mock-identity-system
+          image: {{ template "mock-identity-system.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- if .Values.lifecycleHooks }}
           lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.lifecycleHooks "context" $) | nindent 12 }}
@@ -68,9 +68,9 @@ spec:
           {{- if .Values.containerSecurityContext.enabled }}
           securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
-          {{- include "esignet.command" . | nindent 10 }}
+          {{- include "mock-identity-system.command" . | nindent 10 }}
           env:
-            {{- include "esignet.envVars" . | nindent 12 }}
+            {{- include "mock-identity-system.envVars" . | nindent 12 }}
           ports:
             - name: spring-service
               containerPort: {{ .Values.springServicePort }}

@@ -1,0 +1,27 @@
+dependencies:
+- name: common
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 2.20.2
+- name: oidc-ui
+  repository: ""
+  version: 1.4.0
+- name: mock-identity-system
+  repository: ""
+  version: 0.9.2
+- name: postgresql
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 15.5.5
+- name: softhsm
+  repository: https://mosip.github.io/mosip-helm
+  version: 12.0.1-B2
+- name: artifactory
+  repository: https://mosip.github.io/mosip-helm
+  version: 12.0.2
+- name: redis
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 19.5.3
+- name: kafka
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 29.3.1
+digest: sha256:aec99ea4457ea9be624ddb1cd2f243bc09b5ad625602326b27fc4af499f4d156
+generated: "2024-06-14T18:22:19.995843833+05:30"

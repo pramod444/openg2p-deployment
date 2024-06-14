@@ -130,16 +130,11 @@ resources:
     cpu: 100m
     memory: 50Mi
 
-additionalResources:
-  ## Specify any JAVA_OPTS string here. These typically will be specified in conjunction with above resources
-  ## Example: java_opts: "-Xms500M -Xmx500M"
-  javaOpts: "-Xms750M -Xmx750M"
-
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
 ## Clamav container already runs as 'mosip' user, so we may not need to enable this
 container_user: 'mosip'
 containerSecurityContext:
-  enabled: true
+  enabled: false
   runAsUser: 0
   allowPrivilegeEscalation: false
   # runAsNonRoot: true
@@ -233,27 +228,6 @@ customReadinessProbe: {}
 ##
 updateStrategy:
   type: RollingUpdate
-
-## Additional environment variables to set
-## Example:
-## extraEnvVars:
-##   - name: FOO
-##     value: "bar"
-##
-extraEnvVars: []
-
-## ConfigMap with extra environment variables
-##
-extraEnvVarsCM:
-  - global
-  - config-server-share
-  - artifactory-share
-  - softhsm-esignet-share
-  - oidc-ui
-
-## Secret with extra environment variables
-##
-extraEnvVarsSecret:
 
 ## Extra volumes to add to the deployment
 ##
