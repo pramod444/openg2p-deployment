@@ -13,14 +13,14 @@ metadata:
   {{- end }}
 spec:
   hosts:
-  - {{ default .Values.global.mockidHostname .Values.istio.virtualservice.host | quote }}
+  - {{ default .Values.global.esignetHostname .Values.istio.virtualservice.host | quote }}
   gateways:
   - {{ default (include "common.names.fullname" .) .Values.istio.virtualservice.gateway }}
   http:
   - headers:
       request:
         set:
-          x-forwarded-host: {{ default .Values.global.mockidHostname .Values.istio.virtualservice.host | quote }}
+          x-forwarded-host: {{ default .Values.global.esignetHostname .Values.istio.virtualservice.host | quote }}
           x-forwarded-proto: https
     match:
     - uri:

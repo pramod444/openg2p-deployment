@@ -8,7 +8,7 @@
 #     - myRegistryKeySecretName
 #   storageClass: myStorageClass
 global:
-  mockidHostname: esignet.openg2p.sandbox.net
+  esignetHostname: esignet.openg2p.sandbox.net
 
 ## Add labels to all the deployed resources
 ##
@@ -553,7 +553,7 @@ envVars:
   SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
   SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
   SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
-  mosip_api_internal_host: '{{ .Values.global.mockidHostname }}'
+  mosip_api_internal_host: '{{ .Values.global.esignetHostname }}'
   mosip_mockidentitysystem_database_hostname: '{{ tpl .Values.postgresqlName $ }}'
   mosip_mockidentitysystem_database_port: '5432'
 

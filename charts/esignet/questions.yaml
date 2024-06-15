@@ -1,8 +1,8 @@
 questions:
-- variable: global.keymanagerHostname
-  description: Hostname under which Keymanager should be accessible
+- variable: global.esignetHostname
+  description: Hostname under which eSignet should be accessible
   type: string
-  label: Keymanager Hostname
+  label: eSignet Hostname
 - variable: keycloakBaseUrl
   description: Required for API auth validation.
   type: string
@@ -29,6 +29,24 @@ questions:
   type: string
   label: Spring Config Git Repo Branch
   show_if: springConfig.gitRepo.enabled=true
+- variable: mock-identity-system.enabled
+  description: This installs Mock Identity System along with the current eSignet
+  type: bool
+  label: Install Mock Identity System?
+- variable: captchaEnabled
+  description: Enabling this enables captcha verification wherever applied.
+  type: bool
+  label: Enabled captcha verification?
+- variable: envVars.esignet_captcha_site_key
+  description: Example Google reCAPTCHA site key
+  type: string
+  label: Captcha site key
+  show_if: captchaEnabled=true
+- variable: envVars.esignet_captcha_secret_key
+  description: Example Google reCAPTCHA secret key
+  type: string
+  label: Captcha secret key
+  show_if: captchaEnabled=true
 - variable: springConfig.rawConfig
   description: |-
     If git-based config is disabled, the complete application.properties can be
@@ -36,10 +54,3 @@ questions:
   type: multiline
   label: Spring Config application properties.
   show_if: springConfig.gitRepo.enabled!=true
-- variable: envVars.auth_server_admin_allowed_audience
-  description: |-
-    List of Keycloak Client ID allowed to call this keymanager's APIs.
-    Do not edit this parameter unless required.
-  type: string
-  label: Allowed Keycloak Client IDs.
-  group: Advanced Settings
