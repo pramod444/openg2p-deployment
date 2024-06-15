@@ -16,7 +16,7 @@ Return the proper image name (for the init container volume-permissions image)
 Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "mock-identity-system.imagePullSecrets" -}}
-{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image) "global" .Values.global) -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image .Values.postgresInit.image .Values.keygen.image) "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
@@ -61,38 +61,34 @@ Return podAnnotations
 Render Env values section
 */}}
 {{- define "mock-identity-system.baseEnvVars" -}}
-{{- $context := .context }}
+{{- $context := .context -}}
 {{- range $k, $v := .envVars }}
 - name: {{ $k }}
+{{- if or (kindIs "int" $v) (kindIs "bool" $v) }}
+  value: {{ $v | quote }}
+{{- else if kindIs "string" $v }}
   value: {{ include "common.tplvalues.render" ( dict "value" $v "context" $context ) | squote }}
+{{- else }}
+  valueFrom: {{- include "common.tplvalues.render" ( dict "value" $v "context" $context ) | nindent 4}}
 {{- end }}
-{{- range $k, $v := .envVarsFrom }}
-- name: {{ $k }}
-  valueFrom:
-    {{- if $v.configMapKeyRef }}
-    configMapKeyRef:
-      name: {{ include "common.tplvalues.render" ( dict "value" $v.configMapKeyRef.name "context" $context ) | squote }}
-      key: {{ include "common.tplvalues.render" ( dict "value" $v.configMapKeyRef.key "context" $context ) | squote }}
-    {{- else if $v.secretKeyRef }}
-    secretKeyRef:
-      name: {{ include "common.tplvalues.render" ( dict "value" $v.secretKeyRef.name "context" $context ) | squote }}
-      key: {{ include "common.tplvalues.render" ( dict "value" $v.secretKeyRef.key "context" $context ) | squote }}
-    {{- end }}
 {{- end }}
 {{- end -}}
 
 {{- define "mock-identity-system.envVars" -}}
-{{- include "mock-identity-system.baseEnvVars" (dict "envVars" .Values.envVars "envVarsFrom" .Values.envVarsFrom "context" $) }}
+{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
+{{- include "mock-identity-system.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
 {{- define "mock-identity-system.postgresInit.envVars" -}}
-{{- include "mock-identity-system.baseEnvVars" (dict "envVars" .Values.postgresInit.envVars "envVarsFrom" .Values.postgresInit.envVarsFrom "context" $) }}
+{{- $envVars := merge (deepCopy .Values.postgresInit.envVars) (deepCopy .Values.postgresInit.envVarsFrom) -}}
+{{- include "mock-identity-system.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
 {{- define "mock-identity-system.keygen.envVars" -}}
-{{- $_ := merge .Values.keygen.envVars (deepCopy .Values.envVars) }}
-{{- $_ := merge .Values.keygen.envVarsFrom (deepCopy .Values.envVarsFrom) }}
-{{- include "mock-identity-system.baseEnvVars" (dict "envVars" .Values.keygen.envVars "envVarsFrom" .Values.keygen.envVarsFrom "context" $) }}
+{{- $envVars := merge (deepCopy .Values.keygen.envVars) (deepCopy .Values.envVars) -}}
+{{- $envVarsFrom := merge (deepCopy .Values.keygen.envVarsFrom) (deepCopy .Values.envVarsFrom) -}}
+{{- $_ := merge $envVars $envVarsFrom -}}
+{{- include "mock-identity-system.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
 {{/*

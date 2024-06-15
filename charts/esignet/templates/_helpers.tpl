@@ -5,6 +5,10 @@ Return the proper  image name
 {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
 {{- end -}}
 
+{{- define "esignet.oidc-ui.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.oidcUi.image "global" .Values.global) }}
+{{- end -}}
+
 {{/*
 Return the proper image name (for the init container volume-permissions image)
 */}}
@@ -16,7 +20,7 @@ Return the proper image name (for the init container volume-permissions image)
 Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "esignet.imagePullSecrets" -}}
-{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image) "global" .Values.global) -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image .Values.postgresInit.image .Values.keygen.image .Values.oidcUi.image) "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
@@ -57,42 +61,52 @@ Return podAnnotations
 {{- end }}
 {{- end -}}
 
+{{- define "esignet.oidc-ui.podAnnotations" -}}
+{{- if .Values.oidcUi.podAnnotations }}
+{{ include "common.tplvalues.render" (dict "value" .Values.oidcUi.podAnnotations "context" $) }}
+{{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.podAnnotations }}
+{{ include "common.tplvalues.render" (dict "value" .Values.metrics.podAnnotations "context" $) }}
+{{- end }}
+{{- end -}}
+
 {{/*
 Render Env values section
 */}}
 {{- define "esignet.baseEnvVars" -}}
-{{- $context := .context }}
+{{- $context := .context -}}
 {{- range $k, $v := .envVars }}
 - name: {{ $k }}
+{{- if or (kindIs "int" $v) (kindIs "bool" $v) }}
+  value: {{ $v | quote }}
+{{- else if kindIs "string" $v }}
   value: {{ include "common.tplvalues.render" ( dict "value" $v "context" $context ) | squote }}
+{{- else }}
+  valueFrom: {{- include "common.tplvalues.render" ( dict "value" $v "context" $context ) | nindent 4}}
 {{- end }}
-{{- range $k, $v := .envVarsFrom }}
-- name: {{ $k }}
-  valueFrom:
-    {{- if $v.configMapKeyRef }}
-    configMapKeyRef:
-      name: {{ include "common.tplvalues.render" ( dict "value" $v.configMapKeyRef.name "context" $context ) | squote }}
-      key: {{ include "common.tplvalues.render" ( dict "value" $v.configMapKeyRef.key "context" $context ) | squote }}
-    {{- else if $v.secretKeyRef }}
-    secretKeyRef:
-      name: {{ include "common.tplvalues.render" ( dict "value" $v.secretKeyRef.name "context" $context ) | squote }}
-      key: {{ include "common.tplvalues.render" ( dict "value" $v.secretKeyRef.key "context" $context ) | squote }}
-    {{- end }}
 {{- end }}
 {{- end -}}
 
 {{- define "esignet.envVars" -}}
-{{- include "esignet.baseEnvVars" (dict "envVars" .Values.envVars "envVarsFrom" .Values.envVarsFrom "context" $) }}
+{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
+{{- include "esignet.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
 {{- define "esignet.postgresInit.envVars" -}}
-{{- include "esignet.baseEnvVars" (dict "envVars" .Values.postgresInit.envVars "envVarsFrom" .Values.postgresInit.envVarsFrom "context" $) }}
+{{- $envVars := merge (deepCopy .Values.postgresInit.envVars) (deepCopy .Values.postgresInit.envVarsFrom) -}}
+{{- include "esignet.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
 {{- define "esignet.keygen.envVars" -}}
-{{- $_ := merge .Values.keygen.envVars (deepCopy .Values.envVars) }}
-{{- $_ := merge .Values.keygen.envVarsFrom (deepCopy .Values.envVarsFrom) }}
-{{- include "esignet.baseEnvVars" (dict "envVars" .Values.keygen.envVars "envVarsFrom" .Values.keygen.envVarsFrom "context" $) }}
+{{- $envVars := merge (deepCopy .Values.keygen.envVars) (deepCopy .Values.envVars) -}}
+{{- $envVarsFrom := merge (deepCopy .Values.keygen.envVarsFrom) (deepCopy .Values.envVarsFrom) -}}
+{{- $_ := merge $envVars $envVarsFrom -}}
+{{- include "esignet.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- end -}}
+
+{{- define "esignet.oidc-ui.envVars" -}}
+{{- $envVars := merge (deepCopy .Values.oidcUi.envVars) (deepCopy .Values.oidcUi.envVarsFrom) -}}
+{{- include "esignet.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
 {{/*
@@ -118,4 +132,21 @@ args: []
 
 {{- define "esignet.keygen.command" -}}
 {{- include "esignet.commandBase" (dict "command" .Values.keygen.command "args" .Values.keygen.args "startUpCommand" .Values.keygen.startUpCommand "context" $) }}
+{{- end -}}
+
+{{- define "esignet.oidc-ui.command" -}}
+{{- if or .Values.oidcUi.command .Values.oidcUi.args }}
+{{- if .command }}
+command: {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.command "context" $) }}
+{{- end }}
+{{- if .Values.oidcUi.args }}
+args: {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.args "context" $) }}
+{{- end }}
+{{- else }}
+command: ["./configure_start.sh"]
+args:
+  - bash
+  - -c
+  - echo "Waiting for artifactory..." && if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/"; then echo "Connecting with artifactory failed after max retries..."; exit 1; fi && exec nginx -g 'daemon off;'
+{{- end }}
 {{- end -}}

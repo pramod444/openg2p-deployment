@@ -1,0 +1,29 @@
+{{- if .Values.oidcUi.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  name: {{ template "common.names.fullname" . }}-oidc-ui
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.oidcUi.service.type }}
+  {{- if (or (eq .Values.oidcUi.service.type "LoadBalancer") (eq .Values.oidcUi.service.type "NodePort")) }}
+  externalTrafficPolicy: {{ .Values.oidcUi.service.externalTrafficPolicy | quote }}
+  {{- end }}
+  {{ if eq .Values.oidcUi.service.type "LoadBalancer" }}
+  loadBalancerSourceRanges: {{ .Values.oidcUi.service.loadBalancerSourceRanges }}
+  {{ end }}
+  {{- if (and (eq .Values.oidcUi.service.type "LoadBalancer") (not (empty .Values.oidcUi.service.loadBalancerIP))) }}
+  loadBalancerIP: {{ .Values.oidcUi.service.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - name: http
+      port: {{ .Values.oidcUi.service.port }}
+      targetPort: {{ .Values.oidcUi.containerPort }}
+  selector: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.oidcUi.podLabels "context" $) | nindent 4 }}
+{{- end }}

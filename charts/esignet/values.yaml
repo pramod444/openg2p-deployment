@@ -136,7 +136,7 @@ javaOpts: ""
 ## Clamav container already runs as 'mosip' user, so we may not need to enable this
 containerSecurityContext:
   enabled: false
-  runAsUser: mosip
+  runAsUser: 1001
   runAsNonRoot: true
 
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
@@ -388,15 +388,18 @@ extraVolumes: []
 ##
 extraVolumeMounts: []
 
-## Only internal access
+## This is not required since oidc-ui already provides this.
+## Use "oidc-ui.istio" section instead. Enable this only if there is no oidc-ui.
 istio:
-  enabled: true
+  enabled: false
   virtualservice:
     enabled: true
     host: ""
     gateway: "internal"
     destination: '{{ template "common.names.fullname" . }}'
     destinationPort: '{{ .Values.service.port }}'
+    prefix: /v1/esignet
+    rewriteUri: ""
   gateway:
     enabled: false
     host: ""
@@ -599,8 +602,233 @@ keygen:
 
     exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
 
-oidc-ui:
-  enabled: false
+oidcUi:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 80
+    nodePorts:
+      http: ""
+      https: ""
+    externalTrafficPolicy: Cluster
+  image:
+    registry: docker.io
+    repository: mosipid/oidc-ui
+    tag: 1.4.0
+    pullPolicy: Always
+    pullSecrets: []
+    #   - myRegistryKeySecretName
+  containerPort: 3000
+  startupProbe:
+    enabled: true
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+    successThreshold: 1
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  command: []
+  args: []
+  hostAliases: []
+  resources: {}
+  containerSecurityContext:
+    enabled: false
+    runAsUser: 1001
+    runAsNonRoot: true
+  podSecurityContext:
+    enabled: false
+    fsGroup: 1001
+  podAffinityPreset: ""
+  podAntiAffinityPreset: soft
+  nodeAffinityPreset:
+    type: ""
+    key: ""
+    values: []
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+  podLabels:
+    app.kubernetes.io/name: esignet-oidc-ui
+  podAnnotations: {}
+  # priorityClassName: ""
+  lifecycleHooks: {}
+  updateStrategy:
+    type: RollingUpdate
+  initContainers: []
+  sidecars: []
+  volumePermissions:
+    enabled: false
+    image:
+      registry: docker.io
+      repository: bitnami/bitnami-shell
+      tag: "10"
+      pullPolicy: Always
+      pullSecrets: []
+      ##   - myRegistryKeySecretName
+    resources: {}
+  extraVolumes: []
+  extraVolumeMounts: []
+  istio:
+    enabled: true
+    virtualservice:
+      enabled: true
+      host: ""
+      gateway: "internal"
+      destination: '{{ template "common.names.fullname" . }}-oidc-ui'
+      destinationPort: '{{ .Values.oidcUi.service.port }}'
+      prefix: /
+      rewriteUri: ""
+    gateway:
+      enabled: false
+      host: ""
+      ingressController:
+        istio: ingressgateway
+      httpTlsRedirect: false
+      httpEnabled: true
+      httpsEnabled: false
+      tls:
+        mode: SIMPLE
+        credentialName: ""
+  envVars:
+    # Use this property to set base url to this oidc-ui installation.
+    # Use this in conjunction with "oidcUi.istio.prefix" and "oidcUi.istio.rewriteUri" parameters. Example:
+    # OIDC_UI_PUBLIC_URL: '/oidc-ui'
+    OIDC_UI_PUBLIC_URL: ''
+
+    SIGN_IN_WITH_ESIGNET_PLUGIN_URL: 'http://{{ tpl .Values.artifactoryName $ }}/artifactory/libs-release-local/mosip-plugins/sign-in-with-esignet.zip'
+
+    DEFAULT_WELLKNOWN: '%5B%7B%22name%22%3A%22OpenID%20Configuration%22%2C%22value%22%3A%22%2F.well-known%2Fopenid-configuration%22%7D%2C%7B%22name%22%3A%22Jwks%20Json%22%2C%22value%22%3A%22%2F.well-known%2Fjwks.json%22%7D%2C%7B%22name%22%3A%22Authorization%20Server%22%2C%22value%22%3A%22%2F.well-known%2Foauth-authorization-server%22%7D%2C%7B%22name%22%3A%22OpenID%20Credential%20Issuer%22%2C%22value%22%3A%22%2F.well-known%2Fopenid-credential-issuer%22%7D%5D'
+    DEFAULT_THEME: ''
+    DEFAULT_LANG: 'en'
+    DEFAULT_FEVICON: 'favicon.ico'
+    DEFAULT_TITLE: 'eSignet'
+    DEFAULT_ID_PROVIDER_NAME: 'eSignet'
+    DEFAULT_FONT_URL: ''
+  envVarsFrom:
+    artifactory_url_env:
+      configMapKeyRef:
+        name: '{{ tpl .Values.artifactoryName $ }}-share'
+        key: artifactory_url_env
+  nginxConfMountPath: /etc/nginx/nginx.conf
+  nginxConf: |-
+    worker_processes  1;
+    pid /tmp/nginx.pid;
+    events {
+      worker_connections  1024;
+    }
+    http {
+      access_log /dev/stdout;
+      error_log /dev/stderr;
+
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path       /tmp/proxy_temp_path;
+      fastcgi_temp_path     /tmp/fastcgi_temp;
+      uwsgi_temp_path       /tmp/uwsgi_temp;
+      scgi_temp_path        /tmp/scgi_temp;
+
+      server {
+        listen {{ .Values.oidcUi.containerPort }};
+
+        root   /usr/share/nginx/html;
+        index  index.html index.htm;
+        include /etc/nginx/mime.types;
+
+        gzip on;
+        gzip_min_length 1000;
+        gzip_proxied expired no-cache no-store private auth;
+        gzip_types text/plain text/css application/json application/javascript application/x-javascript text/xml application/xml application/xml+rss text/javascript;
+
+        # TODO: Proxying the API calls via UI pod is not a great idea.
+        location /v1/esignet {
+          proxy_pass         http://{{ include "common.names.fullname" . }}/v1/esignet;
+          proxy_redirect     off;
+          proxy_set_header   Host $host;
+          proxy_set_header   X-Real-IP $remote_addr;
+          proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header   X-Forwarded-Host $host;
+          proxy_set_header   X-Forwarded-Proto $scheme;
+        }
+
+        location /.well-known/jwks.json {
+          proxy_pass         http://{{ include "common.names.fullname" . }}/v1/esignet/oauth/.well-known/jwks.json;
+          proxy_redirect     off;
+          proxy_set_header   Host $host;
+          proxy_set_header   X-Real-IP $remote_addr;
+          proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header   X-Forwarded-Host $host;
+          proxy_set_header   X-Forwarded-Proto $scheme;
+          types {
+            text/plain log cer json txt;
+          }
+        }
+
+        location /.well-known/openid-configuration {
+          proxy_pass         http://{{ include "common.names.fullname" . }}/v1/esignet/oidc/.well-known/openid-configuration;
+          proxy_redirect     off;
+          proxy_set_header   Host $host;
+          proxy_set_header   X-Real-IP $remote_addr;
+          proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header   X-Forwarded-Host $host;
+          proxy_set_header   X-Forwarded-Proto $scheme;
+          types {
+            text/plain log cer json txt;
+          }
+        }
+
+        location /.well-known/oauth-authorization-server {
+          proxy_pass         http://{{ include "common.names.fullname" . }}/v1/esignet/oauth/.well-known/oauth-authorization-server;
+          proxy_redirect     off;
+          proxy_set_header   Host $host;
+          proxy_set_header   X-Real-IP $remote_addr;
+          proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header   X-Forwarded-Host $host;
+          proxy_set_header   X-Forwarded-Proto $scheme;
+          types {
+            text/plain log cer json txt;
+          }
+        }
+
+        location /.well-known/openid-credential-issuer {
+          proxy_pass         http://{{ include "common.names.fullname" . }}/v1/esignet/vci/.well-known/openid-credential-issuer;
+          proxy_redirect     off;
+          proxy_set_header   Host $host;
+          proxy_set_header   X-Real-IP $remote_addr;
+          proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header   X-Forwarded-Host $host;
+          proxy_set_header   X-Forwarded-Proto $scheme;
+          types {
+            text/plain log cer json txt;
+          }
+        }
+
+        location / {
+          try_files $uri $uri/ /index.html;
+        }
+      }
+    }
 
 keycloakBaseUrl: 'https://keycloak.your.org'
 captchaEnabled: false
