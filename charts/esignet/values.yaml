@@ -484,7 +484,7 @@ postgresql:
       host: "*"
       gateway: ""
       matchPort: 5432
-      destination: '{{ tpl .Values.postgresqlName $ }}'
+      destination: '{{ tpl .Values.postgresqlInstallationName $ }}'
       destinationPort: "5432"
     gateway:
       enabled: true
@@ -515,7 +515,7 @@ postgresInit:
     - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
   envVars:
     MOSIP_DB_NAME: mosip_esignet
-    DB_SERVERIP: '{{ tpl .Values.postgresqlName $ }}'
+    DB_SERVERIP: '{{ tpl .Values.postgresqlInstallationName $ }}'
     DB_PORT: '5432'
     SU_USER: postgres
     DB_USER: esignetuser
@@ -525,11 +525,11 @@ postgresInit:
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
-        name: '{{ tpl .Values.postgresqlName $ }}'
+        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: postgres-password
     DBUSER_PWD:
       secretKeyRef:
-        name: '{{ tpl .Values.postgresqlName $ }}'
+        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
 
 softhsm:
@@ -542,10 +542,10 @@ softhsm:
 mock-identity-system:
   enabled: true
   nameOverride: esignet-mock-identity-system
-  artifactoryName: '{{ .Release.Name }}-esignet-artifactory'
+  artifactoryInstallationName: '{{ .Release.Name }}-esignet-artifactory'
   artifactory:
     enabled: false
-  postgresqlName: '{{ .Release.Name }}-esignet-postgresql'
+  postgresqlInstallationName: '{{ .Release.Name }}-esignet-postgresql'
   postgresql:
     enabled: false
 
@@ -719,7 +719,7 @@ oidcUi:
     # OIDC_UI_PUBLIC_URL: '/oidc-ui'
     OIDC_UI_PUBLIC_URL: ''
 
-    SIGN_IN_WITH_ESIGNET_PLUGIN_URL: 'http://{{ tpl .Values.artifactoryName $ }}/artifactory/libs-release-local/mosip-plugins/sign-in-with-esignet.zip'
+    SIGN_IN_WITH_ESIGNET_PLUGIN_URL: 'http://{{ tpl .Values.artifactoryInstallationName $ }}/artifactory/libs-release-local/mosip-plugins/sign-in-with-esignet.zip'
 
     DEFAULT_WELLKNOWN: '%5B%7B%22name%22%3A%22OpenID%20Configuration%22%2C%22value%22%3A%22%2F.well-known%2Fopenid-configuration%22%7D%2C%7B%22name%22%3A%22Jwks%20Json%22%2C%22value%22%3A%22%2F.well-known%2Fjwks.json%22%7D%2C%7B%22name%22%3A%22Authorization%20Server%22%2C%22value%22%3A%22%2F.well-known%2Foauth-authorization-server%22%7D%2C%7B%22name%22%3A%22OpenID%20Credential%20Issuer%22%2C%22value%22%3A%22%2F.well-known%2Fopenid-credential-issuer%22%7D%5D'
     DEFAULT_THEME: ''
@@ -731,7 +731,7 @@ oidcUi:
   envVarsFrom:
     artifactory_url_env:
       configMapKeyRef:
-        name: '{{ tpl .Values.artifactoryName $ }}-share'
+        name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
         key: artifactory_url_env
   nginxConfMountPath: /etc/nginx/nginx.conf
   nginxConf: |-
@@ -839,9 +839,9 @@ envVars:
   SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
   SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
 
-  spring_kafka_bootstrapServers: '{{ tpl .Values.kafkaName $ }}:{{ .Values.kafka.service.ports.client }}'
+  spring_kafka_bootstrapServers: '{{ tpl .Values.kafkaInstallationName $ }}:{{ .Values.kafka.service.ports.client }}'
 
-  spring_redis_host: '{{ tpl .Values.redisName $ }}-master'
+  spring_redis_host: '{{ tpl .Values.redisInstallationName $ }}-master'
   spring_redis_port: '{{ .Values.redis.master.ports.redis }}'
 
   keycloak_internal_url: '{{ .Values.global.keycloakBaseUrl }}'
@@ -850,10 +850,10 @@ envVars:
   mosip_api_internal_host: '{{ .Values.global.esignetHostname }}'
   mosip_api_public_host: '{{ .Values.global.esignetHostname }}'
   mosip_signup_host: '{{ .Values.global.esignetHostname }}'
-  mosip_mock_id_baseUrl: '{{ tpl .Values.mockIdentitySystemName $ }}'
+  mosip_mock_id_baseUrl: '{{ tpl .Values.mockIdentitySystemInstallationName $ }}'
   mosip_esignet_host: '{{ .Values.global.esignetHostname }}'
 
-  mosip_esignet_database_hostname: '{{ tpl .Values.postgresqlName $ }}'
+  mosip_esignet_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_esignet_database_port: '5432'
 
   mosip_esignet_captcha_required: >-
@@ -883,38 +883,38 @@ envVarsFrom:
 
   spring_redis_password:
     secretKeyRef:
-      name: '{{ tpl .Values.redisName $ }}'
+      name: '{{ tpl .Values.redisInstallationName $ }}'
       key: redis-password
 
   artifactory_url_env:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: artifactory_url_env
   esignet_wrapper_url_env:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: esignet_wrapper_url_env
   iam_adapter_url_env:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: iam_adapter_url_env
   zip_file_path:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: zip_file_path
 
   db_dbuser_password:
     secretKeyRef:
-      name: '{{ tpl .Values.postgresqlName $ }}'
+      name: '{{ tpl .Values.postgresqlInstallationName $ }}'
       key: password
 
   PKCS11_PROXY_SOCKET:
     configMapKeyRef:
-      name: '{{ tpl .Values.softhsmName $ }}-share'
+      name: '{{ tpl .Values.softhsmInstallationName $ }}-share'
       key: PKCS11_PROXY_SOCKET
   softhsm_esignet_security_pin:
     secretKeyRef:
-      name: '{{ tpl .Values.softhsmName $ }}'
+      name: '{{ tpl .Values.softhsmInstallationName $ }}'
       key: security-pin
 
 springConfig:
@@ -972,17 +972,10 @@ startUpCommand: |-
 
   exec java -jar ${ADDL_ARGS[@]} ./esignet-service.jar
 
-
-## Do NOT edit the following values.
-##
-## If you want to change the name the dependency being installed, use
-## the nameOverride and fullnameOverride values of the dependencies.
-##
-## The following can be edited only when you want to use a dependency installed externally, so that
-## this chart will look for the dependency present in the given location.
-artifactoryName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-postgresqlName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
-redisName: '{{ include "common.names.fullname" .Subcharts.redis }}'
-kafkaName: '{{ include "common.names.fullname" .Subcharts.kafka }}'
-mockIdentitySystemName: '{{ include "common.names.fullname" (index .Subcharts "mock-identity-system") }}'
-softhsmName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
+## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
+artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
+postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+redisInstallationName: '{{ include "common.names.fullname" .Subcharts.redis }}'
+kafkaInstallationName: '{{ include "common.names.fullname" .Subcharts.kafka }}'
+mockIdentitySystemInstallationName: '{{ include "common.names.fullname" (index .Subcharts "mock-identity-system") }}'
+softhsmInstallationName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'

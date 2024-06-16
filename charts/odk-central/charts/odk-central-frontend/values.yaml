@@ -101,6 +101,8 @@ istio:
     gateway: "internal"
     destination: '{{ include "common.names.fullname" . }}'
     destinationPort: "80"
+    prefix: /
+    rewriteUri: ""
   gateway:
     enabled: false
     host: ""

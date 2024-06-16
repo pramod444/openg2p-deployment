@@ -38,6 +38,10 @@ This supports using any name for the installation. This can be installed on any 
 
 Some pods may fail and restart a few times initially. But they should come up on their own in 5-10mins.
 
+## Post Installation
+
+To access esignet APIs create an OIDC client in Keycloak. Also create a scope "esignet_admin_access" and assign this scope as a default allowed scope to the client.
+
 ## Parameters
 
 The following are some of the basic parameters that can be passed to the above helm during installation. (Can be  added as arguments using `--set`. Or can be passed by yaml file using `-f values.yaml`).

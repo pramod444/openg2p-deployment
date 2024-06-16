@@ -22,9 +22,9 @@ spec:
     - port: {{ .Values.postgresql.istio.virtualservice.matchPort }}
     route:
     - destination:
-        host: {{ tpl .Values.postgresql.istio.virtualservice.destination $ }}
+        host: {{ include "common.tplvalues.render" (dict "value" .Values.postgresql.istio.virtualservice.destination "context" $) }}
         port:
-          number: {{ tpl .Values.postgresql.istio.virtualservice.destinationPort $ }}
+          number: {{ include "common.tplvalues.render" (dict "value" .Values.postgresql.istio.virtualservice.destinationPort "context" $) }}
 {{- end }}
 {{- end }}
 {{- end }}

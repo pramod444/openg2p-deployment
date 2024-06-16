@@ -35,6 +35,10 @@ This supports installation on any namespace. Namespace can be given using `-n` a
 
 Keymanager pod may fail and restart a few times initially. But it should come up by itself in 5-10mins.
 
+## Post Installation
+
+To access keymanager APIs create an OIDC client in Keycloak. Also create a role "KEYMANAGER_ADMIN" and assign this role to service account of the client.
+
 ## Parameters
 
 The following are some of the basic parameters that can be passed to the above helm during installation. (Can be  added as arguments using `--set`. Or can be passed by yaml file using `-f values.yaml`).

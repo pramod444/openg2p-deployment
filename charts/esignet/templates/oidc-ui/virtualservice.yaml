@@ -32,9 +32,9 @@ spec:
     {{- end }}
     route:
     - destination:
-        host: {{ tpl .Values.oidcUi.istio.virtualservice.destination $ }}
+        host: {{ include "common.tplvalues.render" (dict "value" .Values.oidcUi.istio.virtualservice.destination "context" $) }}
         port:
-          number: {{ tpl .Values.oidcUi.istio.virtualservice.destinationPort $ }}
+          number: {{ include "common.tplvalues.render" (dict "value" .Values.oidcUi.istio.virtualservice.destinationPort "context" $) }}
 {{- end }}
 {{- end }}
 {{- end }}

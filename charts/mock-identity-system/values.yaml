@@ -439,7 +439,7 @@ postgresql:
       host: "*"
       gateway: ""
       matchPort: 5432
-      destination: '{{ tpl .Values.postgresqlName $ }}'
+      destination: '{{ tpl .Values.postgresqlInstallationName $ }}'
       destinationPort: "5432"
     gateway:
       enabled: true
@@ -470,7 +470,7 @@ postgresInit:
     - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
   envVars:
     MOSIP_DB_NAME: mosip_mockidentitysystem
-    DB_SERVERIP: '{{ tpl .Values.postgresqlName $ }}'
+    DB_SERVERIP: '{{ tpl .Values.postgresqlInstallationName $ }}'
     DB_PORT: '5432'
     SU_USER: postgres
     DB_USER: mockidsystemuser
@@ -480,11 +480,11 @@ postgresInit:
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
-        name: '{{ tpl .Values.postgresqlName $ }}'
+        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: postgres-password
     DBUSER_PWD:
       secretKeyRef:
-        name: '{{ tpl .Values.postgresqlName $ }}'
+        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
 
 softhsm:
@@ -554,7 +554,7 @@ envVars:
   SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
   SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
   mosip_api_internal_host: '{{ .Values.global.esignetHostname }}'
-  mosip_mockidentitysystem_database_hostname: '{{ tpl .Values.postgresqlName $ }}'
+  mosip_mockidentitysystem_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_mockidentitysystem_database_port: '5432'
 
 envVarsFrom:
@@ -568,27 +568,27 @@ envVarsFrom:
       key: branch
   artifactory_url_env:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: artifactory_url_env
   iam_adapter_url_env:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: iam_adapter_url_env
   zip_file_path:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: zip_file_path
   db_dbuser_password:
     secretKeyRef:
-      name: '{{ tpl .Values.postgresqlName $ }}'
+      name: '{{ tpl .Values.postgresqlInstallationName $ }}'
       key: password
   PKCS11_PROXY_SOCKET:
     configMapKeyRef:
-      name: '{{ tpl .Values.softhsmName $ }}-share'
+      name: '{{ tpl .Values.softhsmInstallationName $ }}-share'
       key: PKCS11_PROXY_SOCKET
   softhsm_mock_identity_system_security_pin:
     secretKeyRef:
-      name: '{{ tpl .Values.softhsmName $ }}'
+      name: '{{ tpl .Values.softhsmInstallationName $ }}'
       key: security-pin
 
 springConfig:
@@ -646,14 +646,7 @@ startUpCommand: |-
   
   exec java -jar ${ADDL_ARGS[@]} ./mock-identity-system.jar
 
-
-## Do NOT edit the following values.
-##
-## If you want to change the name the dependency being installed, use
-## the nameOverride and fullnameOverride values of the dependencies.
-##
-## The following can be edited only when you want to use a dependency installed externally, so that
-## this chart will look for the dependency present in the given location.
-artifactoryName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-postgresqlName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
-softhsmName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
+## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
+artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
+postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+softhsmInstallationName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'

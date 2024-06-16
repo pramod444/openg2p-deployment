@@ -24,15 +24,15 @@ spec:
           x-forwarded-proto: https
     match:
     - uri:
-        prefix: {{ .Values.istio.virtualservice.prefix }}
+        prefix: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.prefix "context" $) }}
     {{- if .Values.istio.virtualservice.rewriteUri }}
     rewrite:
-      uri: {{ .Values.istio.virtualservice.rewriteUri }}
+      uri: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.rewriteUri "context" $) }}
     {{- end }}
     route:
     - destination:
-        host: {{ tpl .Values.istio.virtualservice.destination $ }}
+        host: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destination "context" $) }}
         port:
-          number: {{ tpl .Values.istio.virtualservice.destinationPort $ }}
+          number: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destinationPort "context" $) }}
 {{- end }}
 {{- end }}

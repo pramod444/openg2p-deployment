@@ -4,6 +4,6 @@ metadata:
   name: {{ include "common.names.fullname" . }}
 data:
   odk.conf.template: |-
-    {{- tpl .Values.odkConfTemplate $ | nindent 4 }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.odkConfTemplate "context" $) | nindent 4 }}
   setup-odk.sh: |-
-    {{- tpl .Values.setupOdkScript $ | nindent 4 }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.setupOdkScript "context" $) | nindent 4 }}

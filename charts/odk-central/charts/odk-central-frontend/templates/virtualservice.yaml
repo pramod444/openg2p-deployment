@@ -17,10 +17,22 @@ spec:
   gateways:
   - {{ default (include "common.names.fullname" .) .Values.istio.virtualservice.gateway }}
   http:
-  - route:
+  - headers:
+      request:
+        set:
+          x-forwarded-host: {{ default .Values.global.odkHostname .Values.istio.virtualservice.host | quote }}
+          x-forwarded-proto: https
+    match:
+    - uri:
+        prefix: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.prefix "context" $) }}
+    {{- if .Values.istio.virtualservice.rewriteUri }}
+    rewrite:
+      uri: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.rewriteUri "context" $) }}
+    {{- end }}
+    route:
     - destination:
-        host: {{ tpl .Values.istio.virtualservice.destination $ }}
+        host: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destination "context" $) }}
         port:
-          number: {{ tpl .Values.istio.virtualservice.destinationPort $ }}
+          number: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destinationPort "context" $) }}
 {{- end }}
 {{- end }}

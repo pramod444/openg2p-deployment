@@ -397,6 +397,8 @@ istio:
     gateway: "internal"
     destination: '{{ template "common.names.fullname" . }}'
     destinationPort: '{{ .Values.service.port }}'
+    prefix: /v1/keymanager
+    rewriteUri: ""
   gateway:
     enabled: false
     host: ""
@@ -437,7 +439,7 @@ postgresql:
       host: "*"
       gateway: ""
       matchPort: 5432
-      destination: '{{ tpl .Values.postgresqlName $ }}'
+      destination: '{{ tpl .Values.postgresqlInstallationName $ }}'
       destinationPort: "5432"
     gateway:
       enabled: true
@@ -468,7 +470,7 @@ postgresInit:
     - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
   envVars:
     MOSIP_DB_NAME: mosip_keymgr
-    DB_SERVERIP: '{{ tpl .Values.postgresqlName $ }}'
+    DB_SERVERIP: '{{ tpl .Values.postgresqlInstallationName $ }}'
     DB_PORT: '5432'
     SU_USER: postgres
     DB_USER: keymgruser
@@ -478,11 +480,11 @@ postgresInit:
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
-        name: '{{ tpl .Values.postgresqlName $ }}'
+        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: postgres-password
     DBUSER_PWD:
       secretKeyRef:
-        name: '{{ tpl .Values.postgresqlName $ }}'
+        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
 
 softhsm:
@@ -557,7 +559,7 @@ envVars:
 
   auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
 
-  mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlName $ }}'
+  mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_kernel_database_port: '5432'
 
   # Edit the following properties only if required. OpenG2P doesnt use these properties for now.
@@ -576,27 +578,27 @@ envVarsFrom:
       key: branch
   artifactory_url_env:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: artifactory_url_env
   iam_adapter_url_env:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: iam_adapter_url_env
   zip_file_path:
     configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryName $ }}-share'
+      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: zip_file_path
   db_dbuser_password:
     secretKeyRef:
-      name: '{{ tpl .Values.postgresqlName $ }}'
+      name: '{{ tpl .Values.postgresqlInstallationName $ }}'
       key: password
   PKCS11_PROXY_SOCKET:
     configMapKeyRef:
-      name: '{{ tpl .Values.softhsmName $ }}-share'
+      name: '{{ tpl .Values.softhsmInstallationName $ }}-share'
       key: PKCS11_PROXY_SOCKET
   softhsm_kernel_security_pin:
     secretKeyRef:
-      name: '{{ tpl .Values.softhsmName $ }}'
+      name: '{{ tpl .Values.softhsmInstallationName $ }}'
       key: security-pin
 
 springConfig:
@@ -655,14 +657,7 @@ startUpCommand: |-
 
   exec java -jar ${ADDL_ARGS[@]} ./kernel-keymanager-service.jar
 
-
-## Do NOT edit the following values.
-##
-## If you want to change the name the dependency being installed, use
-## the nameOverride and fullnameOverride values of the dependencies.
-##
-## The following can be edited only when you want to use a dependency installed externally, so that
-## this chart will look for the dependency present in the given location.
-artifactoryName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-softhsmName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
-postgresqlName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
+artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
+softhsmInstallationName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
+postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
