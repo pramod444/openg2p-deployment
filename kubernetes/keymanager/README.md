@@ -3,6 +3,7 @@
 Keymanager can now be installed directly as part of the respective OpenG2P Module. For example, refer to [Social Registry deployment](https://docs.openg2p.org/social-registry/deployment) or [PBMS deployment](https://docs.openg2p.org/pbms/deployment).
 
 Source code for [OpenG2P Keymanager](../../charts/keymanager) helm chart.
+
 This installs Keymanager along with all the required dependencies like SoftHSM, MOSIP's Artifactory (to pull jars & artifacts), PostgreSQL, etc. Each of these dependencies can be disabled by setting the appropriate helm value. (Note: This doesn't install config server, it directly allows properties to be downloaded from git repos. See Parameters section below.)
 
 This helm chart is a fork of [MOSIP Keymanager](https://github.com/mosip/mosip-helm/tree/master/charts/keymanager) helm chart, and applies additional modifications to make it easier to install Keymanager seperately.
@@ -46,4 +47,4 @@ For advanced config values refer to [keymanager/values.yaml](../../charts/keyman
 |keycloakBaseUrl|Keycloak base url, to enable Auth JWTs from this particular Keycloak|https://keycloak.your.org|
 |springConfig.profile|Spring Config Profile|default|
 |springConfig.gitRepo.repoUrl|Git Repo Url to get configs. (Username & password have to added in this url, if required)|https://github.com/openg2p/mosip-config|
-|springConfig.gitRepo.branch|Git Repo Branch to get configs.|develop3-v3|
+|springConfig.gitRepo.branch|Git Repo Branch to get configs.|master|

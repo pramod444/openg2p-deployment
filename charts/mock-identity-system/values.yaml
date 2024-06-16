@@ -597,7 +597,7 @@ springConfig:
   gitRepo:
     enabled: true
     repoUrl: https://github.com/openg2p/mosip-config
-    branch: develop3-v3
+    branch: master
   rawConfigMountPath: '/home/mosip/springConfig/application-{{ tpl .Values.springConfig.profile $ }}.properties'
   rawConfig: ""
 

@@ -54,3 +54,38 @@ questions:
   type: multiline
   label: Spring Config application properties.
   show_if: springConfig.gitRepo.enabled!=true
+- variable: mock-identity-system.springConfig.profile
+  type: string
+  label: Spring Config Profile
+  group: Mock Identity System Settings
+- variable: mock-identity-system.springConfig.names
+  type: string
+  label: Spring Config Names
+  group: Mock Identity System Settings
+- variable: mock-identity-system.springConfig.gitRepo.enabled
+  description: Enables download of configs from Git repo.
+  type: boolean
+  label: Spring Config Git Enabled
+  group: Mock Identity System Settings
+- variable: mock-identity-system.springConfig.gitRepo.repoUrl
+  description: |-
+    Repo Url for remote Git repo containing configs.
+    This url should include username password if required.
+  type: string
+  label: Spring Config Git Repo Url
+  group: Mock Identity System Settings
+  show_if: mock-identity-system.springConfig.gitRepo.enabled=true
+- variable: mock-identity-system.springConfig.gitRepo.branch
+  description: Branch of remote Git repo containing configs.
+  type: string
+  label: Spring Config Git Repo Branch
+  group: Mock Identity System Settings
+  show_if: mock-identity-system.springConfig.gitRepo.enabled=true
+- variable: mock-identity-system.springConfig.rawConfig
+  description: |-
+    If git-based config is disabled, the complete application.properties can be
+    directly supplied here.
+  type: multiline
+  label: Spring Config application properties.
+  group: Mock Identity System Settings
+  show_if: mock-identity-system.springConfig.gitRepo.enabled!=true
