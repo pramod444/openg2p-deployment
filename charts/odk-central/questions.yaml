@@ -3,7 +3,7 @@ questions:
   description: Hostname under which ODK Central should be accessible
   type: string
   label: "ODK Central Hostname"
-- variable: odk-central-backend.envVars.OIDC_ISSUER_URL
+- variable: global.keycloakIssuerUrl
   default: https://keycloak.sandbox.openg2p.net/realms/master
   description: OIDC Issuer Url for ODK Central Login
   type: string 

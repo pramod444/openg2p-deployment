@@ -3,7 +3,7 @@ questions:
   description: Hostname under which Keymanager should be accessible
   type: string
   label: Keymanager Hostname
-- variable: keycloakBaseUrl
+- variable: global.keycloakBaseUrl
   description: Required for API auth validation.
   type: string
   label: Keycloak Base URL

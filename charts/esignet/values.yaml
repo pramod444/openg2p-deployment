@@ -9,6 +9,7 @@
 #   storageClass: myStorageClass
 global:
   esignetHostname: esignet.openg2p.sandbox.net
+  keycloakBaseUrl: 'https://keycloak.your.org'
 
 ## Add labels to all the deployed resources
 ##
@@ -830,7 +831,6 @@ oidcUi:
       }
     }
 
-keycloakBaseUrl: 'https://keycloak.your.org'
 captchaEnabled: false
 
 envVars:
@@ -844,8 +844,8 @@ envVars:
   spring_redis_host: '{{ tpl .Values.redisName $ }}-master'
   spring_redis_port: '{{ .Values.redis.master.ports.redis }}'
 
-  keycloak_internal_url: '{{ .Values.keycloakBaseUrl }}'
-  keycloak_external_url: '{{ .Values.keycloakBaseUrl }}'
+  keycloak_internal_url: '{{ .Values.global.keycloakBaseUrl }}'
+  keycloak_external_url: '{{ .Values.global.keycloakBaseUrl }}'
 
   mosip_api_internal_host: '{{ .Values.global.esignetHostname }}'
   mosip_api_public_host: '{{ .Values.global.esignetHostname }}'
