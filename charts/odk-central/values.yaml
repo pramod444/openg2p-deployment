@@ -8,7 +8,7 @@ global:
   # Support email
   supportEmail: "support@odk.openg2p.sandbox.net"
   keycloakBaseUrl: https://keycloak.your.org
-  keycloakIssuerUrl: '{{ .Values.global.keycloakBaseUrl }}/realms/master'
+  keycloakIssuerUrl: '{{ tpl .Values.global.keycloakBaseUrl $ }}/realms/master'
 
 odk-central-mail:
   enabled: true
