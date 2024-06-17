@@ -551,6 +551,14 @@ mock-identity-system:
     enabled: false
   softhsm:
     nameOverride: esignet-mock-id-softhsm
+  springConfig:
+    names: application,mock-identity-system
+    profile: default
+    gitRepo:
+      enabled: true
+      repoUrl: https://github.com/openg2p/mosip-config
+      branch: master
+    rawConfig: ""
 
 keygen:
   # Key generator is not required for esignet.
