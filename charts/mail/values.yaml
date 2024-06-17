@@ -5,7 +5,6 @@ global:
 
 replicaCount: 1
 
-
 service:
   type: ClusterIP
   port: 25

@@ -411,7 +411,6 @@ istio:
       mode: SIMPLE
       credentialName: ""
 
-
 artifactory:
   enabled: true
   nameOverride: keymanager-artifactory

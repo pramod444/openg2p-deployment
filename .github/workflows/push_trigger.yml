@@ -51,7 +51,7 @@ jobs:
             echo "Chartname: $chartname"
             helm dep up charts/$chartpath
             helm package charts/$chartpath
-            is_rancher_chart=$(grep "$RANCHER_CHART_FILTER" charts/${chartpath%*/}/Chart.yaml)
+            is_rancher_chart=$(grep "$RANCHER_CHART_FILTER" charts/${chartpath%*/}/Chart.yaml || true)
             if [ -n "$is_rancher_chart" ]; then
               RANCHER_CHARTS+=("$chartname")
             fi
