@@ -34,6 +34,6 @@ questions:
   description: |-
     If git-based config is disabled, the complete application.properties can be
     directly supplied here.
-  type: multiline
+  type: yamlfile
   label: Spring Config application properties.
   show_if: "springConfig.gitRepo.enabled!=true"
