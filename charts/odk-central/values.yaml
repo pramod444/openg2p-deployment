@@ -7,6 +7,7 @@ global:
   sysAdminEmail: "admin@odk.openg2p.sandbox.net"
   # Support email
   supportEmail: "support@odk.openg2p.sandbox.net"
+
   keycloakBaseUrl: https://keycloak.your.org
   keycloakIssuerUrl: '{{ tpl .Values.global.keycloakBaseUrl $ }}/realms/master'
 
