@@ -591,7 +591,6 @@ envVarsFrom:
       name: '{{ tpl .Values.softhsmInstallationName $ }}'
       key: security-pin
 
-
 springConfig:
   names: application,mock-identity-system
   profile: default
