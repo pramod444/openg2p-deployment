@@ -421,7 +421,8 @@ redis:
     ports:
       redis: 6379
     persistence:
-      size: 3Gi
+      # Cache persistence is disabled for now.
+      enabled: false
 
 kafka:
   enabled: true
@@ -541,13 +542,15 @@ softhsm:
 
 mock-identity-system:
   enabled: true
-  nameOverride: esignet-mock-identity-system
+  nameOverride: esignet-mock-id
   artifactoryInstallationName: '{{ .Release.Name }}-esignet-artifactory'
   artifactory:
     enabled: false
   postgresqlInstallationName: '{{ .Release.Name }}-esignet-postgresql'
   postgresql:
     enabled: false
+  softhsm:
+    nameOverride: esignet-mock-id-softhsm
 
 keygen:
   # Key generator is not required for esignet.
