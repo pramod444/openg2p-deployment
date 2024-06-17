@@ -606,6 +606,7 @@ keygen:
 
     exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
 
+
 oidcUi:
   enabled: true
   replicaCount: 1
