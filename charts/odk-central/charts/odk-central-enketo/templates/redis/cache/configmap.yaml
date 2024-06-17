@@ -5,5 +5,5 @@ metadata:
   name: {{ include "common.names.fullname" . }}-redis-cache
 data:
   redis-enketo-cache.conf: |-
-    {{- tpl .Values.redisCacheConf $ | nindent 4 }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.redisCacheConf "context" $) | nindent 4 }}
 {{- end }}

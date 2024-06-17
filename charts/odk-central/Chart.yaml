@@ -24,7 +24,8 @@ keywords:
   - odk
   - odk-central
 maintainers:
-  - email: lalith@openg2p.org
-    name: lalithkota
+  - email: info@openg2p.org
+    name: OpenG2P
+icon: https://openg2p.github.io/openg2p-helm/openg2p-logo.png
 annotations:
   catalog.cattle.io/display-name: "ODK Central"

@@ -4,6 +4,6 @@ metadata:
   name: {{ include "common.names.fullname" . }}
 data:
   config.json.template: |-
-    {{- tpl .Values.configJsonTemplate $ | nindent 4 }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.configJsonTemplate "context" $) | nindent 4 }}
   start-odk.sh: |-
-    {{- tpl .Values.startOdkScript $ | nindent 4 }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.startOdkScript "context" $) | nindent 4 }}

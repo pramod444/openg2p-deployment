@@ -1,19 +1,21 @@
 questions:
 - variable: global.odkHostname
-  default: odk.sandbox.openg2p.net
   description: Hostname under which ODK Central should be accessible
   type: string
-  label: "ODK Central Hostname"
-- variable: odk-central-backend.envVars.OIDC_ISSUER_URL
+  label: ODK Central Hostname
+
+- variable: global.keycloakIssuerUrl
   default: https://keycloak.sandbox.openg2p.net/realms/master
   description: OIDC Issuer Url for ODK Central Login
   type: string 
-  label: "OIDC Issuer URL"
+  label: OIDC Issuer URL
+
 - variable: odk-central-backend.envVars.OIDC_CLIENT_ID
   description: OIDC Client ID for ODK Central Login
   type: string 
-  label: "OIDC Client ID"
+  label: OIDC Client ID
+
 - variable: odk-central-backend.envVars.OIDC_CLIENT_SECRET
   description: OIDC Client Secret for ODK Central Login
   type: string 
-  label: "OIDC Client Secret"
+  label: OIDC Client Secret

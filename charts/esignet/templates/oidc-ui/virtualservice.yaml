@@ -1,0 +1,40 @@
+{{- if .Values.oidcUi.enabled }}
+{{- if .Values.oidcUi.istio.enabled }}
+{{- if .Values.oidcUi.istio.virtualservice.enabled }}
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{ template "common.names.fullname" . }}-oidc-ui
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  hosts:
+  - {{ default .Values.global.esignetHostname .Values.oidcUi.istio.virtualservice.host | quote }}
+  gateways:
+  - {{ default (include "common.names.fullname" .) .Values.oidcUi.istio.virtualservice.gateway }}
+  http:
+  - headers:
+      request:
+        set:
+          x-forwarded-host: {{ default .Values.global.esignetHostname .Values.oidcUi.istio.virtualservice.host | quote }}
+          x-forwarded-proto: https
+    match:
+    - uri:
+        prefix: {{ .Values.oidcUi.istio.virtualservice.prefix }}
+    {{- if .Values.oidcUi.istio.virtualservice.rewriteUri }}
+    rewrite:
+      uri: {{ .Values.oidcUi.istio.virtualservice.rewriteUri }}
+    {{- end }}
+    route:
+    - destination:
+        host: {{ include "common.tplvalues.render" (dict "value" .Values.oidcUi.istio.virtualservice.destination "context" $) }}
+        port:
+          number: {{ include "common.tplvalues.render" (dict "value" .Values.oidcUi.istio.virtualservice.destinationPort "context" $) }}
+{{- end }}
+{{- end }}
+{{- end }}

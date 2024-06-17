@@ -1,0 +1,110 @@
+{{- if .Values.oidcUi.enabled }}
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ template "common.names.fullname" . }}-oidc-ui
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- if .Values.commonAnnotations }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.oidcUi.replicaCount }}
+  {{- if .Values.oidcUi.updateStrategy }}
+  strategy: {{- toYaml .Values.oidcUi.updateStrategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.oidcUi.podLabels "context" $) | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if or .Values.oidcUi.podAnnotations .Values.metrics.enabled }}
+        {{- include "esignet.oidc-ui.podAnnotations" . | nindent 8 }}
+        {{- end }}
+      labels: {{- include "common.labels.standard" . | nindent 8 }}
+        {{- if .Values.oidcUi.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.podLabels "context" $) | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ template "esignet.serviceAccountName" . }}
+      {{- include "esignet.imagePullSecrets" . | nindent 6 }}
+      {{- if .Values.oidcUi.hostAliases }}
+      hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.hostAliases "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.oidcUi.affinity }}
+      affinity: {{- include "common.tplvalues.render" ( dict "value" .Values.oidcUi.affinity "context" $) | nindent 8 }}
+      {{- else }}
+      affinity:
+        podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.oidcUi.podAffinityPreset "context" $) | nindent 10 }}
+        podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.oidcUi.podAntiAffinityPreset "context" $) | nindent 10 }}
+        nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.oidcUi.nodeAffinityPreset.type "key" .Values.oidcUi.nodeAffinityPreset.key "values" .Values.oidcUi.nodeAffinityPreset.values) | nindent 10 }}
+      {{- end }}
+      {{- if .Values.oidcUi.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" ( dict "value" .Values.oidcUi.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.oidcUi.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.tolerations "context" .) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.oidcUi.priorityClassName }}
+      priorityClassName: {{ .Values.oidcUi.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.oidcUi.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.oidcUi.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if .Values.oidcUi.initContainers }}
+      initContainers:
+        {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.initContainers "context" $) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: oidc-ui
+          image: {{ template "esignet.oidc-ui.image" . }}
+          imagePullPolicy: {{ .Values.oidcUi.image.pullPolicy }}
+          {{- if .Values.oidcUi.lifecycleHooks }}
+          lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.lifecycleHooks "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.oidcUi.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.oidcUi.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          {{- include "esignet.oidc-ui.command" . | nindent 10 }}
+          env:
+            {{- include "esignet.oidc-ui.envVars" . | nindent 12 }}
+          ports:
+            - name: http-port
+              containerPort: {{ .Values.oidcUi.containerPort }}
+          {{- if .Values.oidcUi.resources }}
+          resources: {{- toYaml .Values.oidcUi.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.oidcUi.startupProbe.enabled }}
+          startupProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.oidcUi.startupProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.oidcUi.livenessProbe.enabled }}
+          livenessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.oidcUi.livenessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.oidcUi.readinessProbe.enabled }}
+          readinessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.oidcUi.readinessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.oidcUi.nginxConf }}
+            - name: nginx-config
+              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.oidcUi.nginxConfMountPath "context" $) }}
+              subPath: nginx.conf
+            {{- end }}
+            {{- if .Values.oidcUi.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+        {{- if .Values.oidcUi.sidecars }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.oidcUi.sidecars "context" $) | nindent 8 }}
+        {{- end }}
+      volumes:
+        {{- if .Values.oidcUi.nginxConf }}
+        - name: nginx-config
+          configMap:
+            name: {{ template "common.names.fullname" . }}-oidc-ui-nginx-cm
+        {{- end }}
+        {{- if .Values.oidcUi.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
+{{- end }}

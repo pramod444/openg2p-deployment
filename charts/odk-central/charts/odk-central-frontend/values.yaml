@@ -79,6 +79,8 @@ envVars:
   SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
   SENTRY_PROJECT: "1298632"
 
+envVarsFrom: {}
+
 ingress:
   enabled: false
   ingressClassName: ""
@@ -101,6 +103,8 @@ istio:
     gateway: "internal"
     destination: '{{ include "common.names.fullname" . }}'
     destinationPort: "80"
+    prefix: /
+    rewriteUri: ""
   gateway:
     enabled: false
     host: ""

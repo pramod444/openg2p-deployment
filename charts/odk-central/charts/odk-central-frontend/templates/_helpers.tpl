@@ -1,22 +1,21 @@
 {{/*
 Render Env values section
 */}}
+{{- define "odkFrontend.baseEnvVars" -}}
+{{- $context := .context -}}
+{{- range $k, $v := .envVars }}
+- name: {{ $k }}
+{{- if or (kindIs "int" $v) (kindIs "bool" $v) }}
+  value: {{ $v | quote }}
+{{- else if kindIs "string" $v }}
+  value: {{ include "common.tplvalues.render" ( dict "value" $v "context" $context ) | squote }}
+{{- else }}
+  valueFrom: {{- include "common.tplvalues.render" ( dict "value" $v "context" $context ) | nindent 4}}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- define "odkFrontend.envVars" -}}
-{{- range $k, $v := .Values.envVars }}
-- name: {{ $k }}
-  value: {{ include "common.tplvalues.render" ( dict "value" $v "context" $ ) | squote }}
-{{- end }}
-{{- range $k, $v := .Values.envVarsFrom }}
-- name: {{ $k }}
-  valueFrom:
-    {{- if $v.configMapKeyRef }}
-    configMapKeyRef:
-      name: {{ include "common.tplvalues.render" ( dict "value" $v.configMapKeyRef.name "context" $ ) | squote }}
-      key: {{ include "common.tplvalues.render" ( dict "value" $v.configMapKeyRef.key "context" $ ) | squote }}
-    {{- else if $v.secretKeyRef }}
-    secretKeyRef:
-      name: {{ include "common.tplvalues.render" ( dict "value" $v.secretKeyRef.name "context" $ ) | squote }}
-      key: {{ include "common.tplvalues.render" ( dict "value" $v.secretKeyRef.key "context" $ ) | squote }}
-    {{- end }}
-{{- end }}
+{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
+{{- include "mail.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end }}

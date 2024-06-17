@@ -1,0 +1,19 @@
+{{- if .Values.keygen.enabled }}
+{{- if and .Values.keygen.startUpCommand (not (or .Values.keygen.command .Values.keygen.args)) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "common.names.fullname" . }}-keygen-startup
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- if .Values.commonAnnotations }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- end }}
+data:
+  startup.sh: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.keygen.startUpCommand "context" $) | nindent 4 }}
+{{- end }}
+{{- end }}
