@@ -75,7 +75,7 @@ Render Env values section
 {{- end -}}
 
 {{- define "keymanager.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
+{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) (.Values.springConfig.gitRepo.enabled | ternary (deepCopy .Values.springConfig.gitRepo.envVars) dict) -}}
 {{- include "keymanager.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
@@ -85,7 +85,7 @@ Render Env values section
 {{- end -}}
 
 {{- define "keymanager.keygen.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.keygen.envVars) (deepCopy .Values.envVars) -}}
+{{- $envVars := merge (deepCopy .Values.keygen.envVars) (deepCopy .Values.envVars) (.Values.springConfig.gitRepo.enabled | ternary (deepCopy .Values.springConfig.gitRepo.envVars) dict) -}}
 {{- $envVarsFrom := merge (deepCopy .Values.keygen.envVarsFrom) (deepCopy .Values.envVarsFrom) -}}
 {{- $_ := merge $envVars $envVarsFrom -}}
 {{- include "keymanager.baseEnvVars" (dict "envVars" $envVars "context" $) }}
