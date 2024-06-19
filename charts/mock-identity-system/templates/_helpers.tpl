@@ -64,7 +64,7 @@ Render Env values section
 {{- $context := .context -}}
 {{- range $k, $v := .envVars }}
 - name: {{ $k }}
-{{- if or (kindIs "int" $v) (kindIs "bool" $v) }}
+{{- if or (kindIs "int64" $v) (kindIs "float64" $v) (kindIs "bool" $v) }}
   value: {{ $v | quote }}
 {{- else if kindIs "string" $v }}
   value: {{ include "common.tplvalues.render" ( dict "value" $v "context" $context ) | squote }}
@@ -99,7 +99,7 @@ Return command
 {{- if .command }}
 command: {{- include "common.tplvalues.render" (dict "value" .command "context" .context) }}
 {{- end }}
-{{- if .Values.args }}
+{{- if .args }}
 args: {{- include "common.tplvalues.render" (dict "value" .args "context" .context) }}
 {{- end }}
 {{- else if .startUpCommand }}
