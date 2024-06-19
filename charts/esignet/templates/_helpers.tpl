@@ -117,7 +117,7 @@ Return command
 {{- if .command }}
 command: {{- include "common.tplvalues.render" (dict "value" .command "context" .context) }}
 {{- end }}
-{{- if .Values.args }}
+{{- if .args }}
 args: {{- include "common.tplvalues.render" (dict "value" .args "context" .context) }}
 {{- end }}
 {{- else if .startUpCommand }}
