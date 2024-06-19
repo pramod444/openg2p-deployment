@@ -558,14 +558,6 @@ envVars:
   mosip_mockidentitysystem_database_port: '5432'
 
 envVarsFrom:
-  SPRING_CONFIG_GIT_REPO:
-    secretKeyRef:
-      name: '{{ template "common.names.fullname" . }}-git-config-secret'
-      key: repoUrl
-  SPRING_CONFIG_GIT_BRANCH:
-    secretKeyRef:
-      name: '{{ template "common.names.fullname" . }}-git-config-secret'
-      key: branch
   artifactory_url_env:
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
@@ -598,6 +590,15 @@ springConfig:
     enabled: true
     repoUrl: https://github.com/openg2p/mosip-config
     branch: master
+    envVars:
+      SPRING_CONFIG_GIT_REPO:
+        secretKeyRef:
+          name: '{{ template "common.names.fullname" . }}-git-config-secret'
+          key: repoUrl
+      SPRING_CONFIG_GIT_BRANCH:
+        secretKeyRef:
+          name: '{{ template "common.names.fullname" . }}-git-config-secret'
+          key: branch
   rawConfigMountPath: '/home/mosip/springConfig/application-{{ tpl .Values.springConfig.profile $ }}.properties'
   rawConfig: ""
 
