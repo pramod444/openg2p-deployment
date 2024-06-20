@@ -18,9 +18,11 @@ This section describes steps to install eSignet on your K8s cluster, if not inst
 ### Using Rancher
 
 - Add OpenG2P to Rancher Apps Repositories, with name like `openg2p-extras` and Url as `https://openg2p.github.io/openg2p-helm`.
+- Select namespace in which you want to install eSignet, from namespace filter on the top-right.
 - Navigate to Rancher Menu -> Apps -> Charts. Refresh and search for eSignet and select it.
-- Configure appropriate options and select namespace when prompted.
-- Click "Install" to finalize configurations and install.
+- Enable _Customize Helm options before install_ checkbox on _Metadata_ step, and choose any installation name, for example `esignet` and click _Next_.
+- Configure whatever is required in the _Values_ step and click _Next_.
+- Disable _Wait_ checkbox on _Helm Options_ step, and click _Install_.
 
 ### Using helm
 
@@ -40,7 +42,11 @@ Some pods may fail and restart a few times initially. But they should come up on
 
 ## Post Installation
 
-To access esignet APIs create an OIDC client in Keycloak. Also create a scope "esignet_admin_access" and assign this scope as a default allowed scope to the client.
+To access esignet APIs:
+- Create an OIDC client in Keycloak.
+- Create a client scope "esignet_admin_access" in Keycloak and mark this client scope to be "Included in token scope".
+- Assign this client scope as a "default" scope to the above client.
+- Get the client token using client_credentials grant type, and pass it as Bearer token to the required eSignet admin apis.
 
 ## Parameters
 

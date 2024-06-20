@@ -476,7 +476,7 @@ postgresInit:
     DB_USER: mockidsystemuser
     DML_FLAG: '1'
     GIT_REPO_URL: https://github.com/mosip/esignet-mock-services
-    GIT_BRANCH: release-0.9.x
+    GIT_BRANCH: v0.9.2
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
@@ -523,7 +523,7 @@ keygen:
     fi
 
     ./configure_start.sh
-    
+
     ADDL_ARGS=()
 
     if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
@@ -545,7 +545,7 @@ keygen:
     ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
     ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
     ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
-    
+
     exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
 
 envVars:
@@ -556,6 +556,7 @@ envVars:
   mosip_api_internal_host: '{{ .Values.global.esignetHostname }}'
   mosip_mockidentitysystem_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_mockidentitysystem_database_port: '5432'
+  mosip_kernel_keymgr_hsm_health_check_enabled: false # this will tell mock id system not to wait for hsm
 
 envVarsFrom:
   artifactory_url_env:
@@ -614,9 +615,9 @@ startUpCommand: |-
   # TODO: Wait for postgres
 
   ./configure_start.sh
-  
+
   ADDL_ARGS=()
-  
+
   if [ "$is_glowroot_env" = "present" ]; then
     wget -q "${artifactory_url_env}"/artifactory/libs-release-local/io/mosip/testing/glowroot.zip
     unzip glowroot.zip
@@ -644,7 +645,7 @@ startUpCommand: |-
   ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
   ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
-  
+
   exec java -jar ${ADDL_ARGS[@]} ./mock-identity-system.jar
 
 ## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.

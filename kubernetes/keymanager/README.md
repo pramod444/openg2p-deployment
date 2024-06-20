@@ -15,9 +15,11 @@ This section describes steps to install Keymanager on your K8s cluster, if not i
 ### Using Rancher
 
 - Add OpenG2P to Rancher Apps Repositories, with name like `openg2p-extras` and Url as `https://openg2p.github.io/openg2p-helm`.
+- Select namespace in which you want to install Keymanager, from namespace filter on the top-right.
 - Navigate to Rancher Menu -> Apps -> Charts. Refresh and search for Keymanager and select it.
-- Configure appropriate options and select namespace when prompted.
-- Click "Install" to finalize configurations and install.
+- Enable _Customize Helm options before install_ checkbox on _Metadata_ step, and choose any installation name, for example `keymanager` and click _Next_.
+- Configure whatever is required in the _Values_ step and click _Next_.
+- Disable _Wait_ checkbox on _Helm Options_ step, and click _Install_.
 
 ### Using helm
 
@@ -37,7 +39,7 @@ Keymanager pod may fail and restart a few times initially. But it should come up
 
 ## Post Installation
 
-To access keymanager APIs create an OIDC client in Keycloak. Also create a role "KEYMANAGER_ADMIN" and assign this role to service account of the client.
+To access keymanager APIs create an OIDC client in Keycloak. Also create a role "KEYMANAGER_ADMIN" and assign this role to service account of the client. (This means that the app, example Social Registry, with the client creds is given permission to access the keymanager APIs. Not the user.)
 
 ## Parameters
 
