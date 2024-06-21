@@ -522,7 +522,7 @@ postgresInit:
     DB_USER: esignetuser
     DML_FLAG: '1'
     GIT_REPO_URL: https://github.com/mosip/esignet
-    GIT_BRANCH: release-1.4.x
+    GIT_BRANCH: v1.4.0
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
@@ -876,7 +876,10 @@ envVars:
   esignet_captcha_site_key: ''
   esignet_captcha_secret_key: ''
 
-  mosip_esignet_amrAcrMappingFileUrl: 'file:///home/mosip/springConfig/amr-acr-mapping.json'
+  # TODO: Find alternative for this if not using springConfig.gitRepo
+  mosip_esignet_amrAcrMappingFileUrl: '{{ tpl .Values.springConfig.gitRepo.repoUrl $ }}/raw/{{ tpl .Values.springConfig.gitRepo.branch $ }}/amr-acr-mapping.json'
+
+  mosip_kernel_keymgr_hsm_health_check_enabled: false # this will tell esignet not to wait for hsm
 
   # Edit the following properties only if required. OpenG2P doesnt use these properties for now.
   mosip_esignet_misp_key: ''

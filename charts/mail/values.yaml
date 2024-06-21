@@ -60,7 +60,7 @@ resources:
 
 containerSecurityContext:
   enabled: false
-  runAsUser: odk
+  runAsUser: 1001
   runAsNonRoot: true
 
 podSecurityContext:

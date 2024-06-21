@@ -17,5 +17,5 @@ Render Env values section
 
 {{- define "odkBackend.envVars" -}}
 {{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
-{{- include "mail.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- include "odkBackend.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}

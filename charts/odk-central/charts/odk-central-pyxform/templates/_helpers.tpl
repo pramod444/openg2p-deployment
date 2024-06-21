@@ -17,5 +17,5 @@ Render Env values section
 
 {{- define "odkPyxform.envVars" -}}
 {{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
-{{- include "mail.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- include "odkPyxform.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end }}

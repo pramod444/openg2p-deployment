@@ -7,15 +7,15 @@ questions:
 - variable: global.keycloakIssuerUrl
   default: https://keycloak.sandbox.openg2p.net/realms/master
   description: OIDC Issuer Url for ODK Central Login
-  type: string 
+  type: string
   label: OIDC Issuer URL
 
 - variable: odk-central-backend.envVars.OIDC_CLIENT_ID
   description: OIDC Client ID for ODK Central Login
-  type: string 
+  type: string
   label: OIDC Client ID
 
 - variable: odk-central-backend.envVars.OIDC_CLIENT_SECRET
   description: OIDC Client Secret for ODK Central Login
-  type: string 
+  type: string
   label: OIDC Client Secret

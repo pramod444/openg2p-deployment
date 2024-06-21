@@ -101,7 +101,7 @@ istio:
       enabled: true
       mode: SIMPLE
       credentialName: ""
-    
+
 registry:
   istio:
     virtualservice:
