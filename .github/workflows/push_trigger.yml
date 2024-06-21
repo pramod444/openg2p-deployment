@@ -2,6 +2,8 @@ name: Publish OpenG2P Helm charts on
 
 on:
   push:
+    tags-ignore:
+      - '**'
     branches:
       - 1.*
       - develop
