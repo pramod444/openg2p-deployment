@@ -890,7 +890,6 @@ envVarsFrom:
     secretKeyRef:
       name: '{{ tpl .Values.redisInstallationName $ }}'
       key: redis-password
-
   artifactory_url_env:
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'

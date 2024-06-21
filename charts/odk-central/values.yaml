@@ -3,6 +3,7 @@ global:
   odkHostname: "odk.openg2p.sandbox.net"
   # mail name
   mailname: "openg2p.sandbox.net"
+
   # system admin email
   sysAdminEmail: "admin@odk.openg2p.sandbox.net"
   # Support email

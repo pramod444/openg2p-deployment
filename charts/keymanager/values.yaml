@@ -468,6 +468,7 @@ postgresInit:
   args:
     - -c
     - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
+
   envVars:
     MOSIP_DB_NAME: mosip_keymgr
     DB_SERVERIP: '{{ tpl .Values.postgresqlInstallationName $ }}'
