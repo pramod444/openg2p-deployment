@@ -6,7 +6,7 @@ metadata:
 spec:
   configPatches:
   - applyTo: NETWORK_FILTER
-    match:      
+    match:
       listener:
         filterChain:
           filter:

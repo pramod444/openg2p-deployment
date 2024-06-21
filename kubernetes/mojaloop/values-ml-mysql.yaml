@@ -8,7 +8,7 @@ auth:
 initdbScripts:
   init_ml_dbs.sh: |-
     #!/bin/bash
-    echo "create database if not exists account_lookup;" | mysql -u"root" -p"$MYSQL_ROOT_PASSWORD" 
+    echo "create database if not exists account_lookup;" | mysql -u"root" -p"$MYSQL_ROOT_PASSWORD"
     echo "create database if not exists central_ledger;" | mysql -u"root" -p"$MYSQL_ROOT_PASSWORD"
     echo "create user if not exists 'account_lookup'@'%' identified by '${MYSQL_PASSWORD}';" | mysql -u"root" -p"$MYSQL_ROOT_PASSWORD"
     echo "create user if not exists 'central_ledger'@'%' identified by '${MYSQL_PASSWORD}';" | mysql -u"root" -p"$MYSQL_ROOT_PASSWORD"

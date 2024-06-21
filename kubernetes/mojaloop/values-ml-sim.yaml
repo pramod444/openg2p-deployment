@@ -422,4 +422,3 @@ defaults:
   ## Set toleration for scheduler
   ## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
   tolerations: []
-  

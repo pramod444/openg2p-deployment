@@ -13,7 +13,7 @@
 - Not required if SPAR is being used.
 - Install one simulator for each ID Type. Example:
   - ```sh
-    helm -n ml install ml-oracle-iban mojaloop/simulator 
+    helm -n ml install ml-oracle-iban mojaloop/simulator
     ```
 
 ## Post Installation
