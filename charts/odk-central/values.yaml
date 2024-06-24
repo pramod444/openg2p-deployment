@@ -16,6 +16,7 @@ serviceAccount:
 postgresql:
   # any other postgres helm chart configuration here
   enabled: true
+  nameOverride: odk-central-postgresql
   auth:
     username: odkuser
     database: odkdb
