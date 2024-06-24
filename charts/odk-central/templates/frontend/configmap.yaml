@@ -1,0 +1,11 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-frontend
+data:
+  odk.conf.template: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.frontend.odkConfTemplate "context" $) | nindent 4 }}
+  setup-odk.sh: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.frontend.setupOdkScript "context" $) | nindent 4 }}
+{{- end }}

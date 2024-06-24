@@ -4,22 +4,23 @@ description: A Helm chart for odk-central.
 type: application
 version: "v2024.1.0"
 dependencies:
-  - name: mail
-    alias: odk-central-mail
-    version: "1.2.0"
-    condition: odk-central-mail.enabled
-  - name: odk-central-pyxform
-    version: "v2024.1.0"
-    condition: odk-central-pyxform.enabled
-  - name: odk-central-enketo
-    version: "v2024.1.0"
-    condition: odk-central-enketo.enabled
-  - name: odk-central-backend
-    version: "v2024.1.0"
-    condition: odk-central-backend.enabled
-  - name: odk-central-frontend
-    version: "v2024.1.0"
-    condition: odk-central-frontend.enabled
+- name: common
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 2.x.x
+- name: postgresql
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 15.x.x
+  condition: postgresql.enabled
+- name: mail
+  alias: odk-central-mail
+  version: "1.2.0"
+  condition: odk-central-mail.enabled
+- name: odk-central-pyxform
+  version: "v2024.1.0"
+  condition: odk-central-pyxform.enabled
+- name: odk-central-enketo
+  version: "v2024.1.0"
+  condition: odk-central-enketo.enabled
 keywords:
   - odk
   - odk-central

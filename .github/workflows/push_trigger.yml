@@ -96,7 +96,7 @@ jobs:
         done
         helm repo index --url https://openg2p.github.io/openg2p-helm/ --merge rancher/index.yaml rancher
         for chartname in $RANCHER_CHARTS; do
-          rm rancher/${chartname}*.tgz
+          rm rancher/${chartname}*.tgz || true
         done
       if: env.SKIP != 'TRUE'
 

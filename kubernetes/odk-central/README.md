@@ -38,7 +38,7 @@ For advanced config values refer to [odk-central/values.yaml](../../charts/odk-c
 
 |Name|Description|Default value|
 |-|-|-|
-|global.odkHostname|Hostname to access ODK Central|odk.sandbox.your.org|
-|odk-central-backend.envVars.OIDC_ISSUER_URL|OIDC Issuer URL|https://keycloak.your.org/realms/master|
-|odk-central-backend.envVars.OIDC_CLIENT_ID|OIDC Client ID||
-|odk-central-backend.envVars.OIDC_CLIENT_SECRET|OIDC Client Secret||
+|hostname|Hostname to access ODK Central|odk.sandbox.your.org|
+|backend.envVars.OIDC_ISSUER_URL|OIDC Issuer URL|https://keycloak.your.org/realms/master|
+|backend.envVars.OIDC_CLIENT_ID|OIDC Client ID||
+|backend.envVars.OIDC_CLIENT_SECRET|OIDC Client Secret||

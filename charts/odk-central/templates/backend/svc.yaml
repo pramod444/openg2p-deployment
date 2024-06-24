@@ -1,0 +1,30 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "common.names.fullname" . }}-backend
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.backend.service.type }}
+  {{- if (or (eq .Values.backend.service.type "LoadBalancer") (eq .Values.backend.service.type "NodePort")) }}
+  externalTrafficPolicy: {{ .Values.backend.service.externalTrafficPolicy | quote }}
+  {{- end }}
+  {{ if eq .Values.backend.service.type "LoadBalancer" }}
+  loadBalancerSourceRanges: {{ .Values.backend.service.loadBalancerSourceRanges }}
+  {{ end }}
+  {{- if (and (eq .Values.backend.service.type "LoadBalancer") (not (empty .Values.backend.service.loadBalancerIP))) }}
+  loadBalancerIP: {{ .Values.backend.service.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - name: http
+      port: {{ .Values.backend.service.port }}
+      protocol: TCP
+      targetPort: {{ .Values.backend.containerPort }}
+  selector: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.backend.podLabels "context" $) | nindent 4 }}
+{{- end }}

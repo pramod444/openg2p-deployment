@@ -1,0 +1,11 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-backend
+data:
+  config.json.template: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.backend.configJsonTemplate "context" $) | nindent 4 }}
+  start-odk.sh: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.backend.startOdkScript "context" $) | nindent 4 }}
+{{- end }}
