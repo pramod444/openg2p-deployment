@@ -1,5 +1,5 @@
 questions:
-- variable: global.esignetHostname
+- variable: hostname
   description: Hostname under which eSignet should be accessible
   type: string
   label: eSignet Hostname
@@ -8,11 +8,6 @@ questions:
   description: Required for API auth validation.
   type: string
   label: Keycloak Base URL
-
-- variable: mock-identity-system.enabled
-  description: This installs Mock Identity System along with the current eSignet
-  type: boolean
-  label: Install Mock Identity System?
 
 - variable: springConfig.profile
   type: string
@@ -65,6 +60,16 @@ questions:
   show_if: "springConfig.gitRepo.enabled!=true"
 
 # Mock Identity Settings
+- variable: mock-identity-system.enabled
+  description: This installs Mock Identity System along with the current eSignet
+  type: boolean
+  label: Install Mock Identity System?
+
+- variable: mock-identity-system.hostname
+  description: Hostname under which Mock Identity System should be accessible
+  type: string
+  label: Mock Identity System Hostname
+
 - variable: mock-identity-system.springConfig.profile
   type: string
   label: Spring Config Profile

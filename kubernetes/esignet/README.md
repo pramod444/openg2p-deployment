@@ -56,7 +56,7 @@ For advanced config values refer to [esignet/values.yaml](../../charts/esignet/v
 
 |Name|Description|Default value|
 |-|-|-|
-|global.esignetHostname|Hostname to access eSignet|esignet.sandbox.your.org|
+|hostname|Hostname to access eSignet|esignet.sandbox.your.org|
 |keycloakBaseUrl|Keycloak base url, to enable Auth JWTs from this particular Keycloak|https://keycloak.your.org|
 |springConfig.profile|Spring Config Profile|default|
 |springConfig.gitRepo.repoUrl|Git Repo Url to get configs. (Username & password have to added in this url, if required)|https://github.com/openg2p/mosip-config|

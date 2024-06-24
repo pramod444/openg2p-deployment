@@ -1,7 +1,6 @@
-global:
-  # domain name of installation
-  # mailname: "example.com"
-  mailname: ""
+# domain name of installation
+# mailname: "example.com"
+mailname: ""
 
 replicaCount: 1
 
@@ -69,7 +68,7 @@ podSecurityContext:
   fsGroup: 1001
 
 envVars:
-  MAILNAME: '{{ .Values.global.mailname }}'
+  MAILNAME: '{{ tpl .Values.mailname $ }}'
   RELAY_NETWORKS: ':10.0.0.0/8'
 
 envVarsFrom: {}

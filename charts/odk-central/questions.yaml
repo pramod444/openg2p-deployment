@@ -1,5 +1,5 @@
 questions:
-- variable: global.odkHostname
+- variable: hostname
   description: Hostname under which ODK Central should be accessible
   type: string
   label: ODK Central Hostname
