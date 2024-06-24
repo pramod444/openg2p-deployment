@@ -8,8 +8,9 @@
 #     - myRegistryKeySecretName
 #   storageClass: myStorageClass
 global:
-  esignetHostname: esignet.openg2p.sandbox.net
   keycloakBaseUrl: 'https://keycloak.your.org'
+
+hostname: esignet.openg2p.sandbox.net
 
 ## Add labels to all the deployed resources
 ##
@@ -543,6 +544,7 @@ softhsm:
 mock-identity-system:
   enabled: true
   nameOverride: esignet-mock-id
+  hostname: esignet.openg2p.sandbox.net
   artifactoryInstallationName: '{{ .Release.Name }}-esignet-artifactory'
   artifactory:
     enabled: false
@@ -845,7 +847,7 @@ oidcUi:
 captchaEnabled: false
 
 envVars:
-  JDK_JAVA_OPTIONS: '{{ .Values.javaOpts }}'
+  JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
   SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
   SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
   SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
@@ -858,11 +860,11 @@ envVars:
   keycloak_internal_url: '{{ .Values.global.keycloakBaseUrl }}'
   keycloak_external_url: '{{ .Values.global.keycloakBaseUrl }}'
 
-  mosip_api_internal_host: '{{ .Values.global.esignetHostname }}'
-  mosip_api_public_host: '{{ .Values.global.esignetHostname }}'
-  mosip_signup_host: '{{ .Values.global.esignetHostname }}'
+  mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
+  mosip_api_public_host: '{{ tpl .Values.hostname $ }}'
+  mosip_signup_host: '{{ tpl .Values.hostname $ }}'
   mosip_mock_id_baseUrl: '{{ tpl .Values.mockIdentitySystemInstallationName $ }}'
-  mosip_esignet_host: '{{ .Values.global.esignetHostname }}'
+  mosip_esignet_host: '{{ tpl .Values.hostname $ }}'
 
   mosip_esignet_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_esignet_database_port: '5432'

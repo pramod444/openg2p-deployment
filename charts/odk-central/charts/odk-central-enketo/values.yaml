@@ -1,8 +1,7 @@
 global:
   odkHostname: ""
-  mainname: ""
-  sysAdminEmail: ""
-  supportEmail: ""
+
+supportEmail: 'support@{{ tpl .Values.global.odkHostname $ }}'
 
 replicaCount: 1
 
@@ -69,8 +68,8 @@ podSecurityContext:
   fsGroup: 1001
 
 envVars:
-  DOMAIN: '{{ .Values.global.odkHostname }}'
-  SUPPORT_EMAIL: '{{ .Values.global.supportEmail }}'
+  DOMAIN: '{{ tpl .Values.global.odkHostname $ }}'
+  SUPPORT_EMAIL: '{{ tpl .Values.supportEmail $ }}'
   ENKETO_PORT: "8005"
   REDIS_MAIN_HOST: '{{ include "common.names.fullname" . }}-redis-main'
   REDIS_CACHE_HOST: '{{ include "common.names.fullname" . }}-redis-cache'

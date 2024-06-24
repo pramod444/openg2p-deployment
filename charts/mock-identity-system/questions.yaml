@@ -1,5 +1,5 @@
 questions:
-- variable: global.esignetHostname
+- variable: hostname
   description: Hostname under which Mock Identity System should be accessible
   type: string
   label: Mock Identity System Hostname

@@ -1,5 +1,5 @@
 questions:
-- variable: global.keymanagerHostname
+- variable: hostname
   description: Hostname under which Keymanager should be accessible
   type: string
   label: Keymanager Hostname

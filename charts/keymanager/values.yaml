@@ -8,8 +8,9 @@
 #     - myRegistryKeySecretName
 #   storageClass: myStorageClass
 global:
-  keymanagerHostname: keymanager.openg2p.sandbox.net
   keycloakBaseUrl: 'https://keycloak.your.org'
+
+hostname: keymanager.openg2p.sandbox.net
 
 ## Add labels to all the deployed resources
 ##
@@ -548,15 +549,15 @@ keygen:
     exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
 
 envVars:
-  JDK_JAVA_OPTIONS: '{{ .Values.javaOpts }}'
+  JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
   SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
   SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
   SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
 
-  mosip_api_internal_host: '{{ .Values.global.keymanagerHostname }}'
+  mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
 
-  keycloak_internal_url: '{{ .Values.global.keycloakBaseUrl }}'
-  keycloak_external_url: '{{ .Values.global.keycloakBaseUrl }}'
+  keycloak_internal_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
+  keycloak_external_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
 
   auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
 

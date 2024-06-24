@@ -49,7 +49,7 @@ For advanced config values refer to [keymanager/values.yaml](../../charts/keyman
 
 |Name|Description|Default value|
 |-|-|-|
-|global.keymanagerHostname|Hostname to access keymanager|keymanager.sandbox.your.org|
+|hostname|Hostname to access keymanager|keymanager.sandbox.your.org|
 |keycloakBaseUrl|Keycloak base url, to enable Auth JWTs from this particular Keycloak|https://keycloak.your.org|
 |springConfig.profile|Spring Config Profile|default|
 |springConfig.gitRepo.repoUrl|Git Repo Url to get configs. (Username & password have to added in this url, if required)|https://github.com/openg2p/mosip-config|
