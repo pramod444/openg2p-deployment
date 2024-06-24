@@ -8,6 +8,7 @@ dependencies:
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 2.x.x
 - name: mock-identity-system
+  repository: https://openg2p.github.io/openg2p-helm
   version: 0.9.2
   condition: mock-identity-system.enabled
 - name: postgresql
