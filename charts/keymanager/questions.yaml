@@ -41,7 +41,7 @@ questions:
     directly supplied here.
   type: yamlfile
   label: Spring Config application properties.
-  show_if: "springConfig.gitRepo.enabled!=true"
+  show_if: "springConfig.gitRepo.enabled=false"
 
 - variable: envVars.auth_server_admin_allowed_audience
   description: |-

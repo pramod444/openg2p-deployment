@@ -57,7 +57,7 @@ questions:
     directly supplied here.
   type: multiline
   label: Spring Config application properties.
-  show_if: "springConfig.gitRepo.enabled!=true"
+  show_if: "springConfig.gitRepo.enabled=false"
 
 # Mock Identity Settings
 - variable: mock-identity-system.enabled
@@ -111,4 +111,4 @@ questions:
   type: yamlfile
   label: Spring Config application properties.
   group: Mock Identity System Settings
-  show_if: "mock-identity-system.springConfig.gitRepo.enabled!=true"
+  show_if: "mock-identity-system.springConfig.gitRepo.enabled=false"
