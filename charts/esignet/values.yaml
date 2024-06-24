@@ -685,7 +685,7 @@ oidcUi:
   nodeSelector: {}
   tolerations: []
   podLabels:
-    app.kubernetes.io/name: esignet-oidc-ui
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-oidc-ui'
   podAnnotations: {}
   # priorityClassName: ""
   lifecycleHooks: {}

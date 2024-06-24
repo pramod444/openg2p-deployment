@@ -59,7 +59,7 @@ backend:
 
   podAnnotations: {}
   podLabels:
-    app.kubernetes.io/name: odk-central-backend
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-backend'
 
   containerPort: 8383
   service:
@@ -268,7 +268,7 @@ frontend:
   containerPort: 80
   podAnnotations: {}
   podLabels:
-    app.kubernetes.io/name: odk-central-frontend
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-frontend'
 
   service:
     type: ClusterIP

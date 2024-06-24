@@ -5,12 +5,9 @@ apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
   name: {{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}
-  labels: {{- include "common.labels.standard" . | nindent 4 }}
-    {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
-    {{- end }}
-  {{- if .Values.commonAnnotations }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.postgresql.commonLabels "context" .Subcharts.postgresql) | nindent 4 }}
+  {{- if .Values.postgresql.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.postgresql.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
   hosts:
