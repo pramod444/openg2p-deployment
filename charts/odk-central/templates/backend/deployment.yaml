@@ -1,0 +1,110 @@
+{{- if .Values.backend.enabled }}
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}-backend
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  {{- if .Values.backend.updateStrategy }}
+  strategy: {{- include "common.tplvalues.render" (dict "value" .Values.backend.updateStrategy "context" $) | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.backend.podLabels "context" $) | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.backend.podAnnotations }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.backend.podAnnotations "context" $) | nindent 8 }}
+        {{- end }}
+      labels: {{- include "common.labels.standard" . | nindent 8 }}
+        {{- if .Values.backend.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.backend.podLabels "context" $) | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ default (include "common.names.fullname" .) .Values.serviceAccount.name }}
+      {{- include "common.images.pullSecrets" (dict "images" (list .Values.backend.image) "global" .Values.global) | nindent 6 }}
+      {{- if .Values.backend.hostAliases }}
+      hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.backend.hostAliases "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.backend.affinity }}
+      affinity: {{- include "common.tplvalues.render" ( dict "value" .Values.backend.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.backend.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" ( dict "value" .Values.backend.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.backend.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.backend.tolerations "context" .) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.backend.priorityClassName }}
+      priorityClassName: {{ .Values.backend.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.backend.podSecurityContext.enabled }}
+      securityContext: {{- include "common.tplvalues.render" (dict "value" (omit .Values.backend.podSecurityContext "enabled") "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.backend.initContainers }}
+      initContainers: {{- include "common.tplvalues.render" (dict "value" .Values.backend.initContainers "context" $) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: odk-central-backend
+          image: {{ include "common.images.image" (dict "imageRoot" .Values.backend.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          {{- if .Values.backend.lifecycleHooks }}
+          lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.backend.lifecycleHooks "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.containerSecurityContext.enabled }}
+          securityContext: {{- include "common.tplvalues.render" (dict "value" (omit .Values.backend.containerSecurityContext "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.command }}
+          command: {{- include "common.tplvalues.render" (dict "value" .Values.backend.command "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.args }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.backend.args "context" $) | nindent 12 }}
+          {{- end }}
+          env: {{- include "odk-central-backend.envVars" . | nindent 12 }}
+          ports:
+          - name: container-port
+            containerPort: {{ .Values.backend.containerPort }}
+          {{- if .Values.backend.resources }}
+          resources: {{- include "common.tplvalues.render" (dict "value" .Values.backend.resources "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.startupProbe.enabled }}
+          startupProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.backend.startupProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.livenessProbe.enabled }}
+          livenessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.backend.livenessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.readinessProbe.enabled }}
+          readinessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.backend.readinessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config-json-template
+              mountPath: /usr/share/odk/config.json.template
+              subPath: config.json.template
+            - name: start-odk-command
+              mountPath: /usr/odk/start-odk.sh
+              subPath: start-odk.sh
+            {{- if .Values.backend.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.backend.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+        {{- if .Values.backend.sidecars }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.backend.sidecars "context" $) | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: start-odk-command
+          configMap:
+            defaultMode: 493
+            name: {{ include "common.names.fullname" . }}-backend
+        - name: config-json-template
+          configMap:
+            name: {{ include "common.names.fullname" . }}-backend
+        {{- if .Values.backend.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.backend.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
+{{- end }}

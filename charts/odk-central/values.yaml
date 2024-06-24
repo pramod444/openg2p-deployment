@@ -1,11 +1,48 @@
 global:
-  # hostname name of installation
-  odkHostname: "odk.openg2p.sandbox.net"
   # system admin email
   sysAdminEmail: "admin@odk.openg2p.sandbox.net"
 
   keycloakBaseUrl: https://keycloak.your.org
   keycloakIssuerUrl: '{{ tpl .Values.global.keycloakBaseUrl $ }}/realms/master'
+
+hostname: "odk.openg2p.sandbox.net"
+
+commonLabels: {}
+commonAnnotations: {}
+serviceAccount:
+  create: true
+  name: ""
+
+postgresql:
+  # any other postgres helm chart configuration here
+  enabled: true
+  auth:
+    username: odkuser
+    database: odkdb
+  primary:
+    extendedConfiguration: |-
+      wal_level = logical
+      max_wal_senders = 20
+      max_replication_slots = 10
+  istio:
+    enabled: false
+    virtualservice:
+      enabled: true
+      host: "*"
+      gateway: ""
+      matchPort: 5432
+      destination: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+      destinationPort: "5432"
+    gateway:
+      enabled: true
+      port: 5432
+      host: "*"
+      ingressController:
+        istio: ingressgateway
+      tls:
+        enabled: false
+        mode: SIMPLE
+        credentialName: ""
 
 odk-central-mail:
   enabled: true
@@ -14,13 +51,402 @@ odk-central-pyxform:
   enabled: true
 odk-central-enketo:
   enabled: true
-odk-central-backend:
+
+backend:
   enabled: true
+  replicaCount: 1
+
+  podAnnotations: {}
+  podLabels:
+    app.kubernetes.io/name: odk-central-backend
+
+  containerPort: 8383
+  service:
+    type: ClusterIP
+    port: 8383
+
+  image:
+    registry: docker.io
+    repository: openg2p/odk-central-backend
+    tag: v2024.1.0
+    pullPolicy: Always
+
+  startupProbe:
+    enabled: true
+    tcpSocket:
+      port: 8383
+    initialDelaySeconds: 0
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 10
+    successThreshold: 1
+
+  livenessProbe:
+    enabled: true
+    tcpSocket:
+      port: 8383
+    initialDelaySeconds: 20
+    periodSeconds: 60
+    timeoutSeconds: 5
+    failureThreshold: 2
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: true
+    tcpSocket:
+      port: 8383
+    initialDelaySeconds: 0
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 2
+    successThreshold: 1
+
+  command: ["bash"]
+  args: ["-c", "wait-for-it ${DB_HOST}:5432 -- ./start-odk.sh"]
+
+  resources:
+    limits: {}
+    #   cpu: 200m
+    #   memory: 256Mi
+    requests: {}
+    #   cpu: 100m
+    #   memory: 1500Mi
+
+  containerSecurityContext:
+    enabled: false
+    runAsUser: odk
+    runAsNonRoot: true
+
+  podSecurityContext:
+    enabled: false
+    fsGroup: 1001
+
   envVars:
+    DOMAIN: '{{ tpl .Values.hostname $ }}'
+    SYSADMIN_EMAIL: '{{ tpl .Values.global.sysAdminEmail $ }}'
+    NODE_OPTIONS: ''
+
+    DB_HOST: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+    DB_USER: '{{ tpl .Values.postgresql.auth.username $ }}'
+    DB_NAME: '{{ tpl .Values.postgresql.auth.database $ }}'
+    DB_SSL: "null"
+
+    ENKETO_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-enketo") }}'
+    ENKETO_PORT: "8005"
+
+    PYXFORM_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-pyxform") }}'
+    PYXFORM_PORT: "80"
+
+    EMAIL_FROM: 'no-reply@{{ tpl .Values.hostname $ }}'
+    EMAIL_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-mail") }}'
+    EMAIL_PORT: "25"
+    EMAIL_SECURE: "false"
+    EMAIL_IGNORE_TLS: "true"
+    EMAIL_USER: ""
+    EMAIL_PASSWORD: ""
+
+    OIDC_ENABLED: "true"
     OIDC_ISSUER_URL: '{{ tpl .Values.global.keycloakIssuerUrl $ }}'
-    OIDC_CLIENT_ID: ''
-    OIDC_CLIENT_SECRET: ''
-  postgresql:
-    nameOverride: odk-central-postgresql
-odk-central-frontend:
+    OIDC_CLIENT_ID: ""
+    OIDC_CLIENT_SECRET: ""
+
+    SENTRY_ORG_SUBDOMAIN: "o130137"
+    SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
+    SENTRY_PROJECT: "1298632"
+  envVarsFrom:
+    DB_PASSWORD:
+      secretKeyRef:
+        name: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+        key: password
+    ENKETO_API_KEY:
+      secretKeyRef:
+        name: '{{ include "common.names.fullname" (index .Subcharts "odk-central-enketo") }}'
+        key: enketo-api-key
+
+  configJsonTemplate: |-
+    {
+      "default": {
+        "database": {
+          "host": "${DB_HOST}",
+          "user": "${DB_USER}",
+          "password": "${DB_PASSWORD}",
+          "database": "${DB_NAME}",
+          "ssl": ${DB_SSL}
+        },
+        "email": {
+          "serviceAccount": "${EMAIL_FROM}",
+          "transport": "smtp",
+          "transportOpts": {
+            "host": "${EMAIL_HOST}",
+            "port": ${EMAIL_PORT},
+            "secure": ${EMAIL_SECURE},
+            "ignoreTLS": ${EMAIL_IGNORE_TLS},
+            "auth": {
+              "user": "${EMAIL_USER}",
+              "pass": "${EMAIL_PASSWORD}"
+            }
+          }
+        },
+        "xlsform": {
+          "host": "${PYXFORM_HOST}",
+          "port": ${PYXFORM_PORT}
+        },
+        "enketo": {
+          "url": "http://${ENKETO_HOST}:${ENKETO_PORT}/-",
+          "apiKey": "${ENKETO_API_KEY}"
+        },
+        "env": {
+          "domain": "https://${DOMAIN}",
+          "sysadminAccount": "${SYSADMIN_EMAIL}"
+        },
+        "oidc": {
+          "enabled": ${OIDC_ENABLED},
+          "issuerUrl": "${OIDC_ISSUER_URL}",
+          "clientId": "${OIDC_CLIENT_ID}",
+          "clientSecret": "${OIDC_CLIENT_SECRET}"
+        },
+        "external": {
+          "sentry": {
+            "orgSubdomain": "${SENTRY_ORG_SUBDOMAIN}",
+            "key": "${SENTRY_KEY}",
+            "project": "${SENTRY_PROJECT}"
+          }
+        }
+      }
+    }
+
+  startOdkScript: |-
+    #!/usr/bin/env bash
+
+    # This file is taken from https://github.com/getodk/central/tree/v2024.1.0/files/service/scripts
+    # And modified the config template generation line.
+
+    echo "generating local service configuration.."
+    envsubst < /usr/share/odk/config.json.template > /usr/odk/config/local.json
+
+    export SENTRY_RELEASE="$(cat sentry-versions/server)"
+    export SENTRY_TAGS="{ \"version.central\": \"$(cat sentry-versions/central)\", \"version.client\": \"$(cat sentry-versions/client)\" }"
+
+    echo "running migrations.."
+    node ./lib/bin/run-migrations
+
+    echo "checking migration success.."
+    node ./lib/bin/check-migrations
+
+    if [ $? -eq 1 ]; then
+      echo "*** Error starting ODK! ***"
+      echo "After attempting to automatically migrate the database, we have detected unapplied migrations, which suggests a problem with the database migration step. Please look in the console above this message for any errors and post what you find in the forum: https://forum.getodk.org/"
+      exit 1
+    fi
+
+    echo "starting cron.."
+    cron -f &
+
+    if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+      MEMTOT=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+    elif [ "$(cat /sys/fs/cgroup/memory.max)" != "max" ]; then
+      MEMTOT=$(cat /sys/fs/cgroup/memory.max)
+    else
+      MEMTOT=$(vmstat -s | grep 'total memory' | awk '{ print $1 }')
+    fi
+
+    if [ "$MEMTOT" -gt "1100000" ]; then
+      export WORKER_COUNT=4
+    else
+      export WORKER_COUNT=1
+    fi
+    echo "using $WORKER_COUNT worker(s) based on available memory ($MEMTOT).."
+
+    echo "starting server."
+    exec npx pm2-runtime ./pm2.config.js
+
+frontend:
   enabled: true
+  replicaCount: 1
+
+  containerPort: 80
+  podAnnotations: {}
+  podLabels:
+    app.kubernetes.io/name: odk-central-frontend
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  image:
+    registry: docker.io
+    repository: openg2p/odk-central-frontend
+    tag: v2024.1.0-oidc
+    pullPolicy: Always
+
+  startupProbe:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 80
+    initialDelaySeconds: 0
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 10
+    successThreshold: 1
+
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 80
+    initialDelaySeconds: 20
+    periodSeconds: 60
+    timeoutSeconds: 5
+    failureThreshold: 2
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 80
+    initialDelaySeconds: 0
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 2
+    successThreshold: 1
+
+  command: []
+  args: []
+
+  resources:
+    limits: {}
+    #   cpu: 200m
+    #   memory: 256Mi
+    requests: {}
+    #   cpu: 100m
+    #   memory: 1500Mi
+
+  containerSecurityContext:
+    enabled: false
+    runAsUser: odk
+    runAsNonRoot: true
+
+  podSecurityContext:
+    enabled: false
+    fsGroup: 1001
+
+  envVars:
+    # Donot change the following. For now.
+    SSL_TYPE: upstream
+    DOMAIN: "_"
+    ENKETO_URL: '{{ include "common.names.fullname" (index .Subcharts "odk-central-enketo") }}'
+    BACKEND_URL: '{{ include "common.names.fullname" . }}-backend'
+
+    SENTRY_ORG_SUBDOMAIN: "o130137"
+    SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
+    SENTRY_PROJECT: "1298632"
+
+  envVarsFrom: {}
+
+  setupOdkScript: |-
+    #!/bin/bash
+    echo "writing fresh nginx templates..."
+    export DOLLAR='$'
+    envsubst < /usr/share/odk/nginx/odk.conf.template > /etc/nginx/conf.d/odk.conf
+    rm -f /etc/nginx/conf.d/redirector.conf
+    exec nginx -g "daemon off;"
+
+  odkConfTemplate: |-
+    server {
+      listen 80;
+
+      server_tokens off;
+
+      include /usr/share/odk/nginx/common-headers.conf;
+
+      client_max_body_size 100m;
+
+      gzip on;
+      gzip_vary on;
+      gzip_min_length 1280;
+      gzip_http_version 1.1;
+      gzip_types text/plain text/css application/json application/x-javascript text/xml text/csv;
+
+      location = /robots.txt {
+        add_header Content-Type text/plain;
+        return 200 "User-agent: *\nDisallow: /\n";
+      }
+
+      location /- {
+        proxy_pass http://${ENKETO_URL}:8005;
+        proxy_redirect off;
+        proxy_set_header Host ${DOLLAR}host;
+
+        add_header Referrer-Policy same-origin;
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header X-Frame-Options "SAMEORIGIN";
+        add_header X-Content-Type-Options nosniff;
+      }
+
+      location ~ ^/v\d {
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_pass http://${BACKEND_URL}:8383;
+        proxy_redirect off;
+
+        # buffer requests, but not responses, so streaming out works.
+        proxy_request_buffering on;
+        proxy_buffering off;
+        proxy_read_timeout 2m;
+      }
+
+      location / {
+        root /usr/share/nginx/html;
+
+        location /version.txt {
+          include /usr/share/odk/nginx/common-headers.conf;
+          add_header Cache-Control no-cache;
+        }
+        location /index.html {
+          include /usr/share/odk/nginx/common-headers.conf;
+          add_header Cache-Control no-cache;
+        }
+      }
+
+      location /csp-report {
+        proxy_pass https://${SENTRY_ORG_SUBDOMAIN}.ingest.sentry.io/api/${SENTRY_PROJECT}/security/?sentry_key=${SENTRY_KEY};
+      }
+    }
+
+ingress:
+  enabled: false
+  ingressClassName: ""
+  pathType: ImplementationSpecific
+  backendServiceName: '{{ include "common.names.fullname" . }}-frontend'
+  path: /
+  apiVersion: ""
+  hostname: ""
+  annotations: {}
+  tls: false
+  tlsSecret: ""
+  extraPaths: []
+  extraTls: []
+  extraRules: []
+
+istio:
+  enabled: true
+  virtualservice:
+    enabled: true
+    host: ""
+    gateway: "internal"
+    destination: '{{ include "common.names.fullname" . }}-frontend'
+    destinationPort: '{{ .Values.frontend.service.port }}'
+    prefix: /
+    rewriteUri: ""
+  gateway:
+    enabled: false
+    host: ""
+    ingressController:
+      istio: ingressgateway
+    httpTlsRedirect: false
+    httpEnabled: true
+    httpsEnabled: false
+    tls:
+      mode: SIMPLE
+      credentialName: ""

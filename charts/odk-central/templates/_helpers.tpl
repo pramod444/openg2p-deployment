@@ -1,7 +1,7 @@
 {{/*
 Render Env values section
 */}}
-{{- define "odkBackend.baseEnvVars" -}}
+{{- define "odk-central.baseEnvVars" -}}
 {{- $context := .context -}}
 {{- range $k, $v := .envVars }}
 - name: {{ $k }}
@@ -15,7 +15,12 @@ Render Env values section
 {{- end }}
 {{- end -}}
 
-{{- define "odkBackend.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
-{{- include "odkBackend.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- define "odk-central-backend.envVars" -}}
+{{- $envVars := merge (deepCopy .Values.backend.envVars) (deepCopy .Values.backend.envVarsFrom) -}}
+{{- include "odk-central.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- end -}}
+
+{{- define "odk-central-frontend.envVars" -}}
+{{- $envVars := merge (deepCopy .Values.frontend.envVars) (deepCopy .Values.frontend.envVarsFrom) -}}
+{{- include "odk-central.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}

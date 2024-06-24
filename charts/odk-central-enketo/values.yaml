@@ -1,7 +1,5 @@
-global:
-  odkHostname: ""
-
-supportEmail: 'support@{{ tpl .Values.global.odkHostname $ }}'
+hostname: ""
+supportEmail: 'support@{{ tpl .Values.hostname $ | default "openg2p.org" }}'
 
 replicaCount: 1
 
@@ -68,7 +66,7 @@ podSecurityContext:
   fsGroup: 1001
 
 envVars:
-  DOMAIN: '{{ tpl .Values.global.odkHostname $ }}'
+  DOMAIN: '{{ tpl .Values.hostname $ }}'
   SUPPORT_EMAIL: '{{ tpl .Values.supportEmail $ }}'
   ENKETO_PORT: "8005"
   REDIS_MAIN_HOST: '{{ include "common.names.fullname" . }}-redis-main'
