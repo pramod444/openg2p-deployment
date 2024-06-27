@@ -314,7 +314,7 @@ volumePermissions:
 ## Specifies whether RBAC resources should be created
 ##
 rbac:
-  create: true
+  create: false
 
 ## Specifies whether a ServiceAccount should be created
 ##
@@ -414,6 +414,8 @@ istio:
 
 artifactory:
   enabled: true
+  rbac:
+    create: false
   nameOverride: keymanager-artifactory
   image:
     registry: docker.io
