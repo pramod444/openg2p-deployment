@@ -311,11 +311,6 @@ volumePermissions:
     ##   memory: 128Mi
     ##
 
-## Specifies whether RBAC resources should be created
-##
-rbac:
-  create: false
-
 ## Specifies whether a ServiceAccount should be created
 ##
 serviceAccount:
