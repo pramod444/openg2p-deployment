@@ -45,7 +45,7 @@ Compile all warnings into a single message.
 {{- end -}}
 {{- end -}}
 
-{{/* 
+{{/*
 Baseurl for artifactory service
 */}}
 {{- define "artifactory.baseUrl" -}}
