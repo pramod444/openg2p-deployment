@@ -16,7 +16,7 @@ dependencies:
   version: 12.0.1-B2
   condition: softhsm.enabled
 - name: artifactory
-  repository: https://mosip.github.io/openg2p-helm
+  repository: https://openg2p.github.io/openg2p-helm
   version: 12.0.1
   condition: artifactory.enabled
 home: https://mosip.io
