@@ -20,7 +20,7 @@ dependencies:
   version: 12.0.1-B2
   condition: softhsm.enabled
 - name: artifactory
-  repository: https://mosip.github.io/mosip-helm
+  repository: https://mosip.github.io/openg2p-helm
   version: 12.0.2
   condition: artifactory.enabled
 - name: redis
