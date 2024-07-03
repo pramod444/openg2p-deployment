@@ -3,16 +3,13 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ template "common.names.fullname" . }}-keygen
-  labels: {{- include "common.labels.standard" . | nindent 4 }}
-    {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
-    {{- end }}
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
   annotations:
-    "helm.sh/hook": post-install
-    "helm.sh/hook-weight": "1"
-    "helm.sh/hook-delete-policy": before-hook-creation
     {{- if .Values.commonAnnotations }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.keygen.commonAnnotations }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.keygen.commonAnnotations "context" $) | nindent 4 }}
     {{- end }}
 spec:
   {{- if .Values.keygen.backoffLimit }}

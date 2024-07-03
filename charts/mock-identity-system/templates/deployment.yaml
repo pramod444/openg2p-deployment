@@ -15,15 +15,10 @@ spec:
     matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
   template:
     metadata:
-      annotations:
-        {{- if or .Values.podAnnotations .Values.metrics.enabled }}
-        {{- include "mock-identity-system.podAnnotations" . | nindent 8 }}
-        {{- end }}
-
-      labels: {{- include "common.labels.standard" . | nindent 8 }}
-        {{- if .Values.podLabels }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.podLabels "context" $) | nindent 8 }}
-        {{- end }}
+      {{- if or .Values.podAnnotations .Values.metrics.enabled }}
+      annotations: {{- include "mock-identity-system.podAnnotations" . | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" (dict "customLabels" .Values.podLabels "context" $) | nindent 8 }}
     spec:
       serviceAccountName: {{ template "mock-identity-system.serviceAccountName" . }}
       {{- include "mock-identity-system.imagePullSecrets" . | nindent 6 }}
