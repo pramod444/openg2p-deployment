@@ -867,7 +867,7 @@ envVars:
   mosip_esignet_captcha_required: >-
     {{ .Values.captchaEnabled | ternary "send-otp,pwd" "" }}
   mosip_esignet_captcha_required_authFactors: >-
-    {{ .Values.captchaEnabled | ternary "{'PWD'}" "{}" }}
+    {{ .Values.captchaEnabled | ternary "{\"PWD\"}" "{}" }}
   mosip_esignet_sendOtp_captchaRequired: >-
     {{ .Values.captchaEnabled | ternary "true" "false" }}
   esignet_captcha_site_key: ''
