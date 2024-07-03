@@ -435,7 +435,7 @@ kafka:
   controller:
     heapOpts: ""
     replicaCount: 1
-    resources: {}
+    resourcesPreset: "none"
   broker:
     heapOpts: ""
     persistence:
