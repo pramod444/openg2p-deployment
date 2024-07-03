@@ -566,6 +566,9 @@ envVars:
   mosip_kernel_tokenid_partnercode_salt: ''
   mosip_admin_client_secret: ''
 
+  # Set true to tell Keymanager to wait for HSM
+  mosip_kernel_keymgr_hsm_health_check_enabled: false
+
 envVarsFrom:
   artifactory_url_env:
     configMapKeyRef:
