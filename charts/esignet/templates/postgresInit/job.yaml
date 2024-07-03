@@ -4,9 +4,13 @@ kind: Job
 metadata:
   name: {{ template "common.names.fullname" . }}-postgres-init
   labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
-  {{- if .Values.commonAnnotations }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
-  {{- end }}
+  annotations:
+    {{- if .Values.commonAnnotations }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.postgresInit.commonAnnotations }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.commonAnnotations "context" $) | nindent 4 }}
+    {{- end }}
 spec:
   {{- if .Values.postgresInit.backoffLimit }}
   backoffLimit: {{ .Values.postgresInit.backoffLimit }}

@@ -16,14 +16,10 @@ spec:
     matchLabels: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.oidcUi.podLabels "context" $) | nindent 6 }}
   template:
     metadata:
-      annotations:
-        {{- if or .Values.oidcUi.podAnnotations .Values.metrics.enabled }}
-        {{- include "esignet.oidc-ui.podAnnotations" . | nindent 8 }}
-        {{- end }}
-      labels: {{- include "common.labels.standard" . | nindent 8 }}
-        {{- if .Values.oidcUi.podLabels }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.oidcUi.podLabels "context" $) | nindent 8 }}
-        {{- end }}
+      {{- if or .Values.oidcUi.podAnnotations .Values.metrics.enabled }}
+      annotations: {{- include "esignet.oidc-ui.podAnnotations" . | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" (dict "customLabels" .Values.oidcUi.podLabels "context" $) | nindent 8 }}
     spec:
       serviceAccountName: {{ template "esignet.serviceAccountName" . }}
       {{- include "esignet.imagePullSecrets" . | nindent 6 }}

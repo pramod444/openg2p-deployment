@@ -461,6 +461,10 @@ postgresInit:
     enabled: false
   podSecurityContext:
     enabled: false
+  commonAnnotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
   command:
     - bash
   args:
@@ -504,6 +508,10 @@ keygen:
     enabled: false
   podSecurityContext:
     enabled: false
+  commonAnnotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
   command: []
   args: []
   extraVolumes: []
