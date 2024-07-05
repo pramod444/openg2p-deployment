@@ -48,10 +48,8 @@ postgresql:
 odk-central-mail:
   enabled: true
   mailname: "openg2p.sandbox.net"
-
 odk-central-pyxform:
   enabled: true
-
 odk-central-enketo:
   enabled: true
 

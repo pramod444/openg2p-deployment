@@ -1,0 +1,107 @@
+global:
+  hostname: selfservice.openg2p.sandbox.net
+
+replicaCount: 1
+image:
+  repository: openg2p/openg2p-selfservice-api
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "develop"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+containerPort: 8000
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - paths:
+        - path: /selfservice/v1(/|$)(.*)
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  #  requests:
+  #    cpu: 500m
+  #    memory: 2G
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+envVars:
+  PORTAL_DB_HOSTNAME: "postgres-postgresql.postgres"
+  PORTAL_DB_USERNAME: "openg2puser"
+  PORTAL_OPENAPI_ROOT_PATH: "/selfservice/v1"
+  PORTAL_AUTH_DEFAULT_ISSUERS: '["https://esignet.openg2p.sandbox.net/v1/esignet"]'
+  PORTAL_AUTH_DEFAULT_JWKS_URLS: '["https://esignet.openg2p.sandbox.mosip.net/v1/esignet/oauth/.well-known/jwks.json"]'
+
+envVarsFrom:
+  PORTAL_DB_PASSWORD:
+    secretKeyRef:
+      name: postgres-postgresql
+      key: password
+
+istio:
+  enabled: false
+  virtualservice:
+    enabled: true
+    host: ""
+    gateway: "istio-system/all-hosts"
+    prefix: /selfservice/v1/
+    rewriteUri: /
+  gateway:
+    enabled: false
+    host: ""
+    ingressController:
+      istio: ingressgateway
+    httpTlsRedirect: true
+    tls:
+      enabled: true
+      mode: SIMPLE
+      credentialName: ""
