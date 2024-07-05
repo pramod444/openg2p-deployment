@@ -55,11 +55,13 @@ jobs:
           while IFS= read -r chartpath; do
             echo "chartpath: $chartpath"
             chartname=$(basename "$chartpath")
-            echo "Chartname: $chartname"
-            helm package charts/$chartpath
-            is_rancher_chart=$(grep "$RANCHER_CHART_FILTER" charts/${chartpath%*/}/Chart.yaml || true)
-            if [ -n "$is_rancher_chart" ]; then
-              RANCHER_CHARTS+=("$chartname")
+            if [ -f charts/${chartname}/Chart.yaml ]; then
+              echo "Chartname: $chartname"
+              helm package charts/$chartpath
+              is_rancher_chart=$(grep "$RANCHER_CHART_FILTER" charts/${chartpath%*/}/Chart.yaml || true)
+              if [ -n "$is_rancher_chart" ]; then
+                RANCHER_CHARTS+=("$chartname")
+              fi
             fi
           done < charts-list.txt
           echo "RANCHER_CHARTS=${RANCHER_CHARTS[@]}" >> $GITHUB_ENV
