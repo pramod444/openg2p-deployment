@@ -1,3 +1,1 @@
-# OpenG2P Beneficiary Portal API Helm Chart
-
-- Refer to [Beneficiary Portal Deployment](https://docs.openg2p.org/deployment/openg2p-modules-deployment/openg2p-beneficiary-portal-deployment).
+This helm chart has been moved to [OpenG2P PBMS Deployment](https://github.com/openg2p/openg2p-pbms-deployment) repo.

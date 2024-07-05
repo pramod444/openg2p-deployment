@@ -13,15 +13,12 @@ dependencies:
   condition: postgresql.enabled
 - name: mail
   alias: odk-central-mail
-  repository: https://openg2p.github.io/openg2p-helm
   version: "1.2.0"
   condition: odk-central-mail.enabled
 - name: odk-central-pyxform
-  repository: https://openg2p.github.io/openg2p-helm
   version: "v2024.1.0"
   condition: odk-central-pyxform.enabled
 - name: odk-central-enketo
-  repository: https://openg2p.github.io/openg2p-helm
   version: "v2024.1.0"
   condition: odk-central-enketo.enabled
 keywords:
