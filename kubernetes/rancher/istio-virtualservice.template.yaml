@@ -1,33 +1,10 @@
 apiVersion: networking.istio.io/v1beta1
-kind: Gateway
-metadata:
-  name: rancher
-spec:
-  selector:
-    istio-rancher: ingressgateway
-  servers:
-  - hosts:
-    - ${RANCHER_HOSTNAME}
-    port:
-      name: http2-redirect-https
-      number: 8081
-      protocol: HTTP2
-    tls:
-      httpsRedirect: true
-  - hosts:
-    - ${RANCHER_HOSTNAME}
-    port:
-      name: http2
-      number: 8080
-      protocol: HTTP2
----
-apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: rancher
 spec:
   gateways:
-  - rancher
+  - ${RANCHER_GATEWAY_NAME}
   hosts:
   - ${RANCHER_HOSTNAME}
   http:

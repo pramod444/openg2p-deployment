@@ -35,33 +35,6 @@ spec:
             port: 80
             targetPort: 8080
             nodePort: 30080
-          - name: http2-redirect-https
-            port: 81
-            targetPort: 8081
-            nodePort: 30081
           - name: tcp-postgres
             port: 5432
             nodePort: 30432
-    - name: istio-ingressgateway-public
-      enabled: false
-      label:
-        istio: ingressgateway-public
-      k8s:
-        hpaSpec:
-          minReplicas: 2
-        nodeSelector:
-          shouldInstallIstioIngress: "true"
-        service:
-          type: NodePort
-          ports:
-          - name: tcp-status-port
-            port: 15021
-            nodePort: 31521
-          - name: http2
-            port: 80
-            targetPort: 8080
-            nodePort: 31080
-          - name: http2-redirect-https
-            port: 81
-            targetPort: 8081
-            nodePort: 31081
