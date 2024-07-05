@@ -47,7 +47,9 @@ jobs:
           echo "SKIP=TRUE" >> $GITHUB_ENV
         else
           for chartpath in charts/*/; do
-            helm dep up $chartpath
+            if [ -f ${chartpath}Chart.yaml ]; then
+              helm dep up $chartpath
+            fi
           done
           RANCHER_CHARTS=()
           while IFS= read -r chartpath; do
