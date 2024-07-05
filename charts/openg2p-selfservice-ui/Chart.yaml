@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openg2p-selfservice-ui
+description: A Helm chart for UI frontend of OpenG2P Self Service Portal
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

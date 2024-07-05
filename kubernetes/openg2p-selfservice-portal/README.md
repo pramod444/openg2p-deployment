@@ -1,3 +1,3 @@
-## OpenG2P PBMS Beneficiary Portal
+# OpenG2P Beneficiary Portal Deployment
 
-This can now be installed directly. Refer to [OpenG2P PBMS deployment](https://docs.openg2p.org/pbms/deployment).
+- Refer to [Beneficiary Portal Deployment](https://docs.openg2p.org/deployment/openg2p-modules-deployment/openg2p-beneficiary-portal-deployment).

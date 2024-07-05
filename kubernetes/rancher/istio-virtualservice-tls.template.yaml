@@ -9,17 +9,20 @@ spec:
   - hosts:
     - ${RANCHER_HOSTNAME}
     port:
-      name: http2-redirect-https
-      number: 8081
+      name: http2
+      number: 8080
       protocol: HTTP2
     tls:
       httpsRedirect: true
   - hosts:
     - ${RANCHER_HOSTNAME}
     port:
-      name: http2
-      number: 8080
-      protocol: HTTP2
+      name: https
+      number: 8443
+      protocol: HTTPS
+    tls:
+      credentialName: tls-rancher-ingress
+      mode: SIMPLE
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService

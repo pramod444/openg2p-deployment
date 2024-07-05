@@ -2,7 +2,7 @@ apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
   namespace: istio-system
-  name: primary
+  name: rancher
 spec:
   profile: default
   meshConfig:
@@ -15,11 +15,16 @@ spec:
         ISTIO_META_IDLE_TIMEOUT: 0s
       holdApplicationUntilProxyStarts: true
   components:
+    base:
+      enabled: false
     ingressGateways:
     - name: istio-ingressgateway
+      enabled: false
+    - name: istio-ingressgateway-rancher
       enabled: true
       label:
-        istio: ingressgateway
+        istio: ingressgateway-rancher
+        istio-rancher: ingressgateway
       k8s:
         hpaSpec:
           minReplicas: 2
@@ -39,29 +44,3 @@ spec:
             port: 81
             targetPort: 8081
             nodePort: 30081
-          - name: tcp-postgres
-            port: 5432
-            nodePort: 30432
-    - name: istio-ingressgateway-public
-      enabled: false
-      label:
-        istio: ingressgateway-public
-      k8s:
-        hpaSpec:
-          minReplicas: 2
-        nodeSelector:
-          shouldInstallIstioIngress: "true"
-        service:
-          type: NodePort
-          ports:
-          - name: tcp-status-port
-            port: 15021
-            nodePort: 31521
-          - name: http2
-            port: 80
-            targetPort: 8080
-            nodePort: 31080
-          - name: http2-redirect-https
-            port: 81
-            targetPort: 8081
-            nodePort: 31081
