@@ -46,12 +46,14 @@ jobs:
           echo "::warning::No Charts to publish";
           echo "SKIP=TRUE" >> $GITHUB_ENV
         else
+          for chartpath in charts/*/; do
+            helm dep up $chartpath
+          done
           RANCHER_CHARTS=()
           while IFS= read -r chartpath; do
             echo "chartpath: $chartpath"
             chartname=$(basename "$chartpath")
             echo "Chartname: $chartname"
-            helm dep up charts/$chartpath
             helm package charts/$chartpath
             is_rancher_chart=$(grep "$RANCHER_CHART_FILTER" charts/${chartpath%*/}/Chart.yaml || true)
             if [ -n "$is_rancher_chart" ]; then
