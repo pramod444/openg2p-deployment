@@ -9,6 +9,6 @@ spec:
   - hosts:
     - ${RANCHER_HOSTNAME}
     port:
-      name: http2-redirect-https
-      number: 8081
+      name: http2
+      number: 8080
       protocol: HTTP2

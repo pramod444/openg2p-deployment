@@ -4,6 +4,7 @@ export RANCHER_HOSTNAME=${RANCHER_HOSTNAME:-rancher.openg2p.net}
 export RANCHER_ISTIO_GATEWAY=${RANCHER_ISTIO_GATEWAY:-true}
 export RANCHER_ISTIO_VIRTUALSERVICE=${RANCHER_ISTIO_VIRTUALSERVICE:-true}
 export RANCHER_GATEWAY_NAME=${RANCHER_GATEWAY_NAME:-rancher}
+export TLS=${TLS:-false}
 export NS=${NS:-cattle-system}
 
 kubectl create ns $NS
@@ -17,7 +18,11 @@ helm -n $NS upgrade --install rancher rancher-latest/rancher \
     $@
 
 if [[ "$RANCHER_ISTIO_GATEWAY" == "true" ]]; then
-    envsubst < istio-gateway.template.yaml | kubectl -n $NS apply -f -
+    if [[ "$TLS" == "true" ]]; then
+        envsubst < istio-gateway-tls.template.yaml | kubectl -n $NS apply -f -
+    else
+        envsubst < istio-gateway.template.yaml | kubectl -n $NS apply -f -
+    fi
 fi
 
 if [[ "$RANCHER_ISTIO_VIRTUALSERVICE" == "true" ]]; then
