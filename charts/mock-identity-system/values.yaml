@@ -13,7 +13,7 @@ hostname: esignet.openg2p.sandbox.net
 ## Add labels to all the deployed resources
 ##
 commonLabels:
-  app.kubernetes.io/component: mosip
+  app.kubernetes.io/group: mosip
 
 ## Add annotations to all the deployed resources
 ##
