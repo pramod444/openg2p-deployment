@@ -10,7 +10,8 @@
 
 ## Add labels to all the deployed resources
 ##
-commonLabels: {}
+commonLabels:
+  app.kubernetes.io/group: mosip
 
 ## Add annotations to all the deployed resources
 ##
