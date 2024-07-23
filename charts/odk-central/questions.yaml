@@ -10,12 +10,19 @@ questions:
   type: string
   label: OIDC Issuer URL
 
+- variable: backend.envVars.OIDC_ENABLED
+  description: Enable OIDC Login for ODK Central
+  type: boolean
+  label: Enable OIDC
+
 - variable: backend.envVars.OIDC_CLIENT_ID
   description: OIDC Client ID for ODK Central Login
   type: string
   label: OIDC Client ID
+  show_if: "backend.envVars.OIDC_ENABLED=true"
 
 - variable: backend.envVars.OIDC_CLIENT_SECRET
   description: OIDC Client Secret for ODK Central Login
   type: string
   label: OIDC Client Secret
+  show_if: "backend.envVars.OIDC_ENABLED=true"

@@ -148,7 +148,7 @@ backend:
     EMAIL_USER: ""
     EMAIL_PASSWORD: ""
 
-    OIDC_ENABLED: "true"
+    OIDC_ENABLED: true
     OIDC_ISSUER_URL: '{{ tpl .Values.global.keycloakIssuerUrl $ }}'
     OIDC_CLIENT_ID: ""
     OIDC_CLIENT_SECRET: ""
@@ -279,7 +279,7 @@ frontend:
   image:
     registry: docker.io
     repository: openg2p/odk-central-frontend
-    tag: v2024.1.0-oidc
+    tag: v2024.1.0{{ .Values.backend.envVars.OIDC_ENABLED | ternary "-oidc" "" }}
     pullPolicy: Always
 
   startupProbe:
