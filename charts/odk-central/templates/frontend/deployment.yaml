@@ -46,7 +46,7 @@ spec:
       {{- end }}
       containers:
         - name: odk-central-frontend
-          image: {{ include "common.images.image" (dict "imageRoot" .Values.frontend.image "global" .Values.global) }}
+          image: {{ printf "%s/%s:%s" (include "common.tplvalues.render" (dict "value" (default .Values.frontend.image.registry .Values.global.imageRegistry) "context" $)) (include "common.tplvalues.render" (dict "value" .Values.frontend.image.repository "context" $)) (include "common.tplvalues.render" (dict "value" .Values.frontend.image.tag "context" $)) }}
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           {{- if .Values.frontend.lifecycleHooks }}
           lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.frontend.lifecycleHooks "context" $) | nindent 12 }}
