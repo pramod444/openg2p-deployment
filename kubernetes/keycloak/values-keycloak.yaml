@@ -27,4 +27,5 @@ rbac:
     - list
 
 proxy: edge
+proxyHeaders: xforwarded
 production: true
