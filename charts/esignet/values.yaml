@@ -866,7 +866,7 @@ envVars:
   mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
   mosip_api_public_host: '{{ tpl .Values.hostname $ }}'
   mosip_signup_host: '{{ tpl .Values.hostname $ }}'
-  mosip_mock_id_baseUrl: '{{ tpl .Values.mockIdentitySystemInstallationName $ }}'
+  mosip_mock_id_baseUrl: 'http://{{ tpl .Values.mockIdentitySystemInstallationName $ }}'
   mosip_esignet_host: '{{ tpl .Values.hostname $ }}'
 
   mosip_esignet_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
