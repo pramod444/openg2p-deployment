@@ -37,4 +37,3 @@ To uninstall/delete the `my-release` deployment:
 ```console
 helm delete my-release
 ```
-

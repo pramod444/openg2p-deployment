@@ -56,5 +56,3 @@ Return podAnnotations
 {{ include "common.tplvalues.render" (dict "value" .Values.metrics.podAnnotations "context" $) }}
 {{- end }}
 {{- end -}}
-
-
