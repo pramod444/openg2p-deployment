@@ -1,0 +1,52 @@
+questions:
+- variable: hostname
+  description: Hostname under which Idgenerator should be accessible
+  type: string
+  label: Idgenerator Hostname
+
+- variable: global.keycloakBaseUrl
+  description: Required for API auth validation.
+  type: string
+  label: Keycloak Base URL
+
+- variable: springConfig.profile
+  type: string
+  label: Spring Config Profile
+
+- variable: springConfig.names
+  type: string
+  label: Spring Config Names
+
+- variable: springConfig.gitRepo.enabled
+  description: Enables download of configs from Git repo.
+  type: boolean
+  label: Spring Config Git Enabled
+  show_subquestions_if: true
+  subquestions:
+  - variable: springConfig.gitRepo.repoUrl
+    description: |-
+      Repo Url for remote Git repo containing configs.
+      This url should include username password if required.
+    type: string
+    label: Spring Config Git Repo Url
+
+  - variable: springConfig.gitRepo.branch
+    description: Branch of remote Git repo containing configs.
+    type: string
+    label: Spring Config Git Repo Branch
+
+- variable: springConfig.rawConfig
+  description: |-
+    If git-based config is disabled, the complete application.properties can be
+    directly supplied here.
+  type: yamlfile
+  label: Spring Config application properties.
+  show_if: "springConfig.gitRepo.enabled=false"
+
+- variable: envVars.auth_server_admin_allowed_audience
+  description: |-
+    List of Keycloak Client ID allowed to call this idgenerator's APIs.
+    Do not edit this parameter unless required.
+  type: string
+  label: Allowed Keycloak Client IDs.
+  group: Advanced Settings
