@@ -7,6 +7,10 @@
 #   imagePullSecrets:
 #     - myRegistryKeySecretName
 #   storageClass: myStorageClass
+global:
+  keycloakBaseUrl: 'https://keycloak.your.org'
+
+hostname: idgenerator.openg2p.sandbox.net
 
 ## Add labels to all the deployed resources
 ##
@@ -453,8 +457,8 @@ postgresql:
   enabled: true
   nameOverride: idgenerator-postgresql
   auth:
-    username: keymgruser
-    database: mosip_keymgr
+    username: kerneluser
+    database: mosip_kernel
   primary:
     extendedConfiguration: |-
       wal_level = logical
@@ -502,14 +506,14 @@ postgresInit:
     - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
 
   envVars:
-    MOSIP_DB_NAME: mosip_idgen
+    MOSIP_DB_NAME: mosip_kernel
     DB_SERVERIP: '{{ tpl .Values.postgresqlInstallationName $ }}'
     DB_PORT: '5432'
     SU_USER: postgres
-    DB_USER: idgenuser
+    DB_USER: kerneluser
     DML_FLAG: '1'
-    GIT_REPO_URL: https://github.com/mosip/keymanager.git
-    GIT_BRANCH: v1.2.0.1-B4
+    GIT_REPO_URL: https://github.com/mosip/commons.git
+    GIT_BRANCH: v1.2.0.1-B2
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
@@ -519,62 +523,6 @@ postgresInit:
       secretKeyRef:
         name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
-
-keygen:
-  enabled: true
-  image:
-    registry: docker.io
-    repository: mosipid/keys-generator
-    tag: 1.2.0.1-B4
-    pullPolicy: Always
-  containerSecurityContext:
-    enabled: false
-  podSecurityContext:
-    enabled: false
-  commonAnnotations:
-    "helm.sh/hook": post-install
-    "helm.sh/hook-weight": "1"
-    "helm.sh/hook-delete-policy": before-hook-creation
-  command: []
-  args: []
-  extraVolumes: []
-  extraVolumeMounts: []
-  envVars: {}
-  envVarsFrom: {}
-  startUpCommand: |-
-    #!/usr/bin/env bash
-
-    echo "Waiting for artifactory..."
-    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/$zip_path"; then
-      echo "Connecting with artifactory failed after max retries..."
-      exit 1
-    fi
-
-    ./configure_start.sh
-
-    ADDL_ARGS=()
-
-    if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
-      git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
-    fi
-
-    config_locations="classpath:/bootstrap.properties,"
-    IFS=","
-    for config_name in $SPRING_CONFIG_NAMES; do
-      conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
-      if [[ -f "$conf_loc" ]]; then
-        config_locations+="${conf_loc},"
-      fi
-    done
-    unset IFS
-    ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
-    ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
-
-    ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
-    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
-    ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
-
-    exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
 
 envVars:
   JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
@@ -614,14 +562,6 @@ envVarsFrom:
     secretKeyRef:
       name: '{{ tpl .Values.postgresqlInstallationName $ }}'
       key: password
-  PKCS11_PROXY_SOCKET:
-    configMapKeyRef:
-      name: '{{ tpl .Values.softhsmInstallationName $ }}-share'
-      key: PKCS11_PROXY_SOCKET
-  softhsm_kernel_security_pin:
-    secretKeyRef:
-      name: '{{ tpl .Values.softhsmInstallationName $ }}'
-      key: security-pin
 
 springConfig:
   names: application,kernel
@@ -690,5 +630,4 @@ startUpCommand: |-
 
 ## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
 artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-softhsmInstallationName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
 postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
