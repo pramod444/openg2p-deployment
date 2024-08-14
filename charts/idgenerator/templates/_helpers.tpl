@@ -104,4 +104,3 @@ args: []
 {{- define "idgenerator.command" -}}
 {{- include "idgenerator.commandBase" (dict "command" .Values.command "args" .Values.args "startUpCommand" .Values.startUpCommand "context" $) }}
 {{- end -}}
-
