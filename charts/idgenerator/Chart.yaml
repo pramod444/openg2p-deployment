@@ -1,0 +1,27 @@
+apiVersion: v2
+name: idgenerator
+description: A Helm chart for MOSIP Idgenerator module
+type: application
+version: 12.0.1
+appVersion: ""
+dependencies:
+- name: common
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 2.x.x
+- name: postgresql
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 15.x.x
+  condition: postgresql.enabled
+- name: artifactory
+  version: 12.0.2
+  condition: artifactory.enabled
+keywords:
+  - mosip
+  - idgenerator
+  - kernel
+maintainers:
+  - email: info@openg2p.org
+    name: OpenG2P
+icon: https://openg2p.github.io/openg2p-helm/openg2p-logo.png
+annotations:
+  catalog.cattle.io/display-name: "Idgenerator"
