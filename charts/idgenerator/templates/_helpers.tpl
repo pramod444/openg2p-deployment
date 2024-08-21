@@ -75,7 +75,7 @@ Render Env values section
 {{- end -}}
 
 {{- define "idgenerator.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) (.Values.springConfig.gitRepo.enabled | ternary (deepCopy .Values.springConfig.gitRepo.envVars) dict) -}}
+{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
 {{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 

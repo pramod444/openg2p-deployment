@@ -89,11 +89,6 @@ spec:
               mountPath: /startup.sh
               subPath: startup.sh
             {{- end }}
-            {{- if and .Values.springConfig.rawConfig (not .Values.springConfig.gitRepo.enabled) }}
-            - name: spring-config
-              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.springConfig.rawConfigMountPath "context" $) }}
-              subPath: application.properties
-            {{- end }}
             {{- if .Values.extraVolumeMounts }}
             {{- include "common.tplvalues.render" (dict "value" .Values.extraVolumeMounts "context" $) | nindent 12 }}
             {{- end }}
@@ -106,11 +101,6 @@ spec:
           configMap:
             name: {{ template "common.names.fullname" . }}-startup
             defaultMode: 0755
-        {{- end }}
-        {{- if and .Values.springConfig.rawConfig (not .Values.springConfig.gitRepo.enabled) }}
-        - name: spring-config
-          configMap:
-            name: {{ template "common.names.fullname" . }}-spring-config
         {{- end }}
         {{- if .Values.extraVolumes }}
         {{- include "common.tplvalues.render" (dict "value" .Values.extraVolumes "context" $) | nindent 8 }}
