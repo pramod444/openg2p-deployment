@@ -477,7 +477,7 @@ postgresInit:
     DB_PORT: '5432'
     SU_USER: postgres
     DB_USER: kerneluser
-    DML_FLAG: '1'
+    DML_FLAG: '0'
     GIT_REPO_URL: https://github.com/mosip/commons.git
     GIT_BRANCH: v1.2.0.1-B2
   envVarsFrom:
