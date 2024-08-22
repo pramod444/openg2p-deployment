@@ -386,7 +386,7 @@ extraVolumes: []
 extraVolumeMounts: []
 
 istio:
-  enabled: false
+  enabled: true
   virtualservice:
     enabled: true
     host: ""
@@ -477,7 +477,7 @@ postgresInit:
     DB_PORT: '5432'
     SU_USER: postgres
     DB_USER: kerneluser
-    DML_FLAG: '1'
+    DML_FLAG: '0'
     GIT_REPO_URL: https://github.com/mosip/commons.git
     GIT_BRANCH: v1.2.0.1-B2
   envVarsFrom:
@@ -492,9 +492,6 @@ postgresInit:
 
 envVars:
   JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
-  SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
-  SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
-  SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
 
   mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
 
@@ -502,9 +499,7 @@ envVars:
   keycloak_external_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
 
   auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
-
-  mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
-  mosip_kernel_database_port: '5432'
+  mosip_admin_client_secret: ''
 
 envVarsFrom:
   artifactory_url_env:
@@ -519,29 +514,19 @@ envVarsFrom:
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: zip_file_path
-  db_dbuser_password:
-    secretKeyRef:
-      name: '{{ tpl .Values.postgresqlInstallationName $ }}'
-      key: password
+  active_profile_env:
+    configMapKeyRef:
+      name: '{{ tpl .Values.configserverInstallationName $ }}-share'
+      key: active_profile_env
+  spring_config_label_env:
+    configMapKeyRef:
+      name: '{{ tpl .Values.configserverInstallationName $ }}-share'
+      key: spring_config_label_env
+  spring_config_url_env:
+    configMapKeyRef:
+      name: '{{ tpl .Values.configserverInstallationName $ }}-share'
+      key: spring_config_url_env
 
-springConfig:
-  names: application,kernel
-  profile: default
-  gitRepo:
-    enabled: true
-    repoUrl: https://github.com/openg2p/mosip-config
-    branch: master
-    envVars:
-      SPRING_CONFIG_GIT_REPO:
-        secretKeyRef:
-          name: '{{ template "common.names.fullname" . }}-git-config-secret'
-          key: repoUrl
-      SPRING_CONFIG_GIT_BRANCH:
-        secretKeyRef:
-          name: '{{ template "common.names.fullname" . }}-git-config-secret'
-          key: branch
-  rawConfigMountPath: '/home/mosip/springConfig/application-{{ tpl .Values.springConfig.profile $ }}.properties'
-  rawConfig: ""
 
 startUpCommand: |-
   #!/usr/bin/env bash
@@ -549,6 +534,12 @@ startUpCommand: |-
   echo "Waiting for artifactory..."
   if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${iam_adapter_url_env}"; then
     echo "Connecting with artifactory failed after max retries..."
+    exit 1
+  fi
+
+  echo "Waiting for config-server..."
+  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${spring_config_url_env}/actuator/health"; then
+    echo "Connecting with config-server failed after max retries..."
     exit 1
   fi
 
@@ -572,24 +563,10 @@ startUpCommand: |-
     ADDL_ARGS+=("-javaagent:glowroot/glowroot.jar -XX:HeapDumpPath=/home/")
   fi
 
-  if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
-    git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
-  fi
+  ADDL_ARGS+=("-Dspring.cloud.config.label=${spring_config_label_env}")
+  ADDL_ARGS+=("-Dspring.cloud.config.uri=${spring_config_url_env}")
+  ADDL_ARGS+=("-Dspring.profiles.active=${active_profile_env}")
 
-  config_locations="classpath:/bootstrap.properties,"
-  IFS=","
-  for config_name in $SPRING_CONFIG_NAMES; do
-    conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
-    if [[ -f "$conf_loc" ]]; then
-      config_locations+="${conf_loc},"
-    fi
-  done
-  unset IFS
-  ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
-  ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
-
-  ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
-  ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
 
   exec java -jar ${ADDL_ARGS[@]} ./kernel-idgenerator-service.jar
@@ -597,3 +574,4 @@ startUpCommand: |-
 ## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
 artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
 postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+configserverInstallationName: '{{ include "common.names.fullname" . }}-config-server'
