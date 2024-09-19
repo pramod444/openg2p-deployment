@@ -31,5 +31,20 @@ spec:
         host: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destination "context" $) }}
         port:
           number: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destinationPort "context" $) }}
+  {{- if .Values.istio.virtualservice.rewriteUri }}
+  - headers:
+      request:
+        set:
+          x-forwarded-host: {{ default .Values.hostname .Values.istio.virtualservice.host | quote }}
+          x-forwarded-proto: https
+    match:
+    - uri:
+        prefix: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.rewriteUri "context" $) }}
+    route:
+    - destination:
+        host: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destination "context" $) }}
+        port:
+          number: {{ include "common.tplvalues.render" (dict "value" .Values.istio.virtualservice.destinationPort "context" $) }}
+  {{- end }}
 {{- end }}
 {{- end }}

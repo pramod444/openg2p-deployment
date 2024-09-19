@@ -89,9 +89,9 @@ spec:
               mountPath: /startup.sh
               subPath: startup.sh
             {{- end }}
-            {{- if and .Values.springConfig.rawConfig (not .Values.springConfig.gitRepo.enabled) }}
+            {{- if and .Values.rawSpringConfig (not .Values.springCloudConfig.enabled) }}
             - name: spring-config
-              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.springConfig.rawConfigMountPath "context" $) }}
+              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.rawSpringConfigMountPath "context" $) }}
               subPath: application.properties
             {{- end }}
             - name: oidc-client-keys
@@ -110,7 +110,7 @@ spec:
             name: {{ template "common.names.fullname" . }}-startup
             defaultMode: 0755
         {{- end }}
-        {{- if and .Values.springConfig.rawConfig (not .Values.springConfig.gitRepo.enabled) }}
+        {{- if and .Values.rawSpringConfig (not .Values.springCloudConfig.enabled) }}
         - name: spring-config
           configMap:
             name: {{ template "common.names.fullname" . }}-spring-config

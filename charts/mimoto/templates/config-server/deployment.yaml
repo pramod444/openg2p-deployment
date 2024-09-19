@@ -1,0 +1,97 @@
+{{- if .Values.springCloudConfig.enabled }}
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ template "common.names.fullname" . }}-config-server
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.springCloudConfig.replicaCount }}
+  {{- if .Values.springCloudConfig.updateStrategy }}
+  strategy: {{- toYaml .Values.springCloudConfig.updateStrategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.springCloudConfig.podLabels "context" $) | nindent 6 }}
+  template:
+    metadata:
+      {{- if .Values.springCloudConfig.podAnnotations }}
+      annotations: {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.podAnnotations "context" $) | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" (dict "customLabels" .Values.springCloudConfig.podLabels "context" $) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ template "mimoto.serviceAccountName" . }}
+      {{- include "mimoto.imagePullSecrets" . | nindent 6 }}
+      {{- if .Values.springCloudConfig.hostAliases }}
+      hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.hostAliases "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.springCloudConfig.affinity }}
+      affinity: {{- include "common.tplvalues.render" ( dict "value" .Values.springCloudConfig.affinity "context" $) | nindent 8 }}
+      {{- else }}
+      affinity:
+        podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.springCloudConfig.podAffinityPreset "context" $) | nindent 10 }}
+        podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.springCloudConfig.podAntiAffinityPreset "context" $) | nindent 10 }}
+        nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.springCloudConfig.nodeAffinityPreset.type "key" .Values.springCloudConfig.nodeAffinityPreset.key "values" .Values.springCloudConfig.nodeAffinityPreset.values) | nindent 10 }}
+      {{- end }}
+      {{- if .Values.springCloudConfig.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" ( dict "value" .Values.springCloudConfig.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.springCloudConfig.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.tolerations "context" .) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.springCloudConfig.priorityClassName }}
+      priorityClassName: {{ .Values.springCloudConfig.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.springCloudConfig.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.springCloudConfig.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if .Values.springCloudConfig.initContainers }}
+      initContainers:
+        {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.initContainers "context" $) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: config-server
+          image: {{ template "mimoto.config-server.image" . }}
+          imagePullPolicy: {{ .Values.springCloudConfig.image.pullPolicy }}
+          {{- if .Values.springCloudConfig.lifecycleHooks }}
+          lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.lifecycleHooks "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.springCloudConfig.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.springCloudConfig.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          {{- if .Values.springCloudConfig.command }}
+          command: {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.command "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.springCloudConfig.args }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.args "context" $) | nindent 12 }}
+          {{- end }}
+          env:
+            {{- include "mimoto.config-server.envVars" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.springCloudConfig.containerPort }}
+          {{- if .Values.springCloudConfig.resources }}
+          resources: {{- toYaml .Values.springCloudConfig.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.springCloudConfig.startupProbe.enabled }}
+          startupProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.springCloudConfig.startupProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.springCloudConfig.livenessProbe.enabled }}
+          livenessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.springCloudConfig.livenessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.springCloudConfig.readinessProbe.enabled }}
+          readinessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.springCloudConfig.readinessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.springCloudConfig.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+        {{- if .Values.springCloudConfig.sidecars }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.springCloudConfig.sidecars "context" $) | nindent 8 }}
+        {{- end }}
+      volumes:
+        {{- if .Values.springCloudConfig.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.springCloudConfig.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
+{{- end }}
