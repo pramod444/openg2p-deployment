@@ -13,10 +13,17 @@ Return the proper image name (for the init container volume-permissions image)
 {{- end -}}
 
 {{/*
+Return the config server image name
+*/}}
+{{- define "mimoto.config-server.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.springCloudConfig.image "global" .Values.global) }}
+{{- end -}}
+
+{{/*
 Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "mimoto.imagePullSecrets" -}}
-{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image) "global" .Values.global) -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.springCloudConfig.image .Values.volumePermissions.image) "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
@@ -27,21 +34,6 @@ Create the name of the service account to use
     {{ default (printf "%s" (include "common.names.fullname" .)) .Values.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.serviceAccount.name }}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Compile all warnings into a single message.
-*/}}
-{{- define "mimoto.validateValues" -}}
-{{- $messages := list -}}
-{{- $messages := append $messages (include "mimoto.validateValues.foo" .) -}}
-{{- $messages := append $messages (include "mimoto.validateValues.bar" .) -}}
-{{- $messages := without $messages "" -}}
-{{- $message := join "\n" $messages -}}
-
-{{- if $message -}}
-{{-   printf "\nVALUES VALIDATION:\n%s" $message -}}
 {{- end -}}
 {{- end -}}
 
@@ -75,7 +67,18 @@ Render Env values section
 {{- end -}}
 
 {{- define "mimoto.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) (.Values.springConfig.gitRepo.enabled | ternary (deepCopy .Values.springConfig.gitRepo.envVars) dict) -}}
+{{- $envVars := merge (.Values.springCloudConfig.enabled | ternary (deepCopy .Values.springCloudConfigEnvVars) dict) (deepCopy .Values.coreEnvVars) (deepCopy .Values.coreEnvVarsFrom) (.Values.springCloudConfig.enabled | ternary dict (merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom))) -}}
+{{- include "mimoto.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- end -}}
+
+{{- define "mimoto.config-server.envVars" -}}
+{{- $overridesEnvVars := dict -}}
+{{- if .Values.springCloudConfig.enabled -}}
+{{- range $k, $v := (merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom)) -}}
+{{- $_ := set $overridesEnvVars (printf "spring_cloud_config_server_overrides_%s" $k) $v -}}
+{{- end -}}
+{{- end -}}
+{{- $envVars := merge $overridesEnvVars (deepCopy .Values.springCloudConfig.envVars) (deepCopy .Values.springCloudConfig.envVarsFrom) -}}
 {{- include "mimoto.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 

@@ -1,4 +1,4 @@
-{{- if .Values.springConfig.rawConfig }}
+{{- if .Values.rawSpringConfig }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,5 +9,5 @@ metadata:
   {{- end }}
 data:
   application.properties: |-
-    {{- include "common.tplvalues.render" (dict "value" .Values.springConfig.rawConfig "context" $) | nindent 4 }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.rawSpringConfig "context" $) | nindent 4 }}
 {{- end }}

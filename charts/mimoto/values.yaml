@@ -9,6 +9,7 @@
 #   storageClass: myStorageClass
 global:
   keycloakBaseUrl: 'https://keycloak.your.org'
+  esignetHostsname: esignet-pbms.openg2p.sandbox.net
 
 hostname: mimoto.openg2p.sandbox.net
 
@@ -421,30 +422,43 @@ artifactory:
 oidcClientKeySecretName: mimoto-oidc-secret
 
 envVars:
-  JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
-  SPRING_CONFIG_NAMES: '{{ tpl .Values.springConfig.names $ }}'
-  SPRING_CONFIG_PROFILE: '{{ tpl .Values.springConfig.profile $ }}'
-  SPRING_CONFIG_GIT_ENABLED: '{{ .Values.springConfig.gitRepo.enabled }}'
-
+  # Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
+  # Else they will be rendered on config-server as overrides.
   mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
   mosip_api_public_host: '{{ tpl .Values.hostname $ }}'
   mosip_resident_url: 'https://{{ tpl .Values.hostname $ }}'
 
-  mosip_esignet_host: 'esignet-pbms.openg2p.sandbox.net'
+  mosip_esignet_host: '{{ tpl .Values.global.esignetHostname $ }}'
 
   keycloak_internal_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
   keycloak_external_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
+
+  mosip_iam_adapter_disableSelfTokenRestTemplate: true
 
   mosip_oidc_client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   mosip_oidc_p12_filename: oidckeystore.p12
   mosip_oidc_p12_password: openg2p123
   mosip_oidc_p12_path: /home/mosip/certs/
-  mimoto_wallet_binding_partner_api_key: ""
+
+  mosip_partner_crypto_p12_password: ""
+
+  mpartner_default_mobile_secret: ""
 
   mimoto_oidc_partner_clientid: mimoto-oidc
   mimoto_oidc_openg2p_partner_clientid: openg2p-mimoto-oidc
+  mimoto_wallet_binding_partner_api_key: ""
 
-envVarsFrom:
+# Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
+# Else they will be rendered on config-server as overrides.
+envVarsFrom: {}
+
+coreEnvVars:
+  # Env Vars from this section will always be rendered on the service
+  JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
+  spring_cloud_config_enabled_env: '{{ .Values.springCloudConfig.enabled }}'
+
+coreEnvVarsFrom:
+  # Env Vars from this section will always be rendered on the service
   artifactory_url_env:
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
@@ -458,24 +472,119 @@ envVarsFrom:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: zip_file_path
 
-springConfig:
-  names: application,mimoto,inji
+springCloudConfigEnvVars:
+  # Env Vars in this section will be rendered on the service, when springCloudConfig.enabled=true.
+  spring_cloud_config_label_env:
+    secretKeyRef:
+      name: '{{ template "common.names.fullname" . }}-config-server-git-secret'
+      key: branch
+  spring_cloud_config_uri_env: 'http://{{ template "common.names.fullname" . }}-config-server/config'
+  spring_profiles_active_env: '{{ tpl .Values.springCloudConfig.profile $ }}'
+
+springCloudConfig:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 80
+    nodePorts:
+      http: ""
+      https: ""
+    externalTrafficPolicy: Cluster
+  image:
+    registry: docker.io
+    repository: mosipid/config-server
+    tag: 1.1.2
+    pullPolicy: Always
+    pullSecrets: []
+  containerPort: 51000
+  startupProbe:
+    enabled: true
+    httpGet:
+      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      port: http
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 60
+    successThreshold: 1
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      port: http
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      port: http
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  command: []
+  args: []
+  hostAliases: []
+  resources: {}
+  containerSecurityContext:
+    enabled: false
+    runAsUser: 1001
+    runAsNonRoot: true
+  podSecurityContext:
+    enabled: false
+    fsGroup: 1001
+  podAffinityPreset: ""
+  podAntiAffinityPreset: soft
+  nodeAffinityPreset:
+    type: ""
+    key: ""
+    values: []
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+  podLabels:
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-config-server'
+  podAnnotations: {}
+  # priorityClassName: ""
+  lifecycleHooks: {}
+  updateStrategy:
+    type: RollingUpdate
+  initContainers: []
+  sidecars: []
+  volumePermissions:
+    enabled: false
+    image:
+      registry: docker.io
+      repository: bitnami/bitnami-shell
+      tag: "10"
+      pullPolicy: Always
+      pullSecrets: []
+      ##   - myRegistryKeySecretName
+    resources: {}
+  extraVolumes: []
+  extraVolumeMounts: []
+
   profile: default
   gitRepo:
-    enabled: true
-    repoUrl: https://github.com/openg2p/mosip-config
+    url: https://github.com/openg2p/mosip-config
     branch: master
-    envVars:
-      SPRING_CONFIG_GIT_REPO:
-        secretKeyRef:
-          name: '{{ template "common.names.fullname" . }}-git-config-secret'
-          key: repoUrl
-      SPRING_CONFIG_GIT_BRANCH:
-        secretKeyRef:
-          name: '{{ template "common.names.fullname" . }}-git-config-secret'
-          key: branch
-  rawConfigMountPath: '/home/mosip/springConfig/application-{{ tpl .Values.springConfig.profile $ }}.properties'
-  rawConfig: ""
+  envVars:
+    # Env Vars in these sections will be rendered on config server.
+    SPRING_CLOUD_CONFIG_SERVER_GIT_SEARCHPATHS: ""
+  envVarsFrom:
+    SPRING_CLOUD_CONFIG_SERVER_GIT_URI:
+      secretKeyRef:
+        name: '{{ template "common.names.fullname" . }}-config-server-git-secret'
+        key: url
+
+rawSpringConfigMountPath: '/home/mosip/springConfig/application.properties'
+rawSpringConfig: ""
 
 startUpCommand: |-
   #!/usr/bin/env bash
@@ -486,7 +595,6 @@ startUpCommand: |-
     exit 1
   fi
 
-  ./configure_start.sh
   wget -q "${iam_adapter_url_env}" -O "${loader_path_env}"/kernel-auth-adapter.jar
 
   ADDL_ARGS=()
@@ -499,24 +607,26 @@ startUpCommand: |-
     ADDL_ARGS+=("-javaagent:glowroot/glowroot.jar -XX:HeapDumpPath=/home/")
   fi
 
-  if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
-    git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
+  if [ "$spring_cloud_config_enabled_env" = "true" ]; then
+    echo "Waiting for config server..."
+    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${spring_cloud_config_uri_env}/*/*"; then
+      echo "Connecting with artifactory failed after max retries..."
+      exit 1
+    fi
+    ADDL_ARGS+=("-Dspring.cloud.config.label=${spring_cloud_config_label_env}")
+    ADDL_ARGS+=("-Dspring.cloud.config.uri=${spring_cloud_config_uri_env}")
+    ADDL_ARGS+=("-Dspring.profiles.active=${spring_profiles_active_env}")
+    ADDL_ARGS+=("-Dspring.cloud.config.enabled=true")
+    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=true")
+  else
+    if [ -f springConfig/application.properties ]; then
+      config_locations="classpath:/bootstrap.properties,springConfig/application.properties"
+      ADDL_ARGS+=("-Dspring.config.location=${config_locations}")
+    fi
+    ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
+    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
   fi
 
-  config_locations="classpath:/bootstrap.properties,"
-  IFS=","
-  for config_name in $SPRING_CONFIG_NAMES; do
-    conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
-    if [[ -f "$conf_loc" ]]; then
-      config_locations+="${conf_loc},"
-    fi
-  done
-  unset IFS
-  ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
-  ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
-
-  ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
-  ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
 
   exec java -jar ${ADDL_ARGS[@]} ./mimoto.jar

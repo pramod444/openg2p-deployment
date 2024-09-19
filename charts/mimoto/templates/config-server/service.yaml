@@ -1,0 +1,26 @@
+{{- if .Values.springCloudConfig.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "common.names.fullname" . }}-config-server
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.springCloudConfig.service.type }}
+  {{- if (or (eq .Values.springCloudConfig.service.type "LoadBalancer") (eq .Values.springCloudConfig.service.type "NodePort")) }}
+  externalTrafficPolicy: {{ .Values.springCloudConfig.service.externalTrafficPolicy | quote }}
+  {{- end }}
+  {{ if eq .Values.springCloudConfig.service.type "LoadBalancer" }}
+  loadBalancerSourceRanges: {{ .Values.springCloudConfig.service.loadBalancerSourceRanges }}
+  {{ end }}
+  {{- if (and (eq .Values.springCloudConfig.service.type "LoadBalancer") (not (empty .Values.springCloudConfig.service.loadBalancerIP))) }}
+  loadBalancerIP: {{ .Values.springCloudConfig.service.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - name: http
+      port: {{ .Values.springCloudConfig.service.port }}
+      targetPort: {{ .Values.springCloudConfig.containerPort }}
+  selector: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.springCloudConfig.podLabels "context" $) | nindent 4 }}
+{{- end }}
