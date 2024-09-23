@@ -9,7 +9,7 @@
 #   storageClass: myStorageClass
 global:
   keycloakBaseUrl: 'https://keycloak.your.org'
-  esignetHostsname: esignet-pbms.openg2p.sandbox.net
+  esignetHostname: esignet-pbms.openg2p.sandbox.net
 
 hostname: mimoto.openg2p.sandbox.net
 
@@ -416,7 +416,7 @@ artifactory:
   image:
     registry: docker.io
     repository: mosipid/artifactory-server
-    tag: 1.4.0-ES
+    tag: 1.4.1-ES
   resources: {}
 
 oidcClientKeySecretName: mimoto-oidc-secret

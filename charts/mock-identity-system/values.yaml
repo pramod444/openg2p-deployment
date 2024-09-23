@@ -51,7 +51,7 @@ service:
 image:
   registry: docker.io
   repository: mosipid/mock-identity-system
-  tag: 0.9.2
+  tag: 0.9.3
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -412,7 +412,7 @@ artifactory:
   image:
     registry: docker.io
     repository: mosipid/artifactory-server
-    tag: 1.4.0-ES
+    tag: 1.4.1-ES
   resources: {}
 
 postgresql:
@@ -476,7 +476,7 @@ postgresInit:
     DB_USER: mockidsystemuser
     DML_FLAG: '1'
     GIT_REPO_URL: https://github.com/mosip/esignet-mock-services
-    GIT_BRANCH: v0.9.2
+    GIT_BRANCH: v0.9.3
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:

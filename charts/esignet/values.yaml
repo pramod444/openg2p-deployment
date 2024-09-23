@@ -53,7 +53,7 @@ service:
 image:
   registry: docker.io
   repository: mosipid/esignet
-  tag: 1.4.0
+  tag: 1.4.1
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -459,7 +459,7 @@ artifactory:
   image:
     registry: docker.io
     repository: mosipid/artifactory-server
-    tag: 1.4.0-ES
+    tag: 1.4.1-ES
   resources: {}
 
 postgresql:
@@ -522,7 +522,7 @@ postgresInit:
     DB_USER: esignetuser
     DML_FLAG: '1'
     GIT_REPO_URL: https://github.com/mosip/esignet
-    GIT_BRANCH: v1.4.0
+    GIT_BRANCH: v1.4.1
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
@@ -632,7 +632,7 @@ oidcUi:
   image:
     registry: docker.io
     repository: mosipid/oidc-ui
-    tag: 1.4.0
+    tag: 1.4.1
     pullPolicy: Always
     pullSecrets: []
     #   - myRegistryKeySecretName
@@ -872,12 +872,7 @@ envVars:
   mosip_esignet_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_esignet_database_port: '5432'
 
-  mosip_esignet_captcha_required: >-
-    {{ .Values.captchaEnabled | ternary "send-otp,pwd" "" }}
-  mosip_esignet_captcha_required_authFactors: >-
-    {{ .Values.captchaEnabled | ternary "{\"PWD\"}" "{}" }}
-  mosip_esignet_sendOtp_captchaRequired: >-
-    {{ .Values.captchaEnabled | ternary "true" "false" }}
+  mosip_esignet_captcha_required: '{{ .Values.captchaEnabled | ternary "send-otp,pwd" "" }}'
   esignet_captcha_site_key: ''
   esignet_captcha_secret_key: ''
 
