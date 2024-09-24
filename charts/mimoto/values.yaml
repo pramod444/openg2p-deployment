@@ -448,7 +448,7 @@ envVars:
   mimoto_oidc_openg2p_partner_clientid: openg2p-mimoto-oidc
   mimoto_wallet_binding_partner_api_key: ""
 
-  openg2p_pbms_baseUrl: https://pbms.openg2p.sandbox.net
+  openg2p_pbms_base_url: https://pbms.openg2p.sandbox.net
 
 # Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
 # Else they will be rendered on config-server as overrides.

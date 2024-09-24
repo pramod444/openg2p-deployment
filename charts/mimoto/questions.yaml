@@ -13,7 +13,7 @@ questions:
   type: string
   label: Esignet Hostname
 
-- variable: envVars.openg2p_pbms_baseUrl
+- variable: envVars.openg2p_pbms_base_url
   type: string
   label: OpenG2P PBMS Base URL
 
