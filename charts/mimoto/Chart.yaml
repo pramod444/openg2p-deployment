@@ -13,7 +13,6 @@ dependencies:
 keywords:
   - mosip
   - mimoto
-  - kernel
 maintainers:
   - email: info@openg2p.org
     name: OpenG2P
