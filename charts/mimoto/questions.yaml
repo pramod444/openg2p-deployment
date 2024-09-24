@@ -13,6 +13,10 @@ questions:
   type: string
   label: Esignet Hostname
 
+- variable: envVars.openg2p_pbms_baseUrl
+  type: string
+  label: OpenG2P PBMS Base URL
+
 - variable: springCloudConfig.enabled
   description: Enables Spring Cloud Config.
   type: boolean
