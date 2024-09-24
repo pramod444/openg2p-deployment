@@ -67,7 +67,7 @@ Render Env values section
 {{- end -}}
 
 {{- define "mimoto.envVars" -}}
-{{- $envVars := merge (.Values.springCloudConfig.enabled | ternary (deepCopy .Values.springCloudConfigEnvVars) dict) (deepCopy .Values.coreEnvVars) (deepCopy .Values.coreEnvVarsFrom) (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
+{{- $envVars := merge (.Values.springCloudConfig.enabled | ternary (deepCopy .Values.springCloudConfigEnvVars) dict) (deepCopy .Values.coreEnvVars) (deepCopy .Values.coreEnvVarsFrom) (.Values.springCloudConfig.enabled | ternary dict (merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom))) -}}
 {{- include "mimoto.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
