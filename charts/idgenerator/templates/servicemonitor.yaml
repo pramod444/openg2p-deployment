@@ -30,5 +30,5 @@ spec:
     matchNames:
       - {{ .Release.Namespace | quote }}
   selector:
-    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+    matchLabels: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 6 }}
 {{- end }}

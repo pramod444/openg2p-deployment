@@ -21,4 +21,4 @@ spec:
     - port: {{ .Values.service.port }}
       protocol: TCP
       targetPort: {{ .Values.springServicePort }}
-  selector: {{- include "common.labels.matchLabels" . | nindent 4 }}
+  selector: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 4 }}
