@@ -10,7 +10,7 @@ service:
 image:
   registry: docker.io
   repository: openg2p/odk-central-enketo
-  tag: v2024.1.0
+  tag: v2024.2.1
   pullPolicy: Always
 
 containerPort: 8005
