@@ -362,6 +362,11 @@ frontend:
 
   envVarsFrom: {}
 
+  clientConfigJsonTemplate: |-
+    {
+      "oidcEnabled": $OIDC_ENABLED
+    }
+
   setupOdkScript: |-
     #!/bin/bash
     export DOLLAR='$'
