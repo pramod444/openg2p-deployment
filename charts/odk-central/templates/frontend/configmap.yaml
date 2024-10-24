@@ -10,6 +10,8 @@ metadata:
 data:
   odk.conf.template: |-
     {{- include "common.tplvalues.render" (dict "value" .Values.frontend.odkConfTemplate "context" $) | nindent 4 }}
+  client-config.json.template: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.frontend.clientConfigJsonTemplate "context" $) | nindent 4 }}
   setup-odk.sh: |-
     {{- include "common.tplvalues.render" (dict "value" .Values.frontend.setupOdkScript "context" $) | nindent 4 }}
 {{- end }}

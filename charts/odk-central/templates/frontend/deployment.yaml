@@ -80,6 +80,9 @@ spec:
             - name: odk-conf-template
               mountPath: /usr/share/odk/nginx/odk.conf.template
               subPath: odk.conf.template
+            - name: client-config-json-template
+              mountPath: /usr/share/odk/nginx/client-config.json.template
+              subPath: client-config.json.template
             - name: start-nginx-command
               mountPath: /scripts/setup-odk.sh
               subPath: setup-odk.sh
@@ -95,6 +98,9 @@ spec:
             defaultMode: 493
             name: {{ include "common.names.fullname" . }}-frontend
         - name: odk-conf-template
+          configMap:
+            name: {{ include "common.names.fullname" . }}-frontend
+        - name: client-config-json-template
           configMap:
             name: {{ include "common.names.fullname" . }}-frontend
         {{- if .Values.frontend.extraVolumes }}
