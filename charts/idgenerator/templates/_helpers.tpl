@@ -13,10 +13,17 @@ Return the proper image name (for the init container volume-permissions image)
 {{- end -}}
 
 {{/*
+Return the config server image name
+*/}}
+{{- define "idgenerator.config-server.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.springCloudConfig.image "global" .Values.global) }}
+{{- end -}}
+
+{{/*
 Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "idgenerator.imagePullSecrets" -}}
-{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image .Values.postgresInit.image) "global" .Values.global) -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.springCloudConfig.image .Values.volumePermissions.image .Values.postgresInit.image) "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
@@ -27,21 +34,6 @@ Create the name of the service account to use
     {{ default (printf "%s" (include "common.names.fullname" .)) .Values.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.serviceAccount.name }}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Compile all warnings into a single message.
-*/}}
-{{- define "idgenerator.validateValues" -}}
-{{- $messages := list -}}
-{{- $messages := append $messages (include "idgenerator.validateValues.foo" .) -}}
-{{- $messages := append $messages (include "idgenerator.validateValues.bar" .) -}}
-{{- $messages := without $messages "" -}}
-{{- $message := join "\n" $messages -}}
-
-{{- if $message -}}
-{{-   printf "\nVALUES VALIDATION:\n%s" $message -}}
 {{- end -}}
 {{- end -}}
 
@@ -75,12 +67,23 @@ Render Env values section
 {{- end -}}
 
 {{- define "idgenerator.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
+{{- $envVars := merge (.Values.springCloudConfig.enabled | ternary (deepCopy .Values.springCloudConfigEnvVars) dict) (deepCopy .Values.coreEnvVars) (deepCopy .Values.coreEnvVarsFrom) (.Values.springCloudConfig.enabled | ternary dict (merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom))) -}}
 {{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
 {{- define "idgenerator.postgresInit.envVars" -}}
 {{- $envVars := merge (deepCopy .Values.postgresInit.envVars) (deepCopy .Values.postgresInit.envVarsFrom) -}}
+{{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- end -}}
+
+{{- define "idgenerator.config-server.envVars" -}}
+{{- $overridesEnvVars := dict -}}
+{{- if .Values.springCloudConfig.enabled -}}
+{{- range $k, $v := (merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom)) -}}
+{{- $_ := set $overridesEnvVars (printf "spring_cloud_config_server_overrides_%s" $k) $v -}}
+{{- end -}}
+{{- end -}}
+{{- $envVars := merge $overridesEnvVars (deepCopy .Values.springCloudConfig.envVars) (deepCopy .Values.springCloudConfig.envVarsFrom) -}}
 {{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 

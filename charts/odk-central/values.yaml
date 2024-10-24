@@ -156,6 +156,12 @@ backend:
     SENTRY_ORG_SUBDOMAIN: "o130137"
     SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
     SENTRY_PROJECT: "1298632"
+
+    # S3_SERVER: ""
+    # S3_ACCESS_KEY: ""
+    # S3_SECRET_KEY: ""
+    # S3_BUCKET_NAME: ""
+
   envVarsFrom:
     DB_PASSWORD:
       secretKeyRef:
@@ -214,6 +220,13 @@ backend:
             "key": "${SENTRY_KEY}",
             "project": "${SENTRY_PROJECT}"
           }
+        },
+        "s3blobStore": {
+          "server": "${S3_SERVER}",
+          "accessKey": "${S3_ACCESS_KEY}",
+          "secretKey": "${S3_SECRET_KEY}",
+          "bucketName": "${S3_BUCKET_NAME}",
+          "requestTimeout": 60000
         }
       }
     }
@@ -221,7 +234,7 @@ backend:
   startOdkScript: |-
     #!/usr/bin/env bash
 
-    # This file is taken from https://github.com/getodk/central/tree/v2024.1.0/files/service/scripts
+    # This file is taken from https://github.com/getodk/central/tree/v2024.2.1/files/service/scripts
     # And modified the config template generation line.
 
     echo "generating local service configuration.."
@@ -351,8 +364,14 @@ frontend:
 
   setupOdkScript: |-
     #!/bin/bash
-    echo "writing fresh nginx templates..."
     export DOLLAR='$'
+    echo "writing client config..."
+    if [[ $OIDC_ENABLED != 'true' ]] && [[ $OIDC_ENABLED != 'false' ]]; then
+      echo 'OIDC_ENABLED must be either true or false'
+      exit 1
+    fi
+    envsubst < /usr/share/odk/nginx/client-config.json.template > /usr/share/nginx/html/client-config.json
+    echo "writing fresh nginx templates..."
     envsubst < /usr/share/odk/nginx/odk.conf.template > /etc/nginx/conf.d/odk.conf
     rm -f /etc/nginx/conf.d/redirector.conf
     exec nginx -g "daemon off;"
@@ -404,6 +423,10 @@ frontend:
         root /usr/share/nginx/html;
 
         location /version.txt {
+          include /usr/share/odk/nginx/common-headers.conf;
+          add_header Cache-Control no-cache;
+        }
+        location /client-config.json {
           include /usr/share/odk/nginx/common-headers.conf;
           add_header Cache-Control no-cache;
         }

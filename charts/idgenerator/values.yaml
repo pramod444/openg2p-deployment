@@ -490,18 +490,13 @@ postgresInit:
         name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
 
-envVars:
+coreEnvVars:
+  # Env Vars from this section will always be rendered on the service
   JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
+  spring_cloud_config_enabled_env: '{{ .Values.springCloudConfig.enabled }}'
 
-  mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
-
-  keycloak_internal_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
-  keycloak_external_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
-
-  auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
-  mosip_admin_client_secret: ''
-
-envVarsFrom:
+coreEnvVarsFrom:
+  # Env Vars from this section will always be rendered on the service
   artifactory_url_env:
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
@@ -514,19 +509,133 @@ envVarsFrom:
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: zip_file_path
-  active_profile_env:
-    configMapKeyRef:
-      name: '{{ tpl .Values.configserverInstallationName $ }}-share'
-      key: active_profile_env
-  spring_config_label_env:
-    configMapKeyRef:
-      name: '{{ tpl .Values.configserverInstallationName $ }}-share'
-      key: spring_config_label_env
-  spring_config_url_env:
-    configMapKeyRef:
-      name: '{{ tpl .Values.configserverInstallationName $ }}-share'
-      key: spring_config_url_env
 
+envVars:
+  # Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
+  # Else they will be rendered on config-server as overrides.
+  mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
+
+  keycloak_internal_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
+  keycloak_external_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
+
+  auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
+  mosip_admin_client_secret: ''
+
+# Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
+# Else they will be rendered on config-server as overrides.
+envVarsFrom: {}
+
+springCloudConfigEnvVars:
+  # Env Vars in this section will be rendered on the service, when springCloudConfig.enabled=true.
+  spring_cloud_config_label_env:
+    secretKeyRef:
+      name: '{{ template "common.names.fullname" . }}-config-server-git-secret'
+      key: branch
+  spring_cloud_config_uri_env: 'http://{{ template "common.names.fullname" . }}-config-server/config'
+  spring_profiles_active_env: '{{ tpl .Values.springCloudConfig.profile $ }}'
+
+springCloudConfig:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 80
+    nodePorts:
+      http: ""
+      https: ""
+    externalTrafficPolicy: Cluster
+  image:
+    registry: docker.io
+    repository: mosipid/config-server
+    tag: 1.1.2
+    pullPolicy: Always
+    pullSecrets: []
+  containerPort: 51000
+  startupProbe:
+    enabled: true
+    httpGet:
+      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      port: http
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 60
+    successThreshold: 1
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      port: http
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      port: http
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  command: []
+  args: []
+  hostAliases: []
+  resources: {}
+  containerSecurityContext:
+    enabled: false
+    runAsUser: 1001
+    runAsNonRoot: true
+  podSecurityContext:
+    enabled: false
+    fsGroup: 1001
+  podAffinityPreset: ""
+  podAntiAffinityPreset: soft
+  nodeAffinityPreset:
+    type: ""
+    key: ""
+    values: []
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+  podLabels:
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-config-server'
+  podAnnotations: {}
+  # priorityClassName: ""
+  lifecycleHooks: {}
+  updateStrategy:
+    type: RollingUpdate
+  initContainers: []
+  sidecars: []
+  volumePermissions:
+    enabled: false
+    image:
+      registry: docker.io
+      repository: bitnami/bitnami-shell
+      tag: "10"
+      pullPolicy: Always
+      pullSecrets: []
+      ##   - myRegistryKeySecretName
+    resources: {}
+  extraVolumes: []
+  extraVolumeMounts: []
+
+  profile: default
+  gitRepo:
+    url: https://github.com/openg2p/mosip-config
+    branch: master
+  envVars:
+    # Env Vars in these sections will be rendered on config server.
+    SPRING_CLOUD_CONFIG_SERVER_GIT_SEARCHPATHS: ""
+  envVarsFrom:
+    # Env Vars in these sections will be rendered on config server.
+    SPRING_CLOUD_CONFIG_SERVER_GIT_URI:
+      secretKeyRef:
+        name: '{{ template "common.names.fullname" . }}-config-server-git-secret'
+        key: url
 
 startUpCommand: |-
   #!/usr/bin/env bash
@@ -534,12 +643,6 @@ startUpCommand: |-
   echo "Waiting for artifactory..."
   if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${iam_adapter_url_env}"; then
     echo "Connecting with artifactory failed after max retries..."
-    exit 1
-  fi
-
-  echo "Waiting for config-server..."
-  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${spring_config_url_env}/actuator/health"; then
-    echo "Connecting with config-server failed after max retries..."
     exit 1
   fi
 
@@ -563,9 +666,25 @@ startUpCommand: |-
     ADDL_ARGS+=("-javaagent:glowroot/glowroot.jar -XX:HeapDumpPath=/home/")
   fi
 
-  ADDL_ARGS+=("-Dspring.cloud.config.label=${spring_config_label_env}")
-  ADDL_ARGS+=("-Dspring.cloud.config.uri=${spring_config_url_env}")
-  ADDL_ARGS+=("-Dspring.profiles.active=${active_profile_env}")
+  if [ "$spring_cloud_config_enabled_env" = "true" ]; then
+    echo "Waiting for config server..."
+    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${spring_cloud_config_uri_env}/*/*"; then
+      echo "Connecting with artifactory failed after max retries..."
+      exit 1
+    fi
+    ADDL_ARGS+=("-Dspring.cloud.config.label=${spring_cloud_config_label_env}")
+    ADDL_ARGS+=("-Dspring.cloud.config.uri=${spring_cloud_config_uri_env}")
+    ADDL_ARGS+=("-Dspring.profiles.active=${spring_profiles_active_env}")
+    ADDL_ARGS+=("-Dspring.cloud.config.enabled=true")
+    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=true")
+  else
+    if [ -f springConfig/application.properties ]; then
+      config_locations="classpath:/bootstrap.properties,springConfig/application.properties"
+      ADDL_ARGS+=("-Dspring.config.location=${config_locations}")
+    fi
+    ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
+    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
+  fi
 
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
 
@@ -574,4 +693,3 @@ startUpCommand: |-
 ## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
 artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
 postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
-configserverInstallationName: '{{ include "common.names.fullname" . }}-config-server'

@@ -12,7 +12,7 @@ spec:
   strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
   {{- end }}
   selector:
-    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+    matchLabels: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 6 }}
   template:
     metadata:
       {{- if or .Values.podAnnotations .Values.metrics.enabled }}
