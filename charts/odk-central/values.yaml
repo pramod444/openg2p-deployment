@@ -71,7 +71,7 @@ backend:
   image:
     registry: docker.io
     repository: openg2p/odk-central-backend
-    tag: v2024.1.0
+    tag: v2024.2.1
     pullPolicy: Always
 
   startupProbe:
@@ -279,7 +279,7 @@ frontend:
   image:
     registry: docker.io
     repository: openg2p/odk-central-frontend
-    tag: v2024.1.0{{ .Values.backend.envVars.OIDC_ENABLED | ternary "-oidc" "" }}
+    tag: v2024.2.1
     pullPolicy: Always
 
   startupProbe:
@@ -345,6 +345,7 @@ frontend:
     SENTRY_ORG_SUBDOMAIN: "o130137"
     SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
     SENTRY_PROJECT: "1298632"
+    OIDC_ENABLED: '.Values.backend.envVars.OIDC_ENABLED'
 
   envVarsFrom: {}
 

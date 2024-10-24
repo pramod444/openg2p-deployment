@@ -2,7 +2,7 @@ apiVersion: v2
 name: odk-central
 description: A Helm chart for odk-central.
 type: application
-version: "v2024.1.0"
+version: "v2024.2.1"
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
@@ -16,10 +16,10 @@ dependencies:
   version: "1.2.0"
   condition: odk-central-mail.enabled
 - name: odk-central-pyxform
-  version: "v2024.1.0"
+  version: "v2024.2.1"
   condition: odk-central-pyxform.enabled
 - name: odk-central-enketo
-  version: "v2024.1.0"
+  version: "v2024.2.1"
   condition: odk-central-enketo.enabled
 keywords:
   - odk
