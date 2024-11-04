@@ -521,9 +521,15 @@ envVars:
   auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
   mosip_admin_client_secret: ''
 
-# Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
-# Else they will be rendered on config-server as overrides.
-envVarsFrom: {}
+  mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
+
+envVarsFrom:
+  # Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
+  # Else they will be rendered on config-server as overrides.
+  db_dbuser_password:
+    secretKeyRef:
+      name: '{{ tpl .Values.postgresqlInstallationName $ }}'
+      key: password
 
 springCloudConfigEnvVars:
   # Env Vars in this section will be rendered on the service, when springCloudConfig.enabled=true.
