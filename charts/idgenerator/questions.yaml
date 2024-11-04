@@ -9,39 +9,21 @@ questions:
   type: string
   label: Keycloak Base URL
 
-- variable: springConfig.profile
-  type: string
-  label: Spring Config Profile
-
-- variable: springConfig.names
-  type: string
-  label: Spring Config Names
-
-- variable: springConfig.gitRepo.enabled
-  description: Enables download of configs from Git repo.
-  type: boolean
-  label: Spring Config Git Enabled
-  show_subquestions_if: true
-  subquestions:
-  - variable: springConfig.gitRepo.repoUrl
-    description: |-
-      Repo Url for remote Git repo containing configs.
-      This url should include username password if required.
-    type: string
-    label: Spring Config Git Repo Url
-
-  - variable: springConfig.gitRepo.branch
-    description: Branch of remote Git repo containing configs.
-    type: string
-    label: Spring Config Git Repo Branch
-
-- variable: springConfig.rawConfig
+- variable: springCloudConfig.gitRepo.url
   description: |-
-    If git-based config is disabled, the complete application.properties can be
-    directly supplied here.
-  type: yamlfile
-  label: Spring Config application properties.
-  show_if: "springConfig.gitRepo.enabled=false"
+    Repo Url for remote Git repo containing configs.
+    This url should include username password if required.
+  type: string
+  label: Spring Cloud Config Git Repo Url
+
+- variable: springCloudConfig.gitRepo.branch
+  description: Branch of remote Git repo containing configs.
+  type: string
+  label: Spring Cloud Config Git Repo Branch
+
+- variable: springCloudConfig.profile
+  type: string
+  label: Spring Cloud Config Profile
 
 - variable: envVars.auth_server_admin_allowed_audience
   description: |-
