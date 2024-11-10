@@ -1,0 +1,13 @@
+{{- if and .Values.startUpCommand (not (or .Values.command .Values.args)) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-startup
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+data:
+  startup.sh: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.startUpCommand "context" $) | nindent 4 }}
+{{- end }}

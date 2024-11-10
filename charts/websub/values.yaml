@@ -9,14 +9,12 @@
 #   storageClass: myStorageClass
 global:
   keycloakBaseUrl: 'https://keycloak.your.org'
-  esignetHostname: esignet-pbms.openg2p.sandbox.net
 
-hostname: mimoto.openg2p.sandbox.net
+hostname: websub.openg2p.sandbox.net
 
 ## Add labels to all the deployed resources
 ##
-commonLabels:
-  app.kubernetes.io/group: mosip
+commonLabels: {}
 
 ## Add annotations to all the deployed resources
 ##
@@ -53,8 +51,8 @@ service:
 
 image:
   registry: docker.io
-  repository: mosipid/mimoto
-  tag: 0.13.1
+  repository: openg2p/websub-service
+  tag: 1.2.0.1
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -68,7 +66,7 @@ image:
   #   - myRegistryKeySecretName
 
 ## Port on which this particular spring service module is running.
-containerPort: 8088
+containerPort: 9191
 
 ## Configure extra options for liveness and readiness probes
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
@@ -76,8 +74,8 @@ containerPort: 8088
 startupProbe:
   enabled: true
   httpGet:
-    path: /v1/mimoto/actuator/health
-    port: 8088
+    path: /hub/actuator/health
+    port: http
   initialDelaySeconds: 0
   periodSeconds: 10
   timeoutSeconds: 5
@@ -87,10 +85,10 @@ startupProbe:
 livenessProbe:
   enabled: true
   httpGet:
-    path: /v1/mimoto/actuator/health
-    port: 8088
+    path: /hub/actuator/health
+    port: http
   initialDelaySeconds: 20
-  periodSeconds: 30
+  periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 6
   successThreshold: 1
@@ -98,8 +96,8 @@ livenessProbe:
 readinessProbe:
   enabled: true
   httpGet:
-    path: /v1/mimoto/actuator/health
-    port: 8088
+    path: /hub/actuator/health
+    port: http
   initialDelaySeconds: 0
   periodSeconds: 10
   timeoutSeconds: 5
@@ -124,11 +122,11 @@ hostAliases: []
 ## lines, adjust them as necessary.
 # resources:
 #   limits:
-#     cpu: 1000m
-#     memory: 500Mi
+#     cpu: 500m
+#     memory: 2250Mi
 #   requests:
-#     cpu: 200m
-#     memory: 200Mi
+#     cpu: 100m
+#     memory: 1500Mi
 resources: {}
 
 ## Specify any JAVA_OPTS string here. These typically will be specified in conjunction with above resources. Example:
@@ -256,62 +254,6 @@ initContainers: []
 ##
 sidecars: []
 
-persistence:
-  enabled: false
-  ## If defined, storageClassName: <storageClass>
-  ## If set to "-", storageClassName: "", which disables dynamic provisioning
-  ## If undefined (the default) or set to null, no storageClassName spec is
-  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
-  ##   GKE, AWS & OpenStack).
-  ##
-  # storageClass: "-"
-  ##
-  ## If you want to reuse an existing claim, you can pass the name of the PVC using
-  ## the existingClaim variable
-  # existingClaim: your-claim
-  ## ReadWriteMany not supported by AWS gp2
-  storageClass:
-  accessModes:
-    - ReadWriteOnce
-  size: 10M
-  existingClaim:
-  # Dir where config and keys are written inside container
-  mountDir:
-
-## Init containers parameters:
-## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
-##
-volumePermissions:
-  enabled: false
-  image:
-    registry: docker.io
-    repository: bitnami/bitnami-shell
-    tag: "10"
-    pullPolicy: Always
-    ## Optionally specify an array of imagePullSecrets.
-    ## Secrets must be manually created in the namespace.
-    ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-    ##
-    pullSecrets: []
-    ##   - myRegistryKeySecretName
-  ## Init containers' resource requests and limits
-  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
-  ##
-  resources:
-    ## We usually recommend not to specify default resources and to leave this as a conscious
-    ## choice for the user. This also increases chances charts run on environments with little
-    ## resources, such as Minikube. If you do want to specify resources, uncomment the following
-    ## lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    ##
-    limits: {}
-    ##   cpu: 100m
-    ##   memory: 128Mi
-    ##
-    requests: {}
-    ##   cpu: 100m
-    ##   memory: 128Mi
-    ##
-
 ## Specifies whether a ServiceAccount should be created
 ##
 serviceAccount:
@@ -324,14 +266,14 @@ serviceAccount:
 ## Prometheus Metrics
 ##
 metrics:
-  enabled: true
+  enabled: false
   ## Prometheus pod annotations
   ## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
   ##
   podAnnotations:
     prometheus.io/scrape: "true"
 
-  endpointPath: /v1/mimoto/actuator/prometheus
+  endpointPath: /v1/websub/actuator/prometheus
 
   ## Prometheus Service Monitor
   ## ref: https://github.com/coreos/prometheus-operator
@@ -392,10 +334,10 @@ istio:
     enabled: true
     host: ""
     gateway: "internal"
-    destination: '{{ template "common.names.fullname" . }}'
+    destination: '{{ include "common.names.fullname" . }}'
     destinationPort: '{{ .Values.service.port }}'
-    prefix: /residentmobileapp
-    rewriteUri: /v1/mimoto
+    prefix: /hub
+    rewriteUri: ""
   gateway:
     enabled: false
     host: ""
@@ -408,83 +350,39 @@ istio:
       mode: SIMPLE
       credentialName: ""
 
-artifactory:
+kafka:
   enabled: true
-  rbac:
-    create: false
-  nameOverride: mimoto-artifactory
-  image:
-    registry: docker.io
-    repository: mosipid/artifactory-server
-    tag: 1.4.1-ES
-  resources: {}
+  nameOverride: websub-kafka
+  heapOpts: ""
+  extraConfig: |-
+    default.replication.factor=1
+    offsets.topic.replication.factor=1
+    transaction.state.log.replication.factor=1
+    auto.create.topics.enable=true
+    delete.topic.enable=true
+    num.partitions=3
+  controller:
+    heapOpts: ""
+    replicaCount: 1
+    resourcesPreset: "none"
+  broker:
+    heapOpts: ""
+    persistence:
+      enabled: false
+  listeners:
+    client:
+      protocol: PLAINTEXT
+    controller:
+      protocol: PLAINTEXT
+    interbroker:
+      protocol: PLAINTEXT
+    external:
+      protocol: PLAINTEXT
+  service:
+    ports:
+      client: 9092
 
-oidcClientKeySecretName: mimoto-oidc-secret
-
-envVars:
-  # Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
-  # Else they will be rendered on config-server as overrides.
-  mosip_api_internal_host: '{{ tpl .Values.hostname $ }}'
-  mosip_api_public_host: '{{ tpl .Values.hostname $ }}'
-  mosip_resident_url: 'https://{{ tpl .Values.hostname $ }}'
-
-  mosip_esignet_host: '{{ tpl .Values.global.esignetHostname $ }}'
-
-  keycloak_internal_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
-  keycloak_external_url: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
-
-  mosip_iam_adapter_disableSelfTokenRestTemplate: true
-
-  mosip_oidc_client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
-  mosip_oidc_p12_filename: oidckeystore.p12
-  mosip_oidc_p12_password: openg2p123
-  mosip_oidc_p12_path: /home/mosip/certs/
-
-  mosip_partner_crypto_p12_password: ""
-
-  mpartner_default_mobile_secret: ""
-
-  mimoto_oidc_partner_clientid: mimoto-oidc
-  mimoto_oidc_openg2p_partner_clientid: openg2p-mimoto-oidc
-  mimoto_wallet_binding_partner_api_key: ""
-
-  openg2p_social_registry_base_url: https://socialregistry.openg2p.sandbox.net
-  openg2p_pbms_base_url: https://pbms.openg2p.sandbox.net
-
-# Env Vars from this section will be rendered on the service if springCloudConfig.enabled=false.
-# Else they will be rendered on config-server as overrides.
-envVarsFrom: {}
-
-coreEnvVars:
-  # Env Vars from this section will always be rendered on the service
-  JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
-  spring_cloud_config_enabled_env: '{{ .Values.springCloudConfig.enabled }}'
-
-coreEnvVarsFrom:
-  # Env Vars from this section will always be rendered on the service
-  artifactory_url_env:
-    configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
-      key: artifactory_url_env
-  iam_adapter_url_env:
-    configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
-      key: iam_adapter_url_env
-  zip_file_path:
-    configMapKeyRef:
-      name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
-      key: zip_file_path
-
-springCloudConfigEnvVars:
-  # Env Vars in this section will be rendered on the service, when springCloudConfig.enabled=true.
-  spring_cloud_config_label_env:
-    secretKeyRef:
-      name: '{{ template "common.names.fullname" . }}-config-server-git-secret'
-      key: branch
-  spring_cloud_config_uri_env: 'http://{{ template "common.names.fullname" . }}-config-server/config'
-  spring_profiles_active_env: '{{ tpl .Values.springCloudConfig.profile $ }}'
-
-springCloudConfig:
+consolidator:
   enabled: true
   replicaCount: 1
   service:
@@ -496,35 +394,36 @@ springCloudConfig:
     externalTrafficPolicy: Cluster
   image:
     registry: docker.io
-    repository: mosipid/config-server
-    tag: 1.1.2
+    repository: openg2p/consolidator-websub-service
+    tag: 1.2.0.1
     pullPolicy: Always
     pullSecrets: []
-  containerPort: 51000
+    #   - myRegistryKeySecretName
+  containerPort: 9192
   startupProbe:
     enabled: true
     httpGet:
-      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      path: /consolidator/actuator/health
       port: http
     initialDelaySeconds: 0
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 60
+    failureThreshold: 30
     successThreshold: 1
   livenessProbe:
     enabled: true
     httpGet:
-      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      path: /consolidator/actuator/health
       port: http
     initialDelaySeconds: 20
-    periodSeconds: 30
+    periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 6
     successThreshold: 1
   readinessProbe:
     enabled: true
     httpGet:
-      path: /config/*/{{ tpl .Values.springCloudConfig.profile $ }}/{{ tpl .Values.springCloudConfig.gitRepo.branch $ }}
+      path: /consolidator/actuator/health
       port: http
     initialDelaySeconds: 0
     periodSeconds: 10
@@ -535,6 +434,7 @@ springCloudConfig:
   args: []
   hostAliases: []
   resources: {}
+  javaOpts: ""
   containerSecurityContext:
     enabled: false
     runAsUser: 1001
@@ -552,7 +452,7 @@ springCloudConfig:
   nodeSelector: {}
   tolerations: []
   podLabels:
-    app.kubernetes.io/name: '{{ include "common.names.name" . }}-config-server'
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-consolidator'
   podAnnotations: {}
   # priorityClassName: ""
   lifecycleHooks: {}
@@ -560,79 +460,249 @@ springCloudConfig:
     type: RollingUpdate
   initContainers: []
   sidecars: []
-  volumePermissions:
-    enabled: false
-    image:
-      registry: docker.io
-      repository: bitnami/bitnami-shell
-      tag: "10"
-      pullPolicy: Always
-      pullSecrets: []
-      ##   - myRegistryKeySecretName
-    resources: {}
   extraVolumes: []
   extraVolumeMounts: []
-
-  profile: default
-  gitRepo:
-    url: https://github.com/openg2p/mosip-config
-    branch: master
+  istio:
+    enabled: true
+    virtualservice:
+      enabled: true
+      host: ""
+      gateway: "internal"
+      destination: '{{ include "common.names.fullname" . }}-consolidator'
+      destinationPort: '{{ .Values.consolidator.service.port }}'
+      prefix: /consolidator
+      rewriteUri: ""
+    gateway:
+      enabled: false
+      host: ""
+      ingressController:
+        istio: ingressgateway
+      httpTlsRedirect: false
+      httpEnabled: true
+      httpsEnabled: false
+      tls:
+        mode: SIMPLE
+        credentialName: ""
   envVars:
-    # Env Vars in these sections will be rendered on config server.
-    SPRING_CLOUD_CONFIG_SERVER_GIT_SEARCHPATHS: ""
-  envVarsFrom:
-    SPRING_CLOUD_CONFIG_SERVER_GIT_URI:
-      secretKeyRef:
-        name: '{{ template "common.names.fullname" . }}-config-server-git-secret'
-        key: url
+    JDK_JAVA_OPTIONS: '{{ tpl .Values.consolidator.javaOpts $ }}'
+    CONSOLIDATOR_PORT: '{{ .Values.consolidator.containerPort }}'
+    KAFKA_BOOTSTRAP_HOSTNAME: '{{ tpl .Values.kafkaInstallationName $ }}'
+    KAFKA_PORT: '9092'
+    KAFKA_BOOTSTRAP_SERVER: '{{ tpl .Values.envVars.KAFKA_BOOTSTRAP_HOSTNAME $ }}:{{ tpl .Values.envVars.KAFKA_PORT $ }}'
 
-rawSpringConfigMountPath: '/home/mosip/springConfig/application.properties'
-rawSpringConfig: ""
+  envVarsFrom: {}
+
+  configTomlMountPath: /etc/config.template.toml
+
+  configToml: |-
+    [consolidatorService.config]
+    # IP and Port of the Kafka bootstrap node
+    KAFKA_BOOTSTRAP_NODE = "${KAFKA_BOOTSTRAP_SERVER}"
+
+    # Kafka topic which will get notified for websub topic registration/deregistration
+    # All the hubs must be pointed to the same Kafka topic to notify websub topic registration/deregistration
+    REGISTERED_WEBSUB_TOPICS_TOPIC = "registered-websub-topics"
+
+    # Kafka topic which stores consolidated websub topics for the hub
+    CONSOLIDATED_WEBSUB_TOPICS_TOPIC = "consolidated-websub-topics"
+
+    # Kafka topic which will get notified for websub subscription/unsubscription
+    # All the hubs must be pointed to the same Kafka topic to notify websub subscription/unsubscription
+    WEBSUB_SUBSCRIBERS_TOPIC = "registered-websub-subscribers"
+
+    # Kafka topic which is stores consolidated websub subscribers for this server
+    CONSOLIDATED_WEBSUB_SUBSCRIBERS_TOPIC = "consolidated-websub-subscribers"
+
+    # The interval in which Kafka consumers wait for new messages
+    POLLING_INTERVAL = 10.0
+
+    # The period in which Kafka close method waits to complete
+    GRACEFUL_CLOSE_PERIOD = 5.0
+
+    # The disk space threshold for healthcheck
+    DISK_SPACE_THRESHOLD = 10485760
+
+    # The port that is used to start the consolidator
+    CONSOLIDATOR_PORT = ${CONSOLIDATOR_PORT}
+
+    # consolidator health endpoint
+    CONSOLIDATOR_HEALTH_ENDPOINT = "/consolidator/actuator/health"
+
+    [ballerina.http.accessLogConfig]
+    # Enable printing access logs in console
+    console = true              # Default is false
+
+    [ballerina.http.traceLogAdvancedConfig]
+    # Enable printing trace logs in console
+    console = false              # Default is false
+
+  startUpCommand: |-
+    #!/usr/bin/env bash
+    echo "==> Copying Configs"
+    envsubst < {{ tpl .Values.consolidator.configTomlMountPath $ }} > Config.toml
+    echo "==> Waiting for kafka"
+    RETRY_COUNT=0
+    while :; do
+      if nc -z ${KAFKA_BOOTSTRAP_HOSTNAME} ${KAFKA_PORT} ; then
+        break
+      elif [ $RETRY_COUNT -ne 200 ]; then
+        ((RETRY_COUNT++))
+        sleep 1s
+      else
+        echo "Could not connect to Kafka even after retries..."
+        exit 1
+      fi
+    done
+    java -jar ./consolidator.jar
+
+# If a hub secret already exists give the secret name here. Else will be generated.
+existingSecret: ""
+
+# Give Hub Encryption Key here. If empty it will be autogenerated.
+encryptionKey: ""
+
+envVars:
+  JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
+  HUB_PORT: '{{ .Values.containerPort }}'
+  KAFKA_BOOTSTRAP_HOSTNAME: '{{ tpl .Values.kafkaInstallationName $ }}'
+  KAFKA_PORT: '9092'
+  KAFKA_BOOTSTRAP_SERVER: '{{ tpl .Values.envVars.KAFKA_BOOTSTRAP_HOSTNAME $ }}:{{ tpl .Values.envVars.KAFKA_PORT $ }}'
+  CONSOLIDATOR_URL: 'http://{{ include "common.names.fullname" . }}-consolidator'
+  CONSOLIDATOR_HEALTH_ENDPOINT: '/consolidator/actuator/health'
+  SECURITY_JWT_ISSUER: '{{ tpl .Values.global.keycloakBaseUrl $ }}/realms/master'
+  SECURITY_JWT_ISSUER_JWKS_URL: '{{ tpl .Values.envVars.SECURITY_JWT_ISSUER $ }}/protocol/openid-connect/certs'
+
+envVarsFrom:
+  hub_secret_encryption_key:
+    secretKeyRef:
+      name: '{{ (not .Values.existingSecret) | ternary (include "common.names.fullname" .) .Values.existingSecret }}'
+      key: encryption-key
+
+configTomlMountPath: /etc/config.template.toml
+
+configToml: |-
+  [kafkaHub.config]
+  # Flag to check whether to enable/disable security
+  SECURITY_ON = true
+
+  # Security: JWT Issuer URL
+  SECURITY_JWT_ISSUER = "${SECURITY_JWT_ISSUER}";
+
+  # Security: JWKS Url for the configured issuer
+  SECURITY_JWT_ISSUER_JWKS_URL = "${SECURITY_JWT_ISSUER_JWKS_URL}";
+
+  # Server ID is is used to uniquely identify each server
+  # Each server must have a unique ID
+  SERVER_ID = "server-1"
+
+  # IP and Port of the Kafka bootstrap node
+  KAFKA_BOOTSTRAP_NODE = "${KAFKA_BOOTSTRAP_SERVER}"
+
+  # Kafka topic which will get notified for websub topic registration/deregistration
+  # All the hubs must be pointed to the same Kafka topic to notify websub topic registration/deregistration
+  REGISTERED_WEBSUB_TOPICS_TOPIC = "registered-websub-topics"
+
+  # Kafka topic which stores consolidated websub topics for the hub
+  CONSOLIDATED_WEBSUB_TOPICS_TOPIC = "consolidated-websub-topics"
+
+  # Kafka topic which will get notified for websub subscription/unsubscription
+  # All the hubs must be pointed to the same Kafka topic to notify websub subscription/unsubscription
+  WEBSUB_SUBSCRIBERS_TOPIC = "registered-websub-subscribers"
+
+  # Kafka topic which is stores consolidated websub subscribers for this server
+  CONSOLIDATED_WEBSUB_SUBSCRIBERS_TOPIC = "consolidated-websub-subscribers"
+
+  # The interval in which Kafka consumers wait for new messages
+  POLLING_INTERVAL = 10.0
+
+  # The period in which Kafka close method waits to complete
+  GRACEFUL_CLOSE_PERIOD = 5.0
+
+  # The port that is used to start the hub
+  HUB_PORT = ${HUB_PORT}
+
+  # The period between retry requests
+  MESSAGE_DELIVERY_RETRY_INTERVAL = 3.0
+
+  # The maximum retry count
+  MESSAGE_DELIVERY_COUNT = 3
+
+  # The message delivery timeout
+  MESSAGE_DELIVERY_TIMEOUT = 30.0
+
+  # The token validation URL of IDP
+  DISK_SPACE_THRESHOLD = 10485760
+
+  # The token validation URL of IDP
+  PARTNER_USER_ID_PREFIX = "service-account-"
+
+  # The period between retry requests
+  INTENT_VERIFICATION_RETRY_INTERVAL = 3.0
+
+  # The maximum retry count
+  INTENT_VERIFICATION_COUNT = 3
+
+  # The period between retry requests
+  INTENT_VERIFICATION_BACKOFF_FACTOR = 2.0
+
+  # The maximum retry count
+  INTENT_VERIFICATION_MAX_INTERVAL = 20.0
+
+  # The maximum retry count
+  KAFKA_CONSUMER_MAX_POLL_RECORDS = 3
+
+  # The maximum retry count
+  KAFKA_CONSUMER_FETCH_MAX_BYTES = 3145728
+
+  # The maximum retry count
+  KAFKA_CONSUMER_MAX_PARTITION_FETCH_BYTES = 524288
+
+  # Kafka topic which is stores consolidated websub subscribers for this server
+  META_TOPICS = "registered-websub-topics,consolidated-websub-topics,registered-websub-subscribers,consolidated-websub-subscribers"
+
+  # consolidator base url
+  CONSOLIDATOR_BASE_URL = "${CONSOLIDATOR_URL}"
+
+  # consolidator health endpoint
+  CONSOLIDATOR_HEALTH_ENDPOINT = "/consolidator/actuator/health"
+
+  #Encryption key that will be used to encrypt / decrypt the hub secret
+  HUB_SECRET_ENCRYPTION_KEY = "${hub_secret_encryption_key}"
+
+  # Below config will allow base64-encoded-bytes / alpha-numeric.
+  # Recommended to use base64-encoded-bytes since alpha-numeric is considered less secure. This is just given to ensure the backward compatiblity
+  HUB_SECRET_ENCRYPTION_KEY_FORMAT = "alpha-numeric"
+
+  [ballerina.http.accessLogConfig]
+  # Enable printing access logs in console
+  console = true              # Default is false
+
+  [ballerina.http.traceLogAdvancedConfig]
+  # Enable printing trace logs in console
+  console = false              # Default is false
 
 startUpCommand: |-
   #!/usr/bin/env bash
-
-  echo "Waiting for artifactory..."
-  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${iam_adapter_url_env}"; then
-    echo "Connecting with artifactory failed after max retries..."
-    exit 1
-  fi
-
-  wget -q "${iam_adapter_url_env}" -O "${loader_path_env}"/kernel-auth-adapter.jar
-
-  ADDL_ARGS=()
-
-  if [ "$is_glowroot_env" = "present" ]; then
-    wget -q "${artifactory_url_env}"/artifactory/libs-release-local/io/mosip/testing/glowroot.zip
-    unzip glowroot.zip
-    rm -rf glowroot.zip
-    sed -i 's/<service_name>/mimoto/g' glowroot/glowroot.properties
-    ADDL_ARGS+=("-javaagent:glowroot/glowroot.jar -XX:HeapDumpPath=/home/")
-  fi
-
-  if [ "$spring_cloud_config_enabled_env" = "true" ]; then
-    echo "Waiting for config server..."
-    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${spring_cloud_config_uri_env}/*/*"; then
-      echo "Connecting with artifactory failed after max retries..."
+  echo "==> Copying Configs"
+  envsubst < {{ tpl .Values.consolidator.configTomlMountPath $ }} > Config.toml
+  echo "==> Waiting for kafka"
+  RETRY_COUNT=0
+  while :; do
+    if nc -z ${KAFKA_BOOTSTRAP_HOSTNAME} ${KAFKA_PORT} ; then
+      break
+    elif [ $RETRY_COUNT -ne 200 ]; then
+      ((RETRY_COUNT++))
+      sleep 1s
+    else
+      echo "Could not connect to Kafka even after retries..."
       exit 1
     fi
-    ADDL_ARGS+=("-Dspring.cloud.config.label=${spring_cloud_config_label_env}")
-    ADDL_ARGS+=("-Dspring.cloud.config.uri=${spring_cloud_config_uri_env}")
-    ADDL_ARGS+=("-Dspring.profiles.active=${spring_profiles_active_env}")
-    ADDL_ARGS+=("-Dspring.cloud.config.enabled=true")
-    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=true")
-  else
-    if [ -f springConfig/application.properties ]; then
-      config_locations="classpath:/bootstrap.properties,springConfig/application.properties"
-      ADDL_ARGS+=("-Dspring.config.location=${config_locations}")
-    fi
-    ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
-    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
+  done
+  echo "==> Waiting for consolidator"
+  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${CONSOLIDATOR_URL}${CONSOLIDATOR_HEALTH_ENDPOINT}"; then
+    echo "Failed connecting with consolidator after max retries..."
+    exit 1
   fi
+  java -jar ./hub.jar
 
-  ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
-
-  exec java -jar ${ADDL_ARGS[@]} ./mimoto.jar
-
-## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
-artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
+kafkaInstallationName: '{{ include "common.names.fullname" .Subcharts.kafka }}'

@@ -1,0 +1,10 @@
+questions:
+- variable: hostname
+  description: Hostname under which WebSub should be accessible
+  type: string
+  label: WebSub Hostname
+
+- variable: global.keycloakBaseUrl
+  description: Required for API auth validation.
+  type: string
+  label: Keycloak Base URL
