@@ -1,0 +1,113 @@
+{{- if .Values.consolidator.enabled }}
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}-consolidator
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.consolidator.replicaCount }}
+  {{- if .Values.consolidator.updateStrategy }}
+  strategy: {{- toYaml .Values.consolidator.updateStrategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.consolidator.podLabels "context" $) | nindent 6 }}
+  template:
+    metadata:
+      {{- if or .Values.consolidator.podAnnotations .Values.metrics.enabled }}
+      annotations: {{- include "websub.consolidator.podAnnotations" . | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.standard" (dict "customLabels" .Values.consolidator.podLabels "context" $) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ template "websub.serviceAccountName" . }}
+      {{- include "websub.imagePullSecrets" . | nindent 6 }}
+      {{- if .Values.consolidator.hostAliases }}
+      hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.consolidator.hostAliases "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.consolidator.affinity }}
+      affinity: {{- include "common.tplvalues.render" ( dict "value" .Values.consolidator.affinity "context" $) | nindent 8 }}
+      {{- else }}
+      affinity:
+        podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.consolidator.podAffinityPreset "context" $) | nindent 10 }}
+        podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.consolidator.podAntiAffinityPreset "context" $) | nindent 10 }}
+        nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.consolidator.nodeAffinityPreset.type "key" .Values.consolidator.nodeAffinityPreset.key "values" .Values.consolidator.nodeAffinityPreset.values) | nindent 10 }}
+      {{- end }}
+      {{- if .Values.consolidator.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" ( dict "value" .Values.consolidator.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.consolidator.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.consolidator.tolerations "context" .) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.consolidator.priorityClassName }}
+      priorityClassName: {{ .Values.consolidator.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.consolidator.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.consolidator.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if .Values.consolidator.initContainers }}
+      initContainers:
+        {{- include "common.tplvalues.render" (dict "value" .Values.consolidator.initContainers "context" $) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: websub-consolidator
+          image: {{ template "websub.consolidator.image" . }}
+          imagePullPolicy: {{ .Values.consolidator.image.pullPolicy }}
+          {{- if .Values.consolidator.lifecycleHooks }}
+          lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.consolidator.lifecycleHooks "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.consolidator.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.consolidator.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          {{- include "websub.consolidator.command" . | nindent 10 }}
+          env:
+            {{- include "websub.consolidator.envVars" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.consolidator.containerPort }}
+          {{- if .Values.consolidator.resources }}
+          resources: {{- toYaml .Values.consolidator.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.consolidator.startupProbe.enabled }}
+          startupProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.consolidator.startupProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.consolidator.livenessProbe.enabled }}
+          livenessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.consolidator.livenessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.consolidator.readinessProbe.enabled }}
+          readinessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.consolidator.readinessProbe "enabled") "context" $) | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if and .Values.consolidator.startUpCommand (not (or .Values.consolidator.command .Values.consolidator.args)) }}
+            - name: startup-command
+              mountPath: /startup.sh
+              subPath: startup.sh
+            {{- end }}
+            {{- if .Values.consolidator.configToml }}
+            - name: config-toml
+              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.consolidator.configTomlMountPath "context" $) }}
+              subPath: config.toml
+            {{- end }}
+            {{- if .Values.consolidator.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.consolidator.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+        {{- if .Values.consolidator.sidecars }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.consolidator.sidecars "context" $) | nindent 8 }}
+        {{- end }}
+      volumes:
+        {{- if and .Values.consolidator.startUpCommand (not (or .Values.consolidator.command .Values.consolidator.args)) }}
+        - name: startup-command
+          configMap:
+            name: {{ include "common.names.fullname" . }}-consolidator-startup
+            defaultMode: 0755
+        {{- end }}
+        {{- if .Values.consolidator.configToml }}
+        - name: config-toml
+          configMap:
+            name: {{ include "common.names.fullname" . }}-consolidator-config
+        {{- end }}
+        {{- if .Values.consolidator.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.consolidator.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
+{{- end }}

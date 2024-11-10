@@ -1,0 +1,37 @@
+{{- if .Values.consolidator.enabled }}
+{{- if .Values.consolidator.istio.enabled }}
+{{- if .Values.consolidator.istio.virtualservice.enabled }}
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{ include "common.names.fullname" . }}-consolidator
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  hosts:
+  - {{ default .Values.hostname .Values.consolidator.istio.virtualservice.host | quote }}
+  gateways:
+  - {{ default (include "common.names.fullname" .) .Values.consolidator.istio.virtualservice.gateway }}
+  http:
+  - headers:
+      request:
+        set:
+          x-forwarded-host: {{ default .Values.hostname .Values.consolidator.istio.virtualservice.host | quote }}
+          x-forwarded-proto: https
+    match:
+    - uri:
+        prefix: {{ .Values.consolidator.istio.virtualservice.prefix }}
+    {{- if .Values.consolidator.istio.virtualservice.rewriteUri }}
+    rewrite:
+      uri: {{ .Values.consolidator.istio.virtualservice.rewriteUri }}
+    {{- end }}
+    route:
+    - destination:
+        host: {{ include "common.tplvalues.render" (dict "value" .Values.consolidator.istio.virtualservice.destination "context" $) }}
+        port:
+          number: {{ include "common.tplvalues.render" (dict "value" .Values.consolidator.istio.virtualservice.destinationPort "context" $) }}
+{{- end }}
+{{- end }}
+{{- end }}

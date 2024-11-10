@@ -13,6 +13,10 @@ questions:
   type: string
   label: Esignet Hostname
 
+- variable: envVars.openg2p_social_registry_base_url
+  type: string
+  label: OpenG2P Social Registry Base URL
+
 - variable: envVars.openg2p_pbms_base_url
   type: string
   label: OpenG2P PBMS Base URL
