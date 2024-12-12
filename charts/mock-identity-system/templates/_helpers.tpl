@@ -16,7 +16,7 @@ Return the proper image name (for the init container volume-permissions image)
 Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "mock-identity-system.imagePullSecrets" -}}
-{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image .Values.postgresInit.image .Values.keygen.image) "global" .Values.global) -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.volumePermissions.image .Values.postgresInit.image) "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
@@ -84,13 +84,6 @@ Render Env values section
 {{- include "mock-identity-system.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
-{{- define "mock-identity-system.keygen.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.keygen.envVars) (deepCopy .Values.envVars) (.Values.springConfig.gitRepo.enabled | ternary (deepCopy .Values.springConfig.gitRepo.envVars) dict) -}}
-{{- $envVarsFrom := merge (deepCopy .Values.keygen.envVarsFrom) (deepCopy .Values.envVarsFrom) -}}
-{{- $_ := merge $envVars $envVarsFrom -}}
-{{- include "mock-identity-system.baseEnvVars" (dict "envVars" $envVars "context" $) }}
-{{- end -}}
-
 {{/*
 Return command
 */}}
@@ -110,8 +103,4 @@ args: []
 
 {{- define "mock-identity-system.command" -}}
 {{- include "mock-identity-system.commandBase" (dict "command" .Values.command "args" .Values.args "startUpCommand" .Values.startUpCommand "context" $) }}
-{{- end -}}
-
-{{- define "mock-identity-system.keygen.command" -}}
-{{- include "mock-identity-system.commandBase" (dict "command" .Values.keygen.command "args" .Values.keygen.args "startUpCommand" .Values.keygen.startUpCommand "context" $) }}
 {{- end -}}

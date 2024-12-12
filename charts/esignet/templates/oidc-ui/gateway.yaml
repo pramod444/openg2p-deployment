@@ -1,6 +1,9 @@
 {{- if .Values.oidcUi.enabled  }}
 {{- if .Values.oidcUi.istio.enabled  }}
 {{- if .Values.oidcUi.istio.gateway.enabled  }}
+{{- $istioGatewayHostname := include "common.tplvalues.render" (dict "value" .Values.oidcUi.istio.gateway.host "context" $) }}
+{{- $mainHostname := include "common.tplvalues.render" (dict "value" .Values.hostname "context" $) }}
+{{- $hostname := default $mainHostname $istioGatewayHostname }}
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
@@ -19,7 +22,7 @@ spec:
       number: 8080
       protocol: HTTP2
     hosts:
-      - {{ default .Values.hostname .Values.oidcUi.istio.gateway.host | quote }}
+      - {{ $hostname | quote }}
     {{- if .Values.oidcUi.istio.gateway.httpTlsRedirect }}
     tls:
       httpsRedirect: true
@@ -31,7 +34,7 @@ spec:
       number: 8443
       protocol: HTTPS
     hosts:
-      - {{ default .Values.hostname .Values.oidcUi.istio.gateway.host | quote }}
+      - {{ $hostname | quote }}
     tls:
       {{ toYaml (omit .Values.oidcUi.istio.gateway.tls "enabled") | nindent 6 }}
   {{- end }}

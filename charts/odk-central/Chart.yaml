@@ -2,19 +2,12 @@ apiVersion: v2
 name: odk-central
 description: A Helm chart for odk-central.
 type: application
-version: "v2024.2.1"
+version: "v2024.2.2"
+appVersion: "v2024.2.1"
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 2.x.x
-- name: postgresql
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 15.x.x
-  condition: postgresql.enabled
-- name: mail
-  alias: odk-central-mail
-  version: "1.2.0"
-  condition: odk-central-mail.enabled
 - name: odk-central-pyxform
   version: "v2024.2.1"
   condition: odk-central-pyxform.enabled

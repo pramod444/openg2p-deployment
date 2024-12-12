@@ -23,7 +23,7 @@ Return the config server image name
 Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "idgenerator.imagePullSecrets" -}}
-{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.springCloudConfig.image .Values.volumePermissions.image .Values.postgresInit.image) "global" .Values.global) -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.springCloudConfig.image .Values.volumePermissions.image) "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
@@ -68,11 +68,6 @@ Render Env values section
 
 {{- define "idgenerator.envVars" -}}
 {{- $envVars := merge (.Values.springCloudConfig.enabled | ternary (deepCopy .Values.springCloudConfigEnvVars) dict) (deepCopy .Values.coreEnvVars) (deepCopy .Values.coreEnvVarsFrom) (.Values.springCloudConfig.enabled | ternary dict (merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom))) -}}
-{{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
-{{- end -}}
-
-{{- define "idgenerator.postgresInit.envVars" -}}
-{{- $envVars := merge (deepCopy .Values.postgresInit.envVars) (deepCopy .Values.postgresInit.envVarsFrom) -}}
 {{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 

@@ -4,16 +4,21 @@ eSignet can now be installed directly as part of the respective OpenG2P Module. 
 
 Source code for [OpenG2P eSignet](../../charts/esignet) helm chart.
 
-This installs eSignet along with all the required dependencies like SoftHSM, MOSIP's Artifactory (to pull jars & artifacts), PostgreSQL, etc.
-This installs Mock Identity System and eSignet's OIDC UI modules also.
-
-Each of these dependencies can be disabled by setting the appropriate helm value. (Note: This doesn't install config server, it directly allows properties to be downloaded from git repos. See Parameters section below.)
+- Note: Till version 1.4.2, this helm chart used to install all dependencies of esignet along with it. The later versions only install eSignet, eSignet - UI (OIDC UI), and do NOT install the dependencies. The installation of dependencies is left to the user.
+- Note: This doesn't install config server, it directly allows properties to be downloaded from git repos. (See Parameters section below.)
 
 This helm chart is a fork of [MOSIP eSignet](https://github.com/mosip/esignet/tree/master/helm) helm chart, and applies additional modifications to make it easier to install eSignet seperately.
 
 ## Standalone Installation
 
 This section describes steps to install eSignet on your K8s cluster, if not installing as part of OpenG2P Module.
+
+### Prerequisites
+
+- Install postgresql with name like _esignet-postgresql_ (Recommended: Use bitnami/postgresql helm chart.)
+- Install Kafka with name like _esignet-kafka_ (Recommended: Use bitnami/kafka helm chart.)
+- Install Redis with name like _esignet-redis_ (Recommended: Use bitnami/redis helm chart.)
+- Install Mock Identity System with name like _esignet-mock-identity-system_ (Recommended: Use openg2p/mock-identity-system helm chart.)
 
 ### Using Rancher
 

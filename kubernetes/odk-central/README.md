@@ -1,13 +1,20 @@
 # ODK Central
 
-ODK Central can now be installed directly as part of the respective OpenG2P Module. For example, refer to [Social Registry deployment](https://docs.openg2p.org/social-registry/deployment) or [PBMS deployment](https://docs.openg2p.org/pbms/deployment).
+ODK Central can now be installed directly as part of the respective OpenG2P Module.
+For example, refer to [Social Registry deployment](https://docs.openg2p.org/social-registry/deployment) or [PBMS deployment](https://docs.openg2p.org/pbms/deployment).
 
 Source code for OpenG2P [ODK Central](../../charts/odk-central) helm chart.
-This installs ODK Central along with all the required dependencies.
+
+- Note: Till version v2024.2.1, this helm chart used to install all dependencies of odk-central along with it. The later versions do NOT. The installation of dependencies is left to the user.
 
 ## Standalone Installation
 
 This section describes steps to install ODK Central on your K8s cluster, if not installing as part of OpenG2P Modules.
+
+### Prerequisites
+
+- Install postgresql with name like _odk-central-postgresql_ (Recommended: Use bitnami/postgresql helm chart.)
+- Install mail helm chart with name like _odk-central-mail_ (Recommended: Use openg2p/mail helm chart.)
 
 ### Using Rancher
 
@@ -39,6 +46,7 @@ For advanced config values refer to [odk-central/values.yaml](../../charts/odk-c
 |Name|Description|Default value|
 |-|-|-|
 |hostname|Hostname to access ODK Central|odk.sandbox.your.org|
+|backend.envVars.OIDC_ENABLED|OIDC Enabled|true|
 |backend.envVars.OIDC_ISSUER_URL|OIDC Issuer URL|https://keycloak.your.org/realms/master|
 |backend.envVars.OIDC_CLIENT_ID|OIDC Client ID||
 |backend.envVars.OIDC_CLIENT_SECRET|OIDC Client Secret||

@@ -1,4 +1,7 @@
 {{- if .Values.ingress.enabled }}
+{{- $ingressHostname := include "common.tplvalues.render" (dict "value" .Values.ingress.hostname "context" $) }}
+{{- $mainHostname := include "common.tplvalues.render" (dict "value" .Values.hostname "context" $) }}
+{{- $hostname := default $mainHostname $ingressHostname }}
 apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
 kind: Ingress
 metadata:
@@ -16,8 +19,8 @@ spec:
   ingressClassName: {{ .Values.ingress.ingressClassName | quote }}
   {{- end }}
   rules:
-    {{- if (default .Values.hostname .Values.ingress.hostname | quote) }}
-    - host: {{ default .Values.hostname .Values.ingress.hostname | quote }}
+    {{- if $hostname }}
+    - host: {{ $hostname | quote }}
       http:
     {{- else }}
     - http:
@@ -38,8 +41,8 @@ spec:
   tls:
     {{- if .Values.ingress.tls }}
     - hosts:
-        - {{ default .Values.hostname .Values.ingress.hostname | quote }}
-      secretName: {{ printf "%s-tls" (default .Values.hostname .Values.ingress.hostname) }}
+        - {{ $hostname | quote }}
+      secretName: {{ $hostname }}-tls
     {{- end }}
     {{- if .Values.ingress.extraTls }}
     {{- include "common.tplvalues.render" (dict "value" .Values.ingress.extraTls "context" $) | nindent 4 }}

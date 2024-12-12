@@ -1,16 +1,24 @@
 # Keymanager
 
-Keymanager can now be installed directly as part of the respective OpenG2P Module. For example, refer to [Social Registry deployment](https://docs.openg2p.org/social-registry/deployment) or [PBMS deployment](https://docs.openg2p.org/pbms/deployment).
+Keymanager can now be installed directly as part of the respective OpenG2P Module.
+For example, refer to [Social Registry deployment](https://docs.openg2p.org/social-registry/deployment) or [PBMS deployment](https://docs.openg2p.org/pbms/deployment).
 
 Source code for [OpenG2P Keymanager](../../charts/keymanager) helm chart.
 
-This installs Keymanager along with all the required dependencies like SoftHSM, MOSIP's Artifactory (to pull jars & artifacts), PostgreSQL, etc. Each of these dependencies can be disabled by setting the appropriate helm value. (Note: This doesn't install config server, it directly allows properties to be downloaded from git repos. See Parameters section below.)
+- Note: Till version 1.2.0.1, this helm chart used to install all dependencies of keymanager along with it. The later versions do NOT. The installation of dependencies is left to the user.
+- Note: This doesn't require config-server, it directly allows properties to be downloaded from git repos. (See Parameters section below.)
 
-This helm chart is a fork of [MOSIP Keymanager](https://github.com/mosip/mosip-helm/tree/master/charts/keymanager) helm chart, and applies additional modifications to make it easier to install Keymanager seperately.
+This helm chart is a fork of [MOSIP Keymanager](https://github.com/mosip/mosip-helm/tree/master/charts/keymanager) helm chart, and applies additional modifications to make it easier to install Keymanager  (or with OpenG2P modules).
 
 ## Standalone Installation
 
 This section describes steps to install Keymanager on your K8s cluster, if not installing as part of OpenG2P Module.
+
+### Prerequisites
+
+- Install postgresql with name like _keymanager-postgresql_ (Recommended: Use bitnami/postgresql helm chart.)
+- Install softhsm with name like _keymanager-softhsm_ (Recommended: Use mosip/softhsm helm chart.)
+- Install Artifactory with name like _keymanager-artifactory_ (Recommended: Use openg2p/artifactory helm chart.)
 
 ### Using Rancher
 

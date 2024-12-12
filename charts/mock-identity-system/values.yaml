@@ -406,46 +406,10 @@ istio:
       mode: SIMPLE
       credentialName: ""
 
-artifactory:
-  enabled: true
-  nameOverride: mock-id-artifactory
-  image:
-    registry: docker.io
-    repository: mosipid/artifactory-server
-    tag: 1.4.1-ES
-  resources: {}
-
-postgresql:
-  # any other postgres helm chart configuration here
-  enabled: true
-  nameOverride: mock-id-postgresql
-  auth:
-    username: mockidsystemuser
-    database: mosip_mockidentitysystem
-  primary:
-    extendedConfiguration: |-
-      wal_level = logical
-      max_wal_senders = 20
-      max_replication_slots = 10
-  istio:
-    enabled: false
-    virtualservice:
-      enabled: true
-      host: "*"
-      gateway: ""
-      matchPort: 5432
-      destination: '{{ tpl .Values.postgresqlInstallationName $ }}'
-      destinationPort: "5432"
-    gateway:
-      enabled: true
-      port: 5432
-      host: "*"
-      ingressController:
-        istio: ingressgateway
-      tls:
-        enabled: false
-        mode: SIMPLE
-        credentialName: ""
+## Edit the following properties with names of installation of the dependencies.
+artifactoryInstallationName: '{{ .Release.Name }}-artifactory'
+postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
+softhsmInstallationName: '{{ .Release.Name }}-softhsm'
 
 postgresInit:
   enabled: true
@@ -486,71 +450,6 @@ postgresInit:
       secretKeyRef:
         name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
-
-softhsm:
-  enabled: true
-  nameOverride: mock-id-softhsm
-  # Hardcoding this for now. else every upgrade will reset the pin
-  securityPIN: OTAxNDQyMzg=
-  resources: {}
-
-keygen:
-  # Key generator is not required for mock identity system.
-  # But this is still left here for future.
-  enabled: false
-  image:
-    registry: docker.io
-    repository: mosipid/keys-generator
-    tag: 1.2.0.1-B3
-    pullPolicy: Always
-  containerSecurityContext:
-    enabled: false
-  podSecurityContext:
-    enabled: false
-  commonAnnotations:
-    "helm.sh/hook": post-install
-    "helm.sh/hook-weight": "1"
-    "helm.sh/hook-delete-policy": before-hook-creation
-  command: []
-  args: []
-  extraVolumes: []
-  extraVolumeMounts: []
-  envVars: {}
-  envVarsFrom: {}
-  startUpCommand: |-
-    #!/usr/bin/env bash
-
-    echo "Waiting for artifactory..."
-    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/"; then
-      echo "Connecting with artifactory failed after max retries..."
-      exit 1
-    fi
-
-    ./configure_start.sh
-
-    ADDL_ARGS=()
-
-    if [ "$SPRING_CONFIG_GIT_ENABLED" = "true" ]; then
-      git clone --branch "${SPRING_CONFIG_GIT_BRANCH}" --depth 1 "${SPRING_CONFIG_GIT_REPO}" springConfig
-    fi
-
-    config_locations="classpath:/bootstrap.properties,"
-    IFS=","
-    for config_name in $SPRING_CONFIG_NAMES; do
-      conf_loc="springConfig/${config_name}${SPRING_CONFIG_PROFILE:+-$SPRING_CONFIG_PROFILE}.properties"
-      if [[ -f "$conf_loc" ]]; then
-        config_locations+="${conf_loc},"
-      fi
-    done
-    unset IFS
-    ADDL_ARGS+=("-Dspring.config.location=${config_locations::-1}")
-    ADDL_ARGS+=("-Dspring.profiles.active=${SPRING_CONFIG_PROFILE}")
-
-    ADDL_ARGS+=("-Dspring.cloud.config.enabled=false")
-    ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
-    ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
-
-    exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
 
 envVars:
   JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
@@ -651,8 +550,3 @@ startUpCommand: |-
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
 
   exec java -jar ${ADDL_ARGS[@]} ./mock-identity-system.jar
-
-## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
-artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
-softhsmInstallationName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
