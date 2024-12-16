@@ -8,6 +8,7 @@ spec:
     istio: ingressgateway
   servers:
   - hosts:
+    - "${HOSTNAME}"
     - "${WILDCARD_HOSTNAME}"
     port:
       name: http2-redirect-https
@@ -16,6 +17,7 @@ spec:
     tls:
       httpsRedirect: true
   - hosts:
+    - "${HOSTNAME}"
     - "${WILDCARD_HOSTNAME}"
     port:
       name: http2
