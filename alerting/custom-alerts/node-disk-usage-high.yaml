@@ -10,7 +10,7 @@ spec:
         - alert: NodeStorageUsageHigh
           annotations:
             description: >-
-              Node {{ $labels.instance }} storage usage is above 90%. 
+              Node {{ $labels.instance }} storage usage is above 90%.
               Current usage: {{ $value | humanizePercentage }}.
             runbook_url: >-
               https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodestorageusagehigh
@@ -22,4 +22,3 @@ spec:
           for: 30s
           labels:
             severity: critical
-

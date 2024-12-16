@@ -20,4 +20,3 @@ spec:
           for: 300s
           labels:
             severity: critical
-
