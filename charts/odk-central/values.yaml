@@ -13,41 +13,8 @@ serviceAccount:
   create: true
   name: ""
 
-postgresql:
-  # any other postgres helm chart configuration here
-  enabled: true
-  nameOverride: odk-central-postgresql
-  auth:
-    username: odkuser
-    database: odkdb
-  primary:
-    extendedConfiguration: |-
-      wal_level = logical
-      max_wal_senders = 20
-      max_replication_slots = 10
-  istio:
-    enabled: false
-    virtualservice:
-      enabled: true
-      host: "*"
-      gateway: ""
-      matchPort: 5432
-      destination: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
-      destinationPort: "5432"
-    gateway:
-      enabled: true
-      port: 5432
-      host: "*"
-      ingressController:
-        istio: ingressgateway
-      tls:
-        enabled: false
-        mode: SIMPLE
-        credentialName: ""
-
-odk-central-mail:
-  enabled: true
-  mailname: "openg2p.sandbox.net"
+postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
+mailInstallationName: '{{ .Release.Name }}-mail'
 
 odk-central-pyxform:
   enabled: true
@@ -129,9 +96,9 @@ backend:
     SYSADMIN_EMAIL: '{{ tpl .Values.global.sysAdminEmail $ }}'
     NODE_OPTIONS: ''
 
-    DB_HOST: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
-    DB_USER: '{{ tpl .Values.postgresql.auth.username $ }}'
-    DB_NAME: '{{ tpl .Values.postgresql.auth.database $ }}'
+    DB_HOST: '{{ tpl .Values.postgresqlInstallationName $ }}'
+    DB_NAME: odkdb
+    DB_USER: odkuser
     DB_SSL: "null"
 
     ENKETO_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-enketo") }}'
@@ -141,7 +108,7 @@ backend:
     PYXFORM_PORT: "80"
 
     EMAIL_FROM: 'no-reply@{{ tpl .Values.hostname $ }}'
-    EMAIL_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-mail") }}'
+    EMAIL_HOST: '{{ tpl .Values.mailInstallationName $ }}'
     EMAIL_PORT: "25"
     EMAIL_SECURE: "false"
     EMAIL_IGNORE_TLS: "true"
@@ -165,7 +132,7 @@ backend:
   envVarsFrom:
     DB_PASSWORD:
       secretKeyRef:
-        name: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'
+        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
     ENKETO_API_KEY:
       secretKeyRef:

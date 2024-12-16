@@ -27,7 +27,7 @@ route:
       alertname: KubePersistentVolumeFilling-greater-than-90%
     receiver: 'slack'
   - match:
-      alertname: AggregatedAPIDown 
+      alertname: AggregatedAPIDown
     receiver: 'null'
   - match:
       alertname: KubeClientErrors

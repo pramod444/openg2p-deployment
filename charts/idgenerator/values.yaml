@@ -53,7 +53,7 @@ service:
 image:
   registry: docker.io
   repository: mosipid/kernel-idgenerator-service
-  tag: 1.2.0.1-B2
+  tag: 1.2.0.1
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -409,88 +409,9 @@ istio:
       mode: SIMPLE
       credentialName: ""
 
-artifactory:
-  enabled: true
-  rbac:
-    create: false
-  nameOverride: idgenerator-artifactory
-  image:
-    registry: docker.io
-    repository: mosipid/artifactory-server
-    tag: 1.4.0-ES
-  resources: {}
-
-postgresql:
-  # any other postgres helm chart configuration here
-  enabled: true
-  nameOverride: idgenerator-postgresql
-  auth:
-    username: kerneluser
-    database: mosip_kernel
-  primary:
-    extendedConfiguration: |-
-      wal_level = logical
-      max_wal_senders = 20
-      max_replication_slots = 10
-  istio:
-    enabled: false
-    virtualservice:
-      enabled: true
-      host: "*"
-      gateway: ""
-      matchPort: 5432
-      destination: '{{ tpl .Values.postgresqlInstallationName $ }}'
-      destinationPort: "5432"
-    gateway:
-      enabled: true
-      port: 5432
-      host: "*"
-      ingressController:
-        istio: ingressgateway
-      tls:
-        enabled: false
-        mode: SIMPLE
-        credentialName: ""
-
-postgresInit:
-  enabled: true
-  image:
-    registry: docker.io
-    repository: mosipid/postgres-init
-    tag: 1.2.0.1-B4
-    pullPolicy: Always
-  containerSecurityContext:
-    enabled: false
-  podSecurityContext:
-    enabled: false
-  commonAnnotations:
-    "helm.sh/hook": post-install
-    "helm.sh/hook-weight": "0"
-    "helm.sh/hook-delete-policy": before-hook-creation
-  command:
-    - bash
-  args:
-    - -c
-    - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
-
-  envVars:
-    MOSIP_DB_NAME: mosip_kernel
-    DB_SERVERIP: '{{ tpl .Values.postgresqlInstallationName $ }}'
-    DB_PORT: '5432'
-    SU_USER: postgres
-    DB_USER: kerneluser
-    DML_FLAG: '0'
-    GIT_REPO_URL: https://github.com/mosip/commons.git
-    GIT_BRANCH: v1.2.0.1-B2
-  envVarsFrom:
-    SU_USER_PWD:
-      secretKeyRef:
-        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
-        key: postgres-password
-    DBUSER_PWD:
-      secretKeyRef:
-        name: '{{ tpl .Values.postgresqlInstallationName $ }}'
-        key: password
+## Edit the following properties with names of installation of the dependencies.
+artifactoryInstallationName: '{{ .Release.Name }}-artifactory'
+postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
 
 coreEnvVars:
   # Env Vars from this section will always be rendered on the service
@@ -697,7 +618,3 @@ startUpCommand: |-
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
 
   exec java -jar ${ADDL_ARGS[@]} ./kernel-idgenerator-service.jar
-
-## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
-artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'

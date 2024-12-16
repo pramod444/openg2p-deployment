@@ -407,48 +407,10 @@ istio:
       mode: SIMPLE
       credentialName: ""
 
-artifactory:
-  enabled: true
-  rbac:
-    create: false
-  nameOverride: keymanager-artifactory
-  image:
-    registry: docker.io
-    repository: mosipid/artifactory-server
-    tag: 1.4.0-ES
-  resources: {}
-
-postgresql:
-  # any other postgres helm chart configuration here
-  enabled: true
-  nameOverride: keymanager-postgresql
-  auth:
-    username: keymgruser
-    database: mosip_keymgr
-  primary:
-    extendedConfiguration: |-
-      wal_level = logical
-      max_wal_senders = 20
-      max_replication_slots = 10
-  istio:
-    enabled: false
-    virtualservice:
-      enabled: true
-      host: "*"
-      gateway: ""
-      matchPort: 5432
-      destination: '{{ tpl .Values.postgresqlInstallationName $ }}'
-      destinationPort: "5432"
-    gateway:
-      enabled: true
-      port: 5432
-      host: "*"
-      ingressController:
-        istio: ingressgateway
-      tls:
-        enabled: false
-        mode: SIMPLE
-        credentialName: ""
+## Edit the following properties with names of installation of the dependencies.
+artifactoryInstallationName: '{{ .Release.Name }}-artifactory'
+softhsmInstallationName: '{{ .Release.Name }}-softhsm'
+postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
 
 postgresInit:
   enabled: true
@@ -489,13 +451,6 @@ postgresInit:
       secretKeyRef:
         name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
-
-softhsm:
-  enabled: true
-  nameOverride: keymanager-softhsm
-  # Hardcoding this for now. else every upgrade will reset the pin
-  securityPIN: MTYwMzIyMjg=
-  resources: {}
 
 keygen:
   enabled: true
@@ -667,8 +622,3 @@ startUpCommand: |-
   ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
 
   exec java -jar ${ADDL_ARGS[@]} ./kernel-keymanager-service.jar
-
-## The following properties should only be edited when an existing installation of the dependency already exists and you want to resue it, without installing it again.
-artifactoryInstallationName: '{{ include "common.names.fullname" .Subcharts.artifactory }}'
-softhsmInstallationName: '{{ include "common.names.fullname" .Subcharts.softhsm }}'
-postgresqlInstallationName: '{{ include "postgresql.v1.primary.fullname" .Subcharts.postgresql }}'

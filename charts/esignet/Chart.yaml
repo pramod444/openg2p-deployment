@@ -2,33 +2,12 @@ apiVersion: v2
 name: esignet
 description: A Helm chart for MOSIP eSignet module
 type: application
-version: 1.4.1
+version: 1.4.2
+appVersion: 1.4.1
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 2.x.x
-- name: postgresql
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 15.x.x
-  condition: postgresql.enabled
-- name: redis
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 19.x.x
-  condition: redis.enabled
-- name: kafka
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 29.x.x
-  condition: kafka.enabled
-- name: softhsm
-  repository: https://mosip.github.io/mosip-helm
-  version: 12.0.1-B2
-  condition: softhsm.enabled
-- name: artifactory
-  version: 12.0.2
-  condition: artifactory.enabled
-- name: mock-identity-system
-  version: 0.9.3
-  condition: mock-identity-system.enabled
 home: https://mosip.io
 keywords:
   - mosip

@@ -10,7 +10,7 @@ spec:
         - alert: NodeAverageCPULoadHigh
           annotations:
             description: >-
-              Node {{ $labels.instance }} has a 5-minute load average 
+              Node {{ $labels.instance }} has a 5-minute load average
               higher than the number of CPUs for more than 5 minutes.
             runbook_url: >-
               https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodeaveragecpuloadhigh

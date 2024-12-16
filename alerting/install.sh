@@ -1,5 +1,5 @@
 #!/bin/bash
-# Patch notification alerts 
+# Patch notification alerts
 
 NS=cattle-monitoring-system
 
