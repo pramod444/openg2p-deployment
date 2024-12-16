@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: custom-nodes-average-cpu-load-high
+  namespace: cattle-monitoring-system
+spec:
+  groups:
+    - name: node
+      rules:
+        - alert: NodeAverageCPULoadHigh
+          annotations:
+            description: >-
+              Node {{ $labels.instance }} has a 5-minute load average 
+              higher than the number of CPUs for more than 5 minutes.
+            runbook_url: >-
+              https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodeaveragecpuloadhigh
+            summary: High average CPU load on node {{ $labels.instance }}.
+          expr: node_load5 > node:node_num_cpu:sum
+          for: 5m
+          labels:
+            severity: critical
