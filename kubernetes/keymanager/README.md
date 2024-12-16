@@ -5,7 +5,7 @@ For example, refer to [Social Registry deployment](https://docs.openg2p.org/soci
 
 Source code for [OpenG2P Keymanager](../../charts/keymanager) helm chart.
 
-- Note: Till version 1.2.0.1, this helm chart used to install all dependencies of keymanager along with it. The later versions do NOT. The installation of dependencies is left to the user.
+- Note: Helm chart versions 12.0.1 and lower install all dependencies of keymanager along with them. Versions 12.0.2 and higher do NOT install dependencies. The installation of dependencies is left to the user.
 - Note: This doesn't require config-server, it directly allows properties to be downloaded from git repos. (See Parameters section below.)
 
 This helm chart is a fork of [MOSIP Keymanager](https://github.com/mosip/mosip-helm/tree/master/charts/keymanager) helm chart, and applies additional modifications to make it easier to install Keymanager  (or with OpenG2P modules).

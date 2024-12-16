@@ -5,7 +5,7 @@ For example, refer to [Social Registry deployment](https://docs.openg2p.org/soci
 
 Source code for OpenG2P [ODK Central](../../charts/odk-central) helm chart.
 
-- Note: Till version v2024.2.1, this helm chart used to install all dependencies of odk-central along with it. The later versions do NOT. The installation of dependencies is left to the user.
+- Note: Helm chart versions v2024.2.0 and lower install all dependencies of odk-central along with them. Versions v2024.2.1 and higher do NOT. The installation of dependencies is left to the user.
 
 ## Standalone Installation
 

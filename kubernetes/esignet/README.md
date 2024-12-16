@@ -4,7 +4,7 @@ eSignet can now be installed directly as part of the respective OpenG2P Module. 
 
 Source code for [OpenG2P eSignet](../../charts/esignet) helm chart.
 
-- Note: Till version 1.4.2, this helm chart used to install all dependencies of esignet along with it. The later versions only install eSignet, eSignet - UI (OIDC UI), and do NOT install the dependencies. The installation of dependencies is left to the user.
+- Note: Helm chart versions 1.4.1 and lower install all dependencies of esignet along with them. Versions 1.4.2 and higher only install eSignet, eSignet - UI (OIDC UI), and do NOT install the dependencies. The installation of dependencies is left to the user.
 - Note: This doesn't install config server, it directly allows properties to be downloaded from git repos. (See Parameters section below.)
 
 This helm chart is a fork of [MOSIP eSignet](https://github.com/mosip/esignet/tree/master/helm) helm chart, and applies additional modifications to make it easier to install eSignet seperately.
