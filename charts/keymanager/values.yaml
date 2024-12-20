@@ -51,7 +51,6 @@ service:
   externalTrafficPolicy: Cluster
 
 image:
-  registry: docker.io
   repository: mosipid/kernel-keymanager-service
   tag: 1.2.0.1-B4
   ## Specify a imagePullPolicy
@@ -283,7 +282,6 @@ persistence:
 volumePermissions:
   enabled: false
   image:
-    registry: docker.io
     repository: bitnami/bitnami-shell
     tag: "10"
     pullPolicy: Always
@@ -415,7 +413,6 @@ postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
 postgresInit:
   enabled: true
   image:
-    registry: docker.io
     repository: mosipid/postgres-init
     tag: 1.2.0.1-B4
     pullPolicy: Always
@@ -455,7 +452,6 @@ postgresInit:
 keygen:
   enabled: true
   image:
-    registry: docker.io
     repository: mosipid/keys-generator
     tag: 1.2.0.1-B4
     pullPolicy: Always
