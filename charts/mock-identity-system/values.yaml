@@ -49,7 +49,6 @@ service:
   externalTrafficPolicy: Cluster
 
 image:
-  registry: docker.io
   repository: mosipid/mock-identity-system
   tag: 0.9.3
   ## Specify a imagePullPolicy
@@ -281,7 +280,6 @@ persistence:
 volumePermissions:
   enabled: false
   image:
-    registry: docker.io
     repository: bitnami/bitnami-shell
     tag: "10"
     pullPolicy: Always
@@ -414,7 +412,6 @@ softhsmInstallationName: '{{ .Release.Name }}-softhsm'
 postgresInit:
   enabled: true
   image:
-    registry: docker.io
     repository: mosipid/postgres-init
     tag: 1.2.0.1-B4
     pullPolicy: Always

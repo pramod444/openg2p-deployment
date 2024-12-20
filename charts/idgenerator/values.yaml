@@ -51,7 +51,6 @@ service:
   externalTrafficPolicy: Cluster
 
 image:
-  registry: docker.io
   repository: mosipid/kernel-idgenerator-service
   tag: 1.2.0.1
   ## Specify a imagePullPolicy
@@ -285,7 +284,6 @@ persistence:
 volumePermissions:
   enabled: false
   image:
-    registry: docker.io
     repository: bitnami/bitnami-shell
     tag: "10"
     pullPolicy: Always
@@ -474,7 +472,6 @@ springCloudConfig:
       https: ""
     externalTrafficPolicy: Cluster
   image:
-    registry: docker.io
     repository: mosipid/config-server
     tag: 1.1.2
     pullPolicy: Always
@@ -542,7 +539,6 @@ springCloudConfig:
   volumePermissions:
     enabled: false
     image:
-      registry: docker.io
       repository: bitnami/bitnami-shell
       tag: "10"
       pullPolicy: Always
