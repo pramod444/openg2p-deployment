@@ -15,10 +15,11 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "common.names.fullname" . }}-redis-main
     spec:
+      {{- include "odkEnketo.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: redis
-          image: {{ .Values.redis.main.image }}
-          imagePullPolicy: {{ .Values.redis.main.imagePullPolicy }}
+          image: {{ include "common.images.image" (dict "imageRoot" .Values.redis.main.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.redis.main.image.pullPolicy }}
           {{- with .Values.command }}
           command:
             {{- toYaml . | nindent 12 }}

@@ -87,8 +87,10 @@ envVarsFrom:
 redis:
   main:
     enabled: true
-    image: redis:7.2
-    imagePullPolicy: IfNotPresent
+    image:
+      repository: redis
+      tag: '7.2'
+      pullPolicy: IfNotPresent
     replicaCount: 1
     confMountPath: /usr/local/etc/redis/mnt
     command:
@@ -100,8 +102,10 @@ redis:
       port: 6379
   cache:
     enabled: true
-    image: redis:7.2
-    imagePullPolicy: IfNotPresent
+    image:
+      repository: redis
+      tag: '7.2'
+      pullPolicy: IfNotPresent
     replicaCount: 1
     confMountPath: /usr/local/etc/redis/mnt
     command:

@@ -246,11 +246,11 @@ frontend:
   enabled: true
   replicaCount: 1
 
-  containerPort: 80
   podAnnotations: {}
   podLabels:
     app.kubernetes.io/name: '{{ include "common.names.name" . }}-frontend'
 
+  containerPort: 80
   service:
     type: ClusterIP
     port: 80

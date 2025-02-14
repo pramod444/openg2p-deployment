@@ -1,4 +1,11 @@
 {{/*
+Return the Image Registry Secret Names
+*/}}
+{{- define "odkEnketo.imagePullSecrets" -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.image .Values.redis.main.image .Values.redis.cache.image) "global" .Values.global) -}}
+{{- end -}}
+
+{{/*
 Render Env values section
 */}}
 {{- define "odkEnketo.baseEnvVars" -}}
