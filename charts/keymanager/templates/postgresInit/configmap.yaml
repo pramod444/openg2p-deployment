@@ -1,0 +1,19 @@
+{{- if and .Values.postgresInit.enabled .Values.postgresInit.keyPolicyDef.enabled .Values.postgresInit.startUpCommand }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-postgres-init
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+  {{- end }}
+data:
+  {{- if .Values.postgresInit.startUpCommand }}
+  startup-command-sh: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.startUpCommand "context" $) | nindent 4 }}
+  {{- end }}
+  {{- if .Values.postgresInit.keyPolicyDef.enabled }}
+  key-policy-def-csv: |-
+    {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.keyPolicyDef.csv "context" $) | nindent 4 }}
+  {{- end }}
+{{- end }}

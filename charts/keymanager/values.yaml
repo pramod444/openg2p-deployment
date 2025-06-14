@@ -52,7 +52,7 @@ service:
 
 image:
   repository: mosipid/kernel-keymanager-service
-  tag: 1.2.0.1-B4
+  tag: 1.2.1.0
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -255,59 +255,26 @@ initContainers: []
 sidecars: []
 
 persistence:
-  enabled: false
-  ## If defined, storageClassName: <storageClass>
-  ## If set to "-", storageClassName: "", which disables dynamic provisioning
-  ## If undefined (the default) or set to null, no storageClassName spec is
-  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
-  ##   GKE, AWS & OpenStack).
-  ##
-  # storageClass: "-"
-  ##
-  ## If you want to reuse an existing claim, you can pass the name of the PVC using
-  ## the existingClaim variable
-  # existingClaim: your-claim
+  enabled: true
+  storageClassName: ""
   ## ReadWriteMany not supported by AWS gp2
-  storageClass:
   accessModes:
     - ReadWriteOnce
   size: 10M
-  existingClaim:
+  ## If you want to reuse an existing claim, you can pass the name of the PVC using
+  ## the existingClaim variable. New PVC wont be created when this variable is set.
+  # existingClaim: your-claim
+  existingClaim: ""
   # Dir where config and keys are written inside container
-  mountDir:
+  mountPath: "/data/keymanager"
 
 ## Init containers parameters:
-## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
+## volumePermissions: Change the owner and group of the persistent volume mountpoint.
 ##
 volumePermissions:
   enabled: false
-  image:
-    repository: bitnami/bitnami-shell
-    tag: "10"
-    pullPolicy: Always
-    ## Optionally specify an array of imagePullSecrets.
-    ## Secrets must be manually created in the namespace.
-    ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-    ##
-    pullSecrets: []
-    ##   - myRegistryKeySecretName
-  ## Init containers' resource requests and limits
-  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
-  ##
-  resources:
-    ## We usually recommend not to specify default resources and to leave this as a conscious
-    ## choice for the user. This also increases chances charts run on environments with little
-    ## resources, such as Minikube. If you do want to specify resources, uncomment the following
-    ## lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    ##
-    limits: {}
-    ##   cpu: 100m
-    ##   memory: 128Mi
-    ##
-    requests: {}
-    ##   cpu: 100m
-    ##   memory: 128Mi
-    ##
+  chownUser: mosip
+  chownGroup: root
 
 ## Specifies whether a ServiceAccount should be created
 ##
@@ -384,7 +351,7 @@ extraVolumes: []
 extraVolumeMounts: []
 
 istio:
-  enabled: true
+  enabled: false
   virtualservice:
     enabled: true
     host: ""
@@ -405,6 +372,15 @@ istio:
       mode: SIMPLE
       credentialName: ""
 
+authEnabled: true
+glowrootEnabled: false
+keystoreType: PKCS12
+p11ConfigPath: /config/softhsm-application.conf
+p12KeystorePath: '{{ tpl .Values.persistence.mountPath $ }}/keystore.p12'
+p12KeystorePass: ''
+skipPostgresInitCheck: false  # Enable this to always run keymanager even if postgresInit is not done
+skipKeygenCheck: false  # Enable this to always run keymanager even if keygen is not done
+
 ## Edit the following properties with names of installation of the dependencies.
 artifactoryInstallationName: '{{ .Release.Name }}-artifactory'
 softhsmInstallationName: '{{ .Release.Name }}-softhsm'
@@ -412,9 +388,10 @@ postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
 
 postgresInit:
   enabled: true
+  forceRun: false  # Use this to always run postgresInit even if postgresInit already done.
   image:
     repository: mosipid/postgres-init
-    tag: 1.2.0.1-B4
+    tag: 1.2.0.2
     pullPolicy: Always
   containerSecurityContext:
     enabled: false
@@ -424,11 +401,10 @@ postgresInit:
     "helm.sh/hook": post-install
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation
-  command:
-    - bash
-  args:
-    - -c
-    - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
+  command: []
+  args: []
+  extraVolumeMounts: []
+  extraVolumes: []
 
   envVars:
     MOSIP_DB_NAME: mosip_keymgr
@@ -438,7 +414,7 @@ postgresInit:
     DB_USER: keymgruser
     DML_FLAG: '1'
     GIT_REPO_URL: https://github.com/mosip/keymanager.git
-    GIT_BRANCH: v1.2.0.1-B4
+    GIT_BRANCH: v1.2.1.0
   envVarsFrom:
     SU_USER_PWD:
       secretKeyRef:
@@ -449,11 +425,74 @@ postgresInit:
         name: '{{ tpl .Values.postgresqlInstallationName $ }}'
         key: password
 
+  keyPolicyDef:
+    enabled: true
+    mountPath: "/home/mosip/repos/keymanager-mnt/db_scripts/mosip_keymgr/dml/keymgr-key_policy_def.csv"
+    key_validity_duration: "1095"
+    is_active: "TRUE"
+    cr_by: mosipadmin
+    cr_dtimes: "now()"
+    pre_expire_days: "60"
+    access_allowed: "NA"
+    addl_kpd: |-
+      ROOT,2920,TRUE,mosipadmin,now(),1125,NA
+      BASE,730,TRUE,mosipadmin,now(),30,NA
+    csv: |-
+      app_id,key_validity_duration,is_active,cr_by,cr_dtimes,pre_expire_days,access_allowed
+      {{- $kpd := .Values.postgresInit.keyPolicyDef }}
+      {{- range .Values.keygen.appIdsList }}
+      {{ tpl . $ }},{{ tpl $kpd.key_validity_duration $ }},{{ tpl $kpd.is_active $ }},{{ tpl $kpd.cr_by $ }},{{ tpl $kpd.cr_dtimes $ }},{{ tpl $kpd.pre_expire_days $ }},{{ tpl $kpd.access_allowed $ }}
+      {{- end }}
+      {{- if .Values.postgresInit.keyPolicyDef.addl_kpd }}
+      {{ tpl .Values.postgresInit.keyPolicyDef.addl_kpd $ }}
+      {{- end }}
+
+  startUpCommand: |-
+    #!/usr/bin/env bash
+
+    set -o pipefail
+    set -e
+    shopt -s nullglob
+
+    {{ if .Values.persistence.enabled -}}
+    {{ if not .Values.postgresInit.forceRun -}}
+    if [ -f "{{ tpl .Values.persistence.mountPath $ }}/.postgres_init_done" ]; then
+      echo "Already initialized."
+      exit 0
+    fi
+    {{- end }}
+    {{- if .Values.volumePermissions.enabled }}
+    echo "Changing Volume permissions"
+    mkdir -p {{ tpl .Values.persistence.mountPath $ }}
+    find {{ tpl .Values.persistence.mountPath $ }} -mindepth 1 -maxdepth 1 -not -name ".snapshot" -not -name "lost+found" | xargs -r chown -R {{ tpl .Values.volumePermissions.chownUser $ }}:{{ tpl .Values.volumePermissions.chownGroup $ }}
+    {{- end }}
+    {{- end }}
+
+    until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done
+
+    echo "Cloning $GIT_BRANCH of repo $GIT_REPO_URL for $MOSIP_DB_NAME db_scripts"
+    git clone --depth 1 --single-branch --branch $GIT_BRANCH $GIT_REPO_URL keymanager
+    echo "Sucessfully cloned the repository."
+
+    if [ -d keymanager-mnt ] && [ -n "$(ls -A keymanager-mnt)" ]; then
+      echo "Copying mounted files."
+      cp -r keymanager-mnt/* keymanager
+    fi
+
+    cd keymanager/db_scripts/$MOSIP_DB_NAME
+    echo "Executing db_script"
+    bash deploy.sh
+
+    {{ if .Values.persistence.enabled -}}
+    touch "{{ tpl .Values.persistence.mountPath $ }}/.postgres_init_done"
+    {{- end }}
+
 keygen:
   enabled: true
+  forceRun: false  # Use this to always run keygen even if keygen already done.
   image:
     repository: mosipid/keys-generator
-    tag: 1.2.0.1-B4
+    tag: 1.2.1.0
     pullPolicy: Always
   containerSecurityContext:
     enabled: false
@@ -469,16 +508,49 @@ keygen:
   extraVolumeMounts: []
   envVars: {}
   envVarsFrom: {}
+  initContainers: []
+  # Use this to generate module level keys. Module level keys are stored in HSM/P12 (based on the keystoreType property.)
+  # This translates to the below mentioned property in mosip-config.
+  # mosip.kernel.keymanager.autogen.appids.list
+  appIdsList:
+  - OPENG2P
+
+  # Use this to generate base keys. Base keys are stored in database.
+  # This translates to the below mentioned property in mosip-config.
+  # mosip.kernel.keymanager.autogen.basekeys.list
+  baseKeysList:
+  - "OPENG2P:ENCRYPT"
+
   startUpCommand: |-
     #!/usr/bin/env bash
 
-    echo "Waiting for artifactory..."
-    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/$zip_path"; then
-      echo "Connecting with artifactory failed after max retries..."
-      exit 1
+    set -o pipefail
+    set -e
+    shopt -s nullglob
+
+    {{ if .Values.persistence.enabled -}}
+    {{ if not .Values.keygen.forceRun -}}
+    if [ -f "{{ tpl .Values.persistence.mountPath $ }}/.keygen_done" ]; then
+      echo "Already initialized."
+      exit 0
+    fi
+    {{- end }}
+    {{- if .Values.postgresInit.enabled }}
+    until [ -f "{{ tpl .Values.persistence.mountPath $ }}/.postgres_init_done" ]; do echo "Waiting for postgres_init_done"; sleep 3; done
+    {{- end }}
+    {{- end }}
+
+    if [ -n "$iam_adapter_url_env" ]; then
+      echo "Waiting for artifactory..."
+      if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "$artifactory_url_env/$zip_path"; then
+        echo "Connecting with artifactory failed after max retries..."
+        exit 1
+      fi
     fi
 
-    ./configure_start.sh
+    if [ "$mosip_kernel_keymanager_hsm_keystore_type" = "PKCS11" ] && [ -n "$artifactory_url_env" ]; then
+      ./configure_start.sh
+    fi
 
     ADDL_ARGS=()
 
@@ -502,7 +574,11 @@ keygen:
     ADDL_ARGS+=("-Dspring.cloud.bootstrap.enabled=false")
     ADDL_ARGS+=("-Dloader.path=${loader_path_env}")
 
-    exec java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
+    java -jar ${ADDL_ARGS[@]} ./keys-generator.jar
+
+    {{ if .Values.persistence.enabled -}}
+    touch "{{ tpl .Values.persistence.mountPath $ }}/.keygen_done"
+    {{- end }}
 
 envVars:
   JDK_JAVA_OPTIONS: '{{ tpl .Values.javaOpts $ }}'
@@ -517,27 +593,40 @@ envVars:
 
   auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
 
+  mosip_auth_adapter_impl_basepackage: '{{ .Values.authEnabled | ternary "io.mosip.kernel.auth.defaultadapter" "" }}'
+  spring_autoconfigure_exclude: '{{ .Values.authEnabled | ternary "" "org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration" }}'
+
   mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_kernel_database_port: '5432'
+
+  mosip_kernel_keymanager_autogen_appids_list: '{{ .Values.keygen.appIdsList | join "," }}'
+  mosip_kernel_keymanager_autogen_basekeys_list: '{{ .Values.keygen.baseKeysList | join "," }}'
+
+  mosip_kernel_keymanager_hsm_keystore_type: '{{ tpl .Values.keystoreType $ }}'
+  mosip_kernel_keymanager_hsm_config_path: '{{ eq (tpl .Values.keystoreType $) "PKCS12" | ternary (tpl .Values.p12KeystorePath $) (tpl .Values.p11ConfigPath $) }}'
+
+  # Set true to tell Keymanager to wait for HSM
+  mosip_kernel_keymgr_hsm_health_check_enabled: false
 
   # Edit the following properties only if required. OpenG2P doesnt use these properties for now.
   mosip_kernel_tokenid_uin_salt: ''
   mosip_kernel_tokenid_partnercode_salt: ''
   mosip_admin_client_secret: ''
-
-  # Set true to tell Keymanager to wait for HSM
-  mosip_kernel_keymgr_hsm_health_check_enabled: false
+  is_glowroot_env: '{{ .Values.glowrootEnabled | ternary "present" "" }}'
 
 envVarsFrom:
   artifactory_url_env:
+    enabled: '{{ or (eq (tpl .Values.keystoreType $) "PKCS11") .Values.glowrootEnabled }}'
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: artifactory_url_env
   iam_adapter_url_env:
+    enabled: '{{ .Values.authEnabled }}'
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: iam_adapter_url_env
   zip_file_path:
+    enabled: '{{ eq (tpl .Values.keystoreType $) "PKCS11" }}'
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: zip_file_path
@@ -546,13 +635,20 @@ envVarsFrom:
       name: '{{ tpl .Values.postgresqlInstallationName $ }}'
       key: password
   PKCS11_PROXY_SOCKET:
+    enabled: '{{ eq (tpl .Values.keystoreType $) "PKCS11" }}'
     configMapKeyRef:
       name: '{{ tpl .Values.softhsmInstallationName $ }}-share'
       key: PKCS11_PROXY_SOCKET
   softhsm_kernel_security_pin:
+    enabled: '{{ eq (tpl .Values.keystoreType $) "PKCS11" }}'
     secretKeyRef:
       name: '{{ tpl .Values.softhsmInstallationName $ }}'
       key: security-pin
+  mosip_kernel_keymanager_hsm_keystore_pass:
+    enabled: '{{ eq (tpl .Values.keystoreType $) "PKCS12" }}'
+    secretKeyRef:
+      name: '{{ include "common.names.fullname" . }}'
+      key: p12-keystore-pass
 
 springConfig:
   names: application,kernel
@@ -576,20 +672,39 @@ springConfig:
 startUpCommand: |-
   #!/usr/bin/env bash
 
-  echo "Waiting for artifactory..."
-  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${iam_adapter_url_env}"; then
-    echo "Connecting with artifactory failed after max retries..."
-    exit 1
+  set -o pipefail
+  set -e
+  shopt -s nullglob
+
+  {{ if .Values.persistence.enabled -}}
+  {{ if and .Values.postgresInit.enabled (not .Values.skipPostgresInitCheck) -}}
+  until [ -f "{{ tpl .Values.persistence.mountPath $ }}/.postgres_init_done" ]; do echo "Waiting for postgres_init_done"; sleep 3; done
+  {{- end }}
+  {{- if and .Values.keygen.enabled (not .Values.skipKeygenCheck) }}
+  until [ -f "{{ tpl .Values.persistence.mountPath $ }}/.keygen_done" ]; do echo "Waiting for keygen_done"; sleep 3; done
+  {{- end }}
+  {{- end }}
+
+  if [ -n "$iam_adapter_url_env" ]; then
+    echo "Waiting for artifactory..."
+    if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${iam_adapter_url_env}"; then
+      echo "Connecting with artifactory failed after max retries..."
+      exit 1
+    fi
   fi
 
   # TODO: Wait for postgres
 
-  ./configure_start.sh
-  wget -q "${iam_adapter_url_env}" -O "${loader_path_env}"/kernel-auth-adapter.jar
+  if [ "$mosip_kernel_keymanager_hsm_keystore_type" = "PKCS11" ] && [ -n "$artifactory_url_env" ]; then
+    ./configure_start.sh
+  fi
+  if [ -n "$mosip_auth_adapter_impl_basepackage" ] && [ -n "$iam_adapter_url_env" ]; then
+    wget -q "${iam_adapter_url_env}" -O "${loader_path_env}"/kernel-auth-adapter.jar
+  fi
 
   ADDL_ARGS=()
 
-  if [ "$is_glowroot_env" = "present" ]; then
+  if [ "$is_glowroot_env" = "present" ] && [ -n "$artifactory_url_env" ]; then
     wget -q "${artifactory_url_env}"/artifactory/libs-release-local/io/mosip/testing/glowroot.zip
     unzip glowroot.zip
     rm -rf glowroot.zip

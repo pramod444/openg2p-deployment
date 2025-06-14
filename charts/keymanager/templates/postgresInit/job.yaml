@@ -1,4 +1,4 @@
-{{- if .Values.postgresInit.enabled }}
+{{- if and .Values.postgresInit.enabled (not .Values.persistence.enabled) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -32,15 +32,34 @@ spec:
         - name: postgres-init
           image: {{ include "common.images.image" (dict "imageRoot" .Values.postgresInit.image "global" .Values.global) }}
           imagePullPolicy: {{ .Values.postgresInit.image.pullPolicy }}
-          {{- if .Values.postgresInit.command }}
-          command: {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.command "context" $) | nindent 12 }}
-          {{- end }}
-          {{- if .Values.postgresInit.args }}
-          args: {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.args "context" $) | nindent 12 }}
-          {{- end }}
+          {{- include "keymanager.postgresInit.command" . | nindent 10 }}
           {{- if .Values.postgresInit.containerSecurityContext.enabled }}
           securityContext: {{- omit .Values.postgresInit.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           env:
             {{- include "keymanager.postgresInit.envVars" . | nindent 12 }}
+          volumeMounts:
+            {{- if and .Values.postgresInit.startUpCommand (not (or .Values.postgresInit.command .Values.postgresInit.args)) }}
+            - name: postgres-init-conf
+              mountPath: /startup.sh
+              subPath: startup-command-sh
+            {{- end }}
+            {{- if .Values.postgresInit.keyPolicyDef.enabled }}
+            - name: postgres-init-conf
+              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.postgresInit.keyPolicyDef.mountPath "context" $) }}
+              subPath: key-policy-def-csv
+            {{- end }}
+            {{- if .Values.postgresInit.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if or .Values.postgresInit.keyPolicyDef.enabled (and .Values.postgresInit.startUpCommand (not (or .Values.postgresInit.command .Values.postgresInit.args))) }}
+        - name: postgres-init-conf
+          configMap:
+            name: {{ include "common.names.fullname" . }}-postgres-init
+            defaultMode: 0755
+        {{- end }}
+        {{- if .Values.postgresInit.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
 {{- end }}
