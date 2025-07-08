@@ -7,6 +7,11 @@ Source code for [OpenG2P Keymanager](../../charts/keymanager) helm chart.
 
 - Note: Helm chart versions 12.0.1 and lower install all dependencies of keymanager along with them. Versions 12.0.2 and higher do NOT install dependencies. The installation of dependencies is left to the user.
 - Note: This doesn't require config-server, it directly allows properties to be downloaded from git repos. (See Parameters section below.)
+- Note: Helm chart versions 12.1.0 and higher allow to configure which type of keystore you want (PKCS11/PKCS12).
+  - Earlier versions keystore type was fixed to PKCS11 (HSM).
+  - PKCS12 type keystore requires persistence enabled on the helm chart.
+  - For Helm chart versions >=12.1.0 default keystore type is PKCS12. See [Parameters](#parameters) section for changing keystore type to PKCS11.
+  - Direct upgrade from PKCS11 keystore to PKCS12 keystore will NOT be possible.
 
 This helm chart is a fork of [MOSIP Keymanager](https://github.com/mosip/mosip-helm/tree/master/charts/keymanager) helm chart, and applies additional modifications to make it easier to install Keymanager  (or with OpenG2P modules).
 
@@ -18,7 +23,9 @@ This section describes steps to install Keymanager on your K8s cluster, if not i
 
 - Install postgresql with name like _keymanager-postgresql_ (Recommended: Use bitnami/postgresql helm chart.)
 - Install softhsm with name like _keymanager-softhsm_ (Recommended: Use mosip/softhsm helm chart.)
+  - Required only when `keystoreType=PKCS11`.
 - Install Artifactory with name like _keymanager-artifactory_ (Recommended: Use openg2p/artifactory helm chart.)
+  - Required only when `keystoreType=PKCS11` and `authEnabled=true`.
 
 ### Using Rancher
 
@@ -62,3 +69,12 @@ For advanced config values refer to [keymanager/values.yaml](../../charts/keyman
 |springConfig.profile|Spring Config Profile|default|
 |springConfig.gitRepo.repoUrl|Git Repo Url to get configs. (Username & password have to added in this url, if required)|https://github.com/openg2p/mosip-config|
 |springConfig.gitRepo.branch|Git Repo Branch to get configs.|master|
+|keystoreType|Type of keystore to use.<br>- PKCS11 requires HSM(or softhsm).<br>- PKCS12 stores the keys into a local p12 file. Persistence should be enabled.|PKCS12|
+|p12KeystorePass|Password for the P12 file when using `keystoreType=PKCS12`.<br>If left blank, password will be automatically generated||
+|authEnabled|Enable authentication for Keymanager APIs.<br>Disable only when Keymanager APIs are not exposed publicly or when using as an internal service.|true|
+|keygen.appIdsList|List of [Module keys](https://docs.mosip.io/1.2.0/id-lifecycle-management/supporting-services/keymanager#key-hierarchy) (APP_ID) to be generated when Keymanager starts.|\["OPENG2P"\]|
+|keygen.baseKeysList|List of [Base keys](https://docs.mosip.io/1.2.0/id-lifecycle-management/supporting-services/keymanager#key-hierarchy) (APP_ID:REF_ID) to be generated when Keymanager starts.|\["OPENG2P:ENCRYPT"\]|
+|persistence.enabled|Enable persistence for storing Keys. Required only when using `keystoreType=PKCS12`|true|
+|persistence.storageClassName|Name of storage class of persistent volume||
+|persistence.accessModes|List of persistent volume access modes.<br>This will need to be changed when using `replicas>1`|\["ReadWriteOnce"\]|
+|persistence.size|Size of volume required for storing keys|10M|

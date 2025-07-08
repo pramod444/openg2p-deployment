@@ -7,6 +7,7 @@ questions:
 - variable: global.keycloakBaseUrl
   description: Required for API auth validation.
   type: string
+  show_if: "authEnabled=true"
   label: Keycloak Base URL
 
 - variable: springConfig.profile
@@ -39,7 +40,7 @@ questions:
   description: |-
     If git-based config is disabled, the complete application.properties can be
     directly supplied here.
-  type: yamlfile
+  type: multiline
   label: Spring Config application properties.
   show_if: "springConfig.gitRepo.enabled=false"
 
@@ -49,4 +50,23 @@ questions:
     Do not edit this parameter unless required.
   type: string
   label: Allowed Keycloak Client IDs.
+  show_if: "authEnabled=true"
   group: Advanced Settings
+
+- variable: keystoreType
+  label: Keystore Type
+  description: PKCS11 for HSM. PKCS12 for storing into local p12 file.
+  type: enum
+  options:
+    - PKCS11
+    - PKCS12
+
+- variable: authEnabled
+  label: API Authentication Enabled
+  description: Enables Keymanager API Authentication.
+  type: boolean
+
+- variable: persistence.enabled
+  label: Persistence Enabled
+  description: Enable this if Keystore Type is PKCS12.
+  type: boolean

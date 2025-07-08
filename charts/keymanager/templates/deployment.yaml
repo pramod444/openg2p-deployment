@@ -45,9 +45,65 @@ spec:
       {{- if .Values.podSecurityContext.enabled }}
       securityContext: {{- omit .Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
       {{- end }}
-      {{- if .Values.initContainers }}
+      {{- if or (and .Values.postgresInit.enabled .Values.persistence.enabled) (and .Values.keygen.enabled .Values.persistence.enabled) .Values.initContainers }}
       initContainers:
+        {{- if and .Values.postgresInit.enabled .Values.persistence.enabled }}
+        - name: postgres-init
+          image: {{ include "common.images.image" (dict "imageRoot" .Values.postgresInit.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.postgresInit.image.pullPolicy }}
+          {{- include "keymanager.postgresInit.command" . | nindent 10 }}
+          {{- if .Values.postgresInit.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.postgresInit.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          env:
+            {{- include "keymanager.postgresInit.envVars" . | nindent 12 }}
+          volumeMounts:
+            {{- if and .Values.postgresInit.startUpCommand (not (or .Values.postgresInit.command .Values.postgresInit.args)) }}
+            - name: postgres-init-conf
+              mountPath: /startup.sh
+              subPath: startup-command-sh
+            {{- end }}
+            {{- if .Values.postgresInit.keyPolicyDef.enabled }}
+            - name: postgres-init-conf
+              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.postgresInit.keyPolicyDef.mountPath "context" $) }}
+              subPath: key-policy-def-csv
+            {{- end }}
+            - name: keymanager-data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- if .Values.postgresInit.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.postgresInit.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+        {{- end }}
+        {{- if and .Values.keygen.enabled .Values.persistence.enabled }}
+        - name: keygen
+          image: {{ include "common.images.image" (dict "imageRoot" .Values.keygen.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.keygen.image.pullPolicy }}
+          {{- include "keymanager.keygen.command" . | nindent 10 }}
+          {{- if .Values.keygen.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.keygen.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          env:
+            {{- include "keymanager.keygen.envVars" . | nindent 12 }}
+          volumeMounts:
+            {{- if and .Values.keygen.startUpCommand (not (or .Values.keygen.command .Values.keygen.args)) }}
+            - name: keygen-conf
+              mountPath: /startup.sh
+              subPath: startup-command-sh
+            {{- end }}
+            {{- if and .Values.springConfig.rawConfig (not .Values.springConfig.gitRepo.enabled) }}
+            - name: spring-config
+              mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.springConfig.rawConfigMountPath "context" $) }}
+              subPath: application.properties
+            {{- end }}
+            - name: keymanager-data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- if .Values.keygen.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.keygen.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+        {{- end }}
+        {{- if .Values.initContainers }}
         {{- include "common.tplvalues.render" (dict "value" .Values.initContainers "context" $) | nindent 8 }}
+        {{- end }}
       {{- end }}
       containers:
         - name: keymanager
@@ -94,6 +150,10 @@ spec:
               mountPath: {{ include "common.tplvalues.render" (dict "value" .Values.springConfig.rawConfigMountPath "context" $) }}
               subPath: application.properties
             {{- end }}
+            {{- if .Values.persistence.enabled }}
+            - name: keymanager-data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
             {{- if .Values.extraVolumeMounts }}
             {{- include "common.tplvalues.render" (dict "value" .Values.extraVolumeMounts "context" $) | nindent 12 }}
             {{- end }}
@@ -111,6 +171,23 @@ spec:
         - name: spring-config
           configMap:
             name: {{ template "common.names.fullname" . }}-spring-config
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
+        {{- if or .Values.postgresInit.keyPolicyDef.enabled (and .Values.postgresInit.startUpCommand (not (or .Values.postgresInit.command .Values.postgresInit.args))) }}
+        - name: postgres-init-conf
+          configMap:
+            name: {{ include "common.names.fullname" . }}-postgres-init
+            defaultMode: 0755
+        {{- end }}
+        {{- if and .Values.keygen.startUpCommand (not (or .Values.keygen.command .Values.keygen.args)) }}
+        - name: keygen-conf
+          configMap:
+            name: {{ include "common.names.fullname" . }}-keygen
+            defaultMode: 0755
+        {{- end }}
+        - name: keymanager-data
+          persistentVolumeClaim:
+            claimName: {{ (tpl .Values.persistence.existingClaim $) | default (include "common.names.fullname" .) }}
         {{- end }}
         {{- if .Values.extraVolumes }}
         {{- include "common.tplvalues.render" (dict "value" .Values.extraVolumes "context" $) | nindent 8 }}

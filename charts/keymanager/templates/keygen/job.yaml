@@ -1,4 +1,4 @@
-{{- if .Values.keygen.enabled }}
+{{- if and .Values.keygen.enabled (not .Values.persistence.enabled) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -28,6 +28,9 @@ spec:
       {{- end }}
       serviceAccountName: {{ template "keymanager.serviceAccountName" . }}
       restartPolicy: Never
+      {{- if .Values.keygen.initContainers }}
+      initContainers: {{- include "common.tplvalues.render" (dict "value" .Values.keygen.initContainers "context" $) | nindent 8 }}
+      {{- end }}
       containers:
         - name: keygen
           image: {{ include "common.images.image" (dict "imageRoot" .Values.keygen.image "global" .Values.global) }}
@@ -40,9 +43,9 @@ spec:
             {{- include "keymanager.keygen.envVars" . | nindent 12 }}
           volumeMounts:
             {{- if and .Values.keygen.startUpCommand (not (or .Values.keygen.command .Values.keygen.args)) }}
-            - name: startup-command
+            - name: keygen-conf
               mountPath: /startup.sh
-              subPath: startup.sh
+              subPath: startup-command-sh
             {{- end }}
             {{- if and .Values.springConfig.rawConfig (not .Values.springConfig.gitRepo.enabled) }}
             - name: spring-config
@@ -54,9 +57,9 @@ spec:
             {{- end }}
       volumes:
         {{- if and .Values.keygen.startUpCommand (not (or .Values.keygen.command .Values.keygen.args)) }}
-        - name: startup-command
+        - name: keygen-conf
           configMap:
-            name: {{ template "common.names.fullname" . }}-keygen-startup
+            name: {{ include "common.names.fullname" . }}-keygen
             defaultMode: 0755
         {{- end }}
         {{- if and .Values.springConfig.rawConfig (not .Values.springConfig.gitRepo.enabled) }}

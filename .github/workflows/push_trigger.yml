@@ -112,11 +112,11 @@ jobs:
 
     - name: Update index.yaml
       run: |
-        helm repo index --url https://openg2p.github.io/openg2p-helm/ .
+        helm repo index .
         for chartname in $RANCHER_CHARTS; do
           cp ${chartname}*.tgz rancher/
         done
-        helm repo index --url https://openg2p.github.io/openg2p-helm/ --merge rancher/index.yaml rancher
+        helm repo index --url ../ --merge rancher/index.yaml rancher
         for chartname in $RANCHER_CHARTS; do
           rm rancher/${chartname}*.tgz || true
         done
