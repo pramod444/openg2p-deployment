@@ -1,11 +1,4 @@
 {{/*
-Return the proper  image name
-*/}}
-{{- define "keymanager.image" -}}
-{{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
-{{- end -}}
-
-{{/*
 Return the proper Docker Image Registry Secret Names
 */}}
 {{- define "keymanager.imagePullSecrets" -}}
@@ -20,21 +13,6 @@ Create the name of the service account to use
     {{ default (printf "%s" (include "common.names.fullname" .)) .Values.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.serviceAccount.name }}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Compile all warnings into a single message.
-*/}}
-{{- define "keymanager.validateValues" -}}
-{{- $messages := list -}}
-{{- $messages := append $messages (include "keymanager.validateValues.foo" .) -}}
-{{- $messages := append $messages (include "keymanager.validateValues.bar" .) -}}
-{{- $messages := without $messages "" -}}
-{{- $message := join "\n" $messages -}}
-
-{{- if $message -}}
-{{-   printf "\nVALUES VALIDATION:\n%s" $message -}}
 {{- end -}}
 {{- end -}}
 
@@ -120,4 +98,18 @@ args: []
 
 {{- define "keymanager.postgresInit.command" -}}
 {{- include "keymanager.commandBase" (dict "command" .Values.postgresInit.command "args" .Values.postgresInit.args "startUpCommand" .Values.postgresInit.startUpCommand "context" $) }}
+{{- end -}}
+
+{{/*
+Join a list into comma seperated string after rendering template.
+*/}}
+{{- define "keymanager.joinListToStr" -}}
+  {{- $res := "" -}}
+  {{- $context := .context -}}
+  {{- $joiner := include "common.tplvalues.render" (dict "value" .joiner "context" $context) -}}
+  {{- range $i, $item := .value -}}
+    {{- $transformedItem := include "common.tplvalues.render" (dict "value" $item "context" $context) -}}
+    {{- $res = (gt $i 0) | ternary (printf "%s%s%s" $res $joiner $transformedItem) (printf "%s" $transformedItem) -}}
+  {{- end -}}
+  {{- $res -}}
 {{- end -}}
