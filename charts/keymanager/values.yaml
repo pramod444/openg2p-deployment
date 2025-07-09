@@ -611,8 +611,8 @@ envVars:
   mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_kernel_database_port: '5432'
 
-  mosip_kernel_keymanager_autogen_appids_list: '{{ .Values.keygen.appIdsList | join "," }}'
-  mosip_kernel_keymanager_autogen_basekeys_list: '{{ .Values.keygen.baseKeysList | join "," }}'
+  mosip_kernel_keymanager_autogen_appids_list: '{{ include "keymanager.joinListToStr" (dict "value" .Values.keygen.appIdsList "joiner" "," "context" $) }}'
+  mosip_kernel_keymanager_autogen_basekeys_list: '{{ include "keymanager.joinListToStr" (dict "value" .Values.keygen.baseKeysList "joiner" "," "context" $) }}'
 
   mosip_kernel_keymanager_hsm_keystore_type: '{{ tpl .Values.keystoreType $ }}'
   mosip_kernel_keymanager_hsm_config_path: '{{ eq (tpl .Values.keystoreType $) "PKCS12" | ternary (tpl .Values.p12KeystorePath $) (tpl .Values.p11ConfigPath $) }}'

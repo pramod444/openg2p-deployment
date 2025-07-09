@@ -107,7 +107,7 @@ spec:
       {{- end }}
       containers:
         - name: keymanager
-          image: {{ template "keymanager.image" . }}
+          image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- if .Values.lifecycleHooks }}
           lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.lifecycleHooks "context" $) | nindent 12 }}
