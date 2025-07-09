@@ -593,8 +593,20 @@ envVars:
 
   auth_server_admin_allowed_audience: 'openg2p-sr,openg2p-sr-{{ .Release.Namespace }},openg2p-pbms,openg2p-pbms-{{ .Release.Namespace }},openg2p-spar-{{ .Release.Namespace }}'
 
-  mosip_auth_adapter_impl_basepackage: '{{ .Values.authEnabled | ternary "io.mosip.kernel.auth.defaultadapter" "" }}'
-  spring_autoconfigure_exclude: '{{ .Values.authEnabled | ternary "" "org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration" }}'
+  mosip_auth_adapter_impl_basepackage: >-
+    {{
+    eq (include "common.tplvalues.render" (dict "value" .Values.authEnabled "context" $)) "true" |
+    ternary
+    "io.mosip.kernel.auth.defaultadapter"
+    ""
+    }}
+  spring_autoconfigure_exclude: >-
+    {{
+    eq (include "common.tplvalues.render" (dict "value" .Values.authEnabled "context" $)) "true" |
+    ternary
+    ""
+    "org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration"
+    }}
 
   mosip_kernel_database_hostname: '{{ tpl .Values.postgresqlInstallationName $ }}'
   mosip_kernel_database_port: '5432'
@@ -621,7 +633,7 @@ envVarsFrom:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: artifactory_url_env
   iam_adapter_url_env:
-    enabled: '{{ .Values.authEnabled }}'
+    enabled: '{{ include "common.tplvalues.render" (dict "value" .Values.authEnabled "context" $) }}'
     configMapKeyRef:
       name: '{{ tpl .Values.artifactoryInstallationName $ }}-share'
       key: iam_adapter_url_env
