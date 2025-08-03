@@ -5,6 +5,7 @@ For example, refer to [Social Registry deployment](https://docs.openg2p.org/soci
 
 Source code for OpenG2P [ODK Central](../../charts/odk-central) helm chart.
 
+- Note: Helm chart versions v2025.2.1 and higher do NOT install redis dependencies of odk-central enketo. The installation of these redis dependencies is left to the user.
 - Note: Helm chart versions v2024.2.0 and lower install all dependencies of odk-central along with them. Versions v2024.2.1 and higher do NOT. The installation of dependencies is left to the user.
 
 ## Standalone Installation
@@ -15,6 +16,7 @@ This section describes steps to install ODK Central on your K8s cluster, if not 
 
 - Install postgresql with name like _odk-central-postgresql_ (Recommended: Use bitnami/postgresql helm chart.)
 - Install mail helm chart with name like _odk-central-mail_ (Recommended: Use openg2p/mail helm chart.)
+- Install enketo-redis-main and enketo-redis-cache helm chart with name like _odk-central-enketo-redis-main_ and _odk-central-enketo-redis-cache_ (Recommended: Use bitnami/redis helm chart.)
 
 ### Using Rancher
 
@@ -46,7 +48,8 @@ For advanced config values refer to [odk-central/values.yaml](../../charts/odk-c
 |Name|Description|Default value|
 |-|-|-|
 |hostname|Hostname to access ODK Central|odk.sandbox.your.org|
-|backend.envVars.OIDC_ENABLED|OIDC Enabled|true|
+|backend.envVars.OIDC_ENABLED|Enable OIDC|true|
 |backend.envVars.OIDC_ISSUER_URL|OIDC Issuer URL|https://keycloak.your.org/realms/master|
 |backend.envVars.OIDC_CLIENT_ID|OIDC Client ID||
 |backend.envVars.OIDC_CLIENT_SECRET|OIDC Client Secret||
+|s3BlobsEnabled|Enable Blobs store to S3||

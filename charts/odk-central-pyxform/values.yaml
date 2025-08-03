@@ -7,7 +7,7 @@ service:
 image:
   registry: ghcr.io
   repository: getodk/pyxform-http
-  tag: v2.1.1
+  tag: v3.1.0
   pullPolicy: IfNotPresent
 
 containerPort: 80
@@ -15,8 +15,8 @@ containerPort: 80
 startupProbe:
   enabled: true
   httpGet:
-    path: "/"
-    port: 80
+    port: http
+    path: /
   initialDelaySeconds: 0
   periodSeconds: 30
   timeoutSeconds: 5
@@ -26,8 +26,8 @@ startupProbe:
 livenessProbe:
   enabled: true
   httpGet:
-    path: "/"
-    port: 80
+    port: http
+    path: /
   initialDelaySeconds: 20
   periodSeconds: 60
   timeoutSeconds: 5
@@ -37,8 +37,8 @@ livenessProbe:
 readinessProbe:
   enabled: true
   httpGet:
-    path: "/"
-    port: 80
+    port: http
+    path: /
   initialDelaySeconds: 0
   periodSeconds: 20
   timeoutSeconds: 5
@@ -48,11 +48,11 @@ readinessProbe:
 command: []
 args: []
 
-resources:
-  limits: {}
+resources: {}
+  # limits:
   #   cpu: 200m
   #   memory: 256Mi
-  requests: {}
+  # requests:
   #   cpu: 100m
   #   memory: 1500Mi
 

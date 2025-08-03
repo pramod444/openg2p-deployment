@@ -15,6 +15,11 @@ serviceAccount:
 
 postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
 mailInstallationName: '{{ .Release.Name }}-mail'
+minioInstallationName: '{{ .Release.Name }}-minio'
+
+s3BlobsEnabled: false
+s3ServerUrl: 'http://{{ tpl .Values.minioInstallationName $ }}:3000'
+s3BucketName: 'odk-central-blobs'
 
 odk-central-pyxform:
   enabled: true
@@ -28,22 +33,23 @@ backend:
 
   podAnnotations: {}
   podLabels:
-    app.kubernetes.io/name: '{{ include "common.names.name" . }}-backend'
+    app.kubernetes.io/component: backend
 
   containerPort: 8383
   service:
     type: ClusterIP
-    port: 8383
+    port: 80
 
   image:
     repository: openg2p/odk-central-backend
-    tag: v2024.2.1
+    tag: v2025.2.1
     pullPolicy: Always
 
   startupProbe:
     enabled: true
-    tcpSocket:
-      port: 8383
+    httpGet:
+      port: http
+      path: /
     initialDelaySeconds: 0
     periodSeconds: 30
     timeoutSeconds: 5
@@ -52,8 +58,9 @@ backend:
 
   livenessProbe:
     enabled: true
-    tcpSocket:
-      port: 8383
+    httpGet:
+      port: http
+      path: /
     initialDelaySeconds: 20
     periodSeconds: 60
     timeoutSeconds: 5
@@ -62,8 +69,9 @@ backend:
 
   readinessProbe:
     enabled: true
-    tcpSocket:
-      port: 8383
+    httpGet:
+      port: http
+      path: /
     initialDelaySeconds: 0
     periodSeconds: 20
     timeoutSeconds: 5
@@ -73,11 +81,11 @@ backend:
   command: ["bash"]
   args: ["-c", "wait-for-it ${DB_HOST}:5432 -- ./start-odk.sh"]
 
-  resources:
-    limits: {}
+  resources: {}
+    # limits:
     #   cpu: 200m
     #   memory: 256Mi
-    requests: {}
+    # requests:
     #   cpu: 100m
     #   memory: 1500Mi
 
@@ -95,13 +103,15 @@ backend:
     SYSADMIN_EMAIL: '{{ tpl .Values.global.sysAdminEmail $ }}'
     NODE_OPTIONS: ''
 
+    IS_BASIC_AUTH_APIS_ENABLED: true
+
     DB_HOST: '{{ tpl .Values.postgresqlInstallationName $ }}'
     DB_NAME: odkdb
     DB_USER: odkuser
     DB_SSL: "null"
 
     ENKETO_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-enketo") }}'
-    ENKETO_PORT: "8005"
+    ENKETO_PORT: "80"
 
     PYXFORM_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-pyxform") }}'
     PYXFORM_PORT: "80"
@@ -122,13 +132,24 @@ backend:
     SENTRY_ORG_SUBDOMAIN: "o130137"
     SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
     SENTRY_PROJECT: "1298632"
+    SENTRY_TRACE_RATE: "0.1"
 
-    # S3_SERVER: ""
+    S3_SERVER: '{{ .Values.s3BlobsEnabled | ternary (tpl .Values.s3ServerUrl $) "" }}'
+    S3_BUCKET_NAME: '{{ .Values.s3BlobsEnabled | ternary (tpl .Values.s3BucketName $) "" }}'
     # S3_ACCESS_KEY: ""
     # S3_SECRET_KEY: ""
-    # S3_BUCKET_NAME: ""
 
   envVarsFrom:
+    S3_ACCESS_KEY:
+      enabled: '{{ .Values.s3BlobsEnabled }}'
+      secretKeyRef:
+        name: '{{ tpl .Values.minioInstallationName $ }}'
+        key: root-user
+    S3_SECRET_KEY:
+      enabled: '{{ .Values.s3BlobsEnabled }}'
+      secretKeyRef:
+        name: '{{ tpl .Values.minioInstallationName $ }}'
+        key: root-password
     DB_PASSWORD:
       secretKeyRef:
         name: '{{ tpl .Values.postgresqlInstallationName $ }}'
@@ -141,6 +162,7 @@ backend:
   configJsonTemplate: |-
     {
       "default": {
+        "basicAuthApisEnabled": ${IS_BASIC_AUTH_APIS_ENABLED},
         "database": {
           "host": "${DB_HOST}",
           "user": "${DB_USER}",
@@ -184,15 +206,16 @@ backend:
           "sentry": {
             "orgSubdomain": "${SENTRY_ORG_SUBDOMAIN}",
             "key": "${SENTRY_KEY}",
-            "project": "${SENTRY_PROJECT}"
+            "project": "${SENTRY_PROJECT}",
+            "traceRate": "${SENTRY_TRACE_RATE}"
+          },
+          "s3blobStore": {
+            "server": "${S3_SERVER}",
+            "accessKey": "${S3_ACCESS_KEY}",
+            "secretKey": "${S3_SECRET_KEY}",
+            "bucketName": "${S3_BUCKET_NAME}",
+            "requestTimeout": 60000
           }
-        },
-        "s3blobStore": {
-          "server": "${S3_SERVER}",
-          "accessKey": "${S3_ACCESS_KEY}",
-          "secretKey": "${S3_SECRET_KEY}",
-          "bucketName": "${S3_BUCKET_NAME}",
-          "requestTimeout": 60000
         }
       }
     }
@@ -200,11 +223,15 @@ backend:
   startOdkScript: |-
     #!/usr/bin/env bash
 
-    # This file is taken from https://github.com/getodk/central/tree/v2024.2.1/files/service/scripts
+    set -e
+    set -o pipefail
+    shopt -s inherit_errexit
+
+    # This file is taken from https://github.com/getodk/central/tree/v2025.2.1/files/service/scripts
     # And modified the config template generation line.
 
     echo "generating local service configuration.."
-    envsubst < /usr/share/odk/config.json.template > /usr/odk/config/local.json
+    /scripts/envsub.awk < /usr/share/odk/config.json.template > /usr/odk/config/local.json
 
     export SENTRY_RELEASE="$(cat sentry-versions/server)"
     export SENTRY_TAGS="{ \"version.central\": \"$(cat sentry-versions/central)\", \"version.client\": \"$(cat sentry-versions/client)\" }"
@@ -212,35 +239,62 @@ backend:
     echo "running migrations.."
     node ./lib/bin/run-migrations
 
-    echo "checking migration success.."
-    node ./lib/bin/check-migrations
-
-    if [ $? -eq 1 ]; then
-      echo "*** Error starting ODK! ***"
-      echo "After attempting to automatically migrate the database, we have detected unapplied migrations, which suggests a problem with the database migration step. Please look in the console above this message for any errors and post what you find in the forum: https://forum.getodk.org/"
-      exit 1
-    fi
+    # Logs based on SENTRY_RELEASE and SENTRY_TAGS env variables
+    echo "logging server upgrade.."
+    node ./lib/bin/log-upgrade
 
     echo "starting cron.."
     cron -f &
 
-    if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
-      MEMTOT=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
-    elif [ "$(cat /sys/fs/cgroup/memory.max)" != "max" ]; then
-      MEMTOT=$(cat /sys/fs/cgroup/memory.max)
-    else
-      MEMTOT=$(vmstat -s | grep 'total memory' | awk '{ print $1 }')
-    fi
+    get_cgroup_version() {
+      # The max memory calculation is different between cgroup v1 & v2
+      local cgroup_type
+      cgroup_type=$(stat -fc %T /sys/fs/cgroup/)
+      if [ "$cgroup_type" == "cgroup2fs" ]; then
+        echo "v2"
+      else
+        echo "v1"
+      fi
+    }
 
-    if [ "$MEMTOT" -gt "1100000" ]; then
-      export WORKER_COUNT=4
-    else
-      export WORKER_COUNT=1
-    fi
+    get_memory_limit() {
+      local cgroup_version
+      cgroup_version=$(get_cgroup_version)
+
+      if [ "$cgroup_version" == "v2" ]; then
+        local memtot
+        memtot=$(cat /sys/fs/cgroup/memory.max)
+        if [ "$memtot" == "max" ]; then
+          # No cgroup memory limit; fallback to system's total memory
+          memtot=$(grep MemTotal /proc/meminfo | awk '{print $2 * 1024}')
+        fi
+        # Force memtot to be an integer (not scientific notation e+09)
+        printf "%.0f\n" "$memtot"
+      else
+        # cgroup v1
+        local memtot
+        memtot=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+        # Force memtot to be an integer
+        printf "%.0f\n" "$memtot"
+      fi
+    }
+
+    determine_worker_count() {
+      local memtot=$1
+      if [ "$memtot" -gt 1100000 ]; then
+        echo 4
+      else
+        echo 1
+      fi
+    }
+
+    MEMTOT=$(get_memory_limit)
+    WORKER_COUNT=$(determine_worker_count "$MEMTOT")
+    export WORKER_COUNT
     echo "using $WORKER_COUNT worker(s) based on available memory ($MEMTOT).."
 
     echo "starting server."
-    exec npx pm2-runtime ./pm2.config.js
+    exec npx --no pm2-runtime ./pm2.config.js
 
 frontend:
   enabled: true
@@ -248,7 +302,7 @@ frontend:
 
   podAnnotations: {}
   podLabels:
-    app.kubernetes.io/name: '{{ include "common.names.name" . }}-frontend'
+    app.kubernetes.io/component: frontend
 
   containerPort: 80
   service:
@@ -256,9 +310,10 @@ frontend:
     port: 80
 
   image:
-    repository: openg2p/odk-central-frontend
-    tag: v2024.2.1
-    pullPolicy: Always
+    registry: ghcr.io
+    repository: getodk/central-nginx
+    tag: v2025.2.1
+    pullPolicy: IfNotPresent
 
   startupProbe:
     enabled: true
@@ -296,11 +351,11 @@ frontend:
   command: []
   args: []
 
-  resources:
-    limits: {}
+  resources: {}
+    # limits:
     #   cpu: 200m
     #   memory: 256Mi
-    requests: {}
+    # requests:
     #   cpu: 100m
     #   memory: 1500Mi
 
@@ -317,8 +372,10 @@ frontend:
     # Donot change the following. For now.
     SSL_TYPE: upstream
     DOMAIN: "_"
-    ENKETO_URL: '{{ include "common.names.fullname" (index .Subcharts "odk-central-enketo") }}'
     BACKEND_URL: '{{ include "common.names.fullname" . }}-backend'
+
+    ENKETO_HOST: '{{ include "common.names.fullname" (index .Subcharts "odk-central-enketo") }}'
+    ENKETO_PORT: "80"
 
     SENTRY_ORG_SUBDOMAIN: "o130137"
     SENTRY_KEY: "3cf75f54983e473da6bd07daddf0d2ee"
@@ -333,25 +390,83 @@ frontend:
     }
 
   setupOdkScript: |-
-    #!/bin/bash
+    #!/usr/bin/env bash
+
+    set -e
+    set -o pipefail
+    shopt -s inherit_errexit
+
     export DOLLAR='$'
     echo "writing client config..."
     if [[ $OIDC_ENABLED != 'true' ]] && [[ $OIDC_ENABLED != 'false' ]]; then
       echo 'OIDC_ENABLED must be either true or false'
       exit 1
     fi
-    envsubst < /usr/share/odk/nginx/client-config.json.template > /usr/share/nginx/html/client-config.json
+    /scripts/envsub.awk < /usr/share/odk/nginx/client-config.json.template > /usr/share/nginx/html/client-config.json
     echo "writing fresh nginx templates..."
-    envsubst < /usr/share/odk/nginx/odk.conf.template > /etc/nginx/conf.d/odk.conf
+    /scripts/envsub.awk < /usr/share/odk/nginx/odk.conf.template > /etc/nginx/conf.d/odk.conf
     rm -f /etc/nginx/conf.d/redirector.conf
     exec nginx -g "daemon off;"
 
   odkConfTemplate: |-
+    map "$request_method::$uri$is_args$args" $cache_strategy {
+      # general
+      ~^(GET|HEAD)::/client-config.json$ "revalidate";
+      ~^(GET|HEAD)::/favicon.ico$        "revalidate";
+      ~^(GET|HEAD)::/robots.txt$         "revalidate";
+      ~^(GET|HEAD)::/version.txt$        "revalidate";
+
+      # central-backend
+      ~^(GET|HEAD)::/v1/                 "passthrough";
+
+      # central-frontend - unversioned
+      ~^(GET|HEAD)::/$             "revalidate";
+      ~^(GET|HEAD)::/index.html$   "revalidate";
+      ~^(GET|HEAD)::/blank.html$   "revalidate";
+      ~^(GET|HEAD)::/fonts/.*\?\w+ "immutable";
+      ~^(GET|HEAD)::/fonts/        "revalidate";
+
+      # central-frontend - versioned
+      ~^(GET|HEAD)::/assets/ "immutable";
+
+      # enketo
+      ~^(GET|HEAD)::/-(/x)?/css/                 "revalidate";
+      ~^(GET|HEAD)::/-(/x)?/fonts/.*?v=          "immutable";
+      ~^(GET|HEAD)::/-(/x)?/fonts/               "revalidate";
+      ~^(GET|HEAD)::/-(/x)?/images/              "revalidate";
+      ~^(GET|HEAD)::/-(/x)?/js/build/chunks/     "immutable";
+      ~^(GET|HEAD)::/-(/x)?/js/build/            "revalidate";
+      ~^(GET|HEAD)::/-(/x)?/locales/             "revalidate";
+      ~^(GET|HEAD)::/-/x/[a-zA-Z0-9]+            "revalidate";
+      ~^(GET|HEAD)::/-/x/offline-app-worker\.js$ "revalidate";
+
+      default "single-use";
+    }
+    map $cache_strategy $cache_header_cache_control {
+      "immutable"  "max-age=31536000";
+      "revalidate" "no-cache";
+      "passthrough"  "";
+      default      "no-store";
+    }
+    map $cache_strategy $cache_header_pragma {
+      "immutable"  "";
+      "revalidate" "no-cache";
+      "passthrough"  "";
+      default      "no-cache";
+    }
+    map $cache_strategy $cache_header_vary {
+      "immutable"  "Accept-Encoding";
+      "revalidate" "Accept-Encoding";
+      "passthrough"  "";
+      default      "*";
+    }
+
     server {
       listen 80;
 
       server_tokens off;
 
+      add_header Content-Security-Policy-Report-Only "default-src 'none'; connect-src https://translate.google.com https://translate.googleapis.com; img-src https://translate.google.com; report-uri /csp-report";
       include /usr/share/odk/nginx/common-headers.conf;
 
       client_max_body_size 100m;
@@ -360,23 +475,55 @@ frontend:
       gzip_vary on;
       gzip_min_length 1280;
       gzip_http_version 1.1;
-      gzip_types text/plain text/css application/json application/x-javascript text/xml text/csv;
+      gzip_types text/plain text/css application/json application/x-javascript application/javascript text/xml text/csv;
 
-      location = /robots.txt {
-        add_header Content-Type text/plain;
-        return 200 "User-agent: *\nDisallow: /\n";
+      # Enketo Configuration.
+      # Enketo express is traditionally served at /- but with the introduction of ODK Web Forms
+      # we want old Enketo URLs redirected to a Central frontend page which dynamically decides
+      # whether to show a WebForm or an iframed Enketo.
+      #
+      # Following are the locations that serve a Form and these are redirected to the frontend:
+      location ~ "^/-/single/(?<enketoId>[a-zA-Z0-9]+)$" {
+        # Form fill link, public
+        return 301 "/f/$enketoId$is_args$args";
+      }
+      location ~ "^/-/preview/(?<enketoId>[a-zA-Z0-9]+)$" {
+        # preview link
+        return 301 "/f/$enketoId/preview$is_args$args";
+      }
+      # The negative look ahead patterns in the following regex are for the Enketo endpoints which are
+      # similar to the new submission endpoint i.e. /-/:enketoId but these are not enketoId, therefore
+      # we don't want them to be redirected to central-frontend
+      location ~ "^/-/(?!thanks$|connection$|login$|logout$|api$|preview$)(?<enketoId>[a-zA-Z0-9]+)$" {
+        # Form fill link (non-public), or Draft
+        return 301 "/f/$enketoId/new$is_args$args";
+      }
+      # To read single submission cookies
+      location = /-/single/check-submitted {
+        alias /usr/share/nginx/html/blank.html;
+        default_type text/html;
       }
 
-      location /- {
-        proxy_pass http://${ENKETO_URL}:8005;
+      # For that iframe to work, we'll need another path prefix (enketo-passthrough) under which we can
+      # reach Enketo — this one will not be intercepted.
+      location ~ ^/(?:-|enketo-passthrough)(?:/|$) {
+        rewrite ^/enketo-passthrough(/.*)?$ /-$1 break;
+        proxy_pass http://${ENKETO_HOST}:${ENKETO_PORT};
         proxy_redirect off;
-        proxy_set_header Host ${DOLLAR}host;
+        proxy_set_header Host $host;
+        proxy_hide_header Vary;
+        proxy_hide_header Cache-Control;
 
-        add_header Referrer-Policy same-origin;
-        add_header Strict-Transport-Security "max-age=63072000" always;
-        add_header X-Frame-Options "SAMEORIGIN";
-        add_header X-Content-Type-Options nosniff;
+        # More lax CSP for enketo-express:
+        # Google Maps API: https://developers.google.com/maps/documentation/javascript/content-security-policy
+        add_header Content-Security-Policy-Report-Only "default-src 'none'; connect-src 'self' blob: https://maps.googleapis.com/ https://maps.google.com/ https://maps.gstatic.com/mapfiles/ https://fonts.gstatic.com/ https://fonts.googleapis.com/ https://translate.google.com https://translate.googleapis.com; font-src 'self' https://fonts.gstatic.com/; frame-src 'none'; img-src data: blob: jr: 'self' https://maps.google.com/maps/ https://maps.gstatic.com/mapfiles/ https://maps.googleapis.com/maps/ https://tile.openstreetmap.org/ https://translate.google.com; manifest-src 'none'; media-src blob: jr: 'self'; object-src 'none'; script-src 'unsafe-inline' 'self' https://maps.googleapis.com/maps/api/js/ https://maps.google.com/maps/ https://maps.google.com/maps-api-v3/api/js/; style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/css; style-src-attr 'unsafe-inline'; report-uri /csp-report";
+        #
+        # Rules set to 'none' here would fallback to default-src if excluded.
+        # They are included here to ease interpretation of violation reports.
+
+        include /usr/share/odk/nginx/common-headers.conf;
       }
+      # End of Enketo Configuration.
 
       location ~ ^/v\d {
         proxy_set_header X-Forwarded-Proto https;
@@ -391,19 +538,13 @@ frontend:
 
       location / {
         root /usr/share/nginx/html;
+        try_files $uri $uri/ /index.html;
 
-        location /version.txt {
-          include /usr/share/odk/nginx/common-headers.conf;
-          add_header Cache-Control no-cache;
-        }
-        location /client-config.json {
-          include /usr/share/odk/nginx/common-headers.conf;
-          add_header Cache-Control no-cache;
-        }
-        location /index.html {
-          include /usr/share/odk/nginx/common-headers.conf;
-          add_header Cache-Control no-cache;
-        }
+        # Rules set to 'none' here would fallback to default-src if excluded.
+        # They are included here to ease interpretation of violation reports.
+        add_header Content-Security-Policy-Report-Only "default-src 'none'; connect-src 'self' https://translate.google.com https://translate.googleapis.com; font-src 'self'; frame-src 'self' https://getodk.github.io/central/news.html; img-src * data:; manifest-src 'none'; media-src 'none'; object-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; report-uri /csp-report";
+
+        include /usr/share/odk/nginx/common-headers.conf;
       }
 
       location /csp-report {
