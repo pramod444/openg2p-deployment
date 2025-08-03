@@ -4,11 +4,9 @@ questions:
   type: string
   label: ODK Central Hostname
 
-- variable: global.keycloakIssuerUrl
-  default: https://keycloak.sandbox.openg2p.net/realms/master
-  description: OIDC Issuer Url for ODK Central Login
+- variable: global.keycloakBaseUrl
   type: string
-  label: OIDC Issuer URL
+  label: Keycloak Base URL
 
 - variable: backend.envVars.OIDC_ENABLED
   description: Enable OIDC Login for ODK Central
@@ -26,3 +24,8 @@ questions:
   type: string
   label: OIDC Client Secret
   show_if: "backend.envVars.OIDC_ENABLED=true"
+
+- variable: s3BlobsEnabled
+  description: This enables use of S3 (Minio) for storing blobs.
+  type: boolean
+  label: Enable Blobs store to S3

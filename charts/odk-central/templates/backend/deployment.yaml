@@ -62,7 +62,7 @@ spec:
           {{- end }}
           env: {{- include "odk-central-backend.envVars" . | nindent 12 }}
           ports:
-          - name: container-port
+          - name: http
             containerPort: {{ .Values.backend.containerPort }}
           {{- if .Values.backend.resources }}
           resources: {{- include "common.tplvalues.render" (dict "value" .Values.backend.resources "context" $) | nindent 12 }}

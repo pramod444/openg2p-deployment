@@ -5,19 +5,21 @@ replicaCount: 1
 
 service:
   type: ClusterIP
-  port: 8005
+  port: 80
 
 image:
-  repository: openg2p/odk-central-enketo
-  tag: v2024.2.1
-  pullPolicy: Always
+  registry: ghcr.io
+  repository: enketo/enketo
+  tag: 7.5.1
+  pullPolicy: IfNotPresent
 
 containerPort: 8005
 
 startupProbe:
   enabled: true
-  tcpSocket:
-    port: 8005
+  httpGet:
+    port: http
+    path: /
   initialDelaySeconds: 0
   periodSeconds: 30
   timeoutSeconds: 5
@@ -26,8 +28,9 @@ startupProbe:
 
 livenessProbe:
   enabled: true
-  tcpSocket:
-    port: 8005
+  httpGet:
+    port: http
+    path: /
   initialDelaySeconds: 20
   periodSeconds: 60
   timeoutSeconds: 5
@@ -36,8 +39,9 @@ livenessProbe:
 
 readinessProbe:
   enabled: true
-  tcpSocket:
-    port: 8005
+  httpGet:
+    port: http
+    path: /
   initialDelaySeconds: 0
   periodSeconds: 20
   timeoutSeconds: 5
@@ -47,11 +51,11 @@ readinessProbe:
 command: []
 args: []
 
-resources:
-  limits: {}
+resources: {}
+  # limits:
   #   cpu: 200m
   #   memory: 256Mi
-  requests: {}
+  # requests:
   #   cpu: 100m
   #   memory: 1500Mi
 
@@ -64,12 +68,21 @@ podSecurityContext:
   enabled: false
   fsGroup: 1001
 
+enketoSrcDir: /srv/src/enketo/packages/enketo-express
+
+# Leave the following secrets blank to generate during installation.
+# If you already have existing values, they can be passed here.
+enketoSecret: ""
+enketoLessSecret: ""
+enketoApiKey: ""
+
 envVars:
   DOMAIN: '{{ tpl .Values.hostname $ }}'
   SUPPORT_EMAIL: '{{ tpl .Values.supportEmail $ }}'
   ENKETO_PORT: "8005"
-  REDIS_MAIN_HOST: '{{ include "common.names.fullname" . }}-redis-main'
-  REDIS_CACHE_HOST: '{{ include "common.names.fullname" . }}-redis-cache'
+  ENKETO_SRC_DIR: '{{ include "common.tplvalues.render" (dict "value" .Values.enketoSrcDir "context" $) }}'
+  REDIS_MAIN_HOST: '{{ tpl .Values.redisMainInstallationName $ }}'
+  REDIS_CACHE_HOST: '{{ tpl .Values.redisCacheInstallationName $ }}'
 envVarsFrom:
   ENKETO_SECRET:
     secretKeyRef:
@@ -84,40 +97,11 @@ envVarsFrom:
       name: '{{ include "common.names.fullname" . }}'
       key: enketo-api-key
 
-redis:
-  main:
-    enabled: true
-    image:
-      repository: redis
-      tag: '7.2'
-      pullPolicy: IfNotPresent
-    replicaCount: 1
-    confMountPath: /usr/local/etc/redis/mnt
-    command:
-    - redis-server
-    - /usr/local/etc/redis/mnt/redis-enketo-main.conf
-    containerPort: 6379
-    service:
-      type: ClusterIP
-      port: 6379
-  cache:
-    enabled: true
-    image:
-      repository: redis
-      tag: '7.2'
-      pullPolicy: IfNotPresent
-    replicaCount: 1
-    confMountPath: /usr/local/etc/redis/mnt
-    command:
-    - redis-server
-    - /usr/local/etc/redis/mnt/redis-enketo-cache.conf
-    containerPort: 6379
-    service:
-      type: ClusterIP
-      port: 6379
-
 startEnketoScript: |-
   #!/bin/sh
+
+  set -o pipefail
+  set -e
 
   CONFIG_PATH=${ENKETO_SRC_DIR}/config/config.json
   echo "generating enketo configuration..."
@@ -125,6 +109,7 @@ startEnketoScript: |-
   envsubst < "$CONFIG_PATH.template" > "$CONFIG_PATH"
 
   echo "starting enketo..."
+  cd $ENKETO_SRC_DIR
   exec yarn workspace enketo-express start
 
 configJsonTemplate: |-
@@ -168,134 +153,5 @@ configJsonTemplate: |-
     "exclude non-relevant": true
   }
 
-redisMainConf: |-
-  # Redis configuration for Enketo main database instance
-
-  #supervised systemd
-
-  #daemonize yes
-
-  #pidfile /var/run/redis-enketo-cache/redis-server.pid
-
-  port 6379
-
-  bind 0.0.0.0
-
-  timeout 0
-
-  tcp-keepalive 0
-
-  loglevel notice
-
-  #logfile /var/log/redis/redis-enketo-main.log
-
-  databases 16
-
-  save 300 1
-
-  stop-writes-on-bgsave-error yes
-
-  rdbcompression yes
-
-  rdbchecksum yes
-
-  dbfilename enketo-main.rdb
-
-  #dir /var/lib/redis/
-
-  slave-serve-stale-data yes
-  slave-read-only yes
-  repl-disable-tcp-nodelay no
-  slave-priority 100
-
-  appendonly no
-
-  lua-time-limit 5000
-
-  slowlog-log-slower-than 10000
-
-  slowlog-max-len 128
-
-  notify-keyspace-events ""
-
-  hash-max-ziplist-entries 512
-  hash-max-ziplist-value 64
-  list-max-ziplist-entries 512
-  list-max-ziplist-value 64
-  set-max-intset-entries 512
-  zset-max-ziplist-entries 128
-  zset-max-ziplist-value 64
-  activerehashing yes
-  client-output-buffer-limit normal 0 0 0
-  client-output-buffer-limit slave 256mb 64mb 60
-  client-output-buffer-limit pubsub 32mb 8mb 60
-  hz 10
-  aof-rewrite-incremental-fsync yes
-
-  #include /etc/redis/conf.d/local.conf
-
-redisCacheConf: |-
-  # Redis configuration for Enketo XSLT Cache
-
-  #supervised systemd
-
-  #daemonize yes
-
-  #pidfile /var/run/redis-enketo-cache/redis-server.pid
-
-  port 6379
-
-  bind 0.0.0.0
-
-  timeout 0
-
-  tcp-keepalive 0
-
-  loglevel notice
-
-  #logfile /var/log/redis/redis-enketo-cache.log
-
-  databases 16
-
-  save 3600 1
-
-  stop-writes-on-bgsave-error yes
-
-  rdbcompression yes
-
-  rdbchecksum yes
-
-  dbfilename enketo-cache.rdb
-
-  #dir /var/lib/redis/
-
-  slave-serve-stale-data yes
-  slave-read-only yes
-  repl-disable-tcp-nodelay no
-  slave-priority 100
-
-  appendonly no
-
-  lua-time-limit 5000
-
-  slowlog-log-slower-than 10000
-
-  slowlog-max-len 128
-
-  notify-keyspace-events ""
-
-  hash-max-ziplist-entries 512
-  hash-max-ziplist-value 64
-  list-max-ziplist-entries 512
-  list-max-ziplist-value 64
-  set-max-intset-entries 512
-  zset-max-ziplist-entries 128
-  zset-max-ziplist-value 64
-  activerehashing yes
-  client-output-buffer-limit normal 0 0 0
-  client-output-buffer-limit slave 256mb 64mb 60
-  client-output-buffer-limit pubsub 32mb 8mb 60
-  hz 10
-  aof-rewrite-incremental-fsync yes
-
-  #include /etc/redis/conf.d/local.conf
+redisMainInstallationName: '{{ include "common.names.fullname" . }}-redis-main-master'
+redisCacheInstallationName: '{{ include "common.names.fullname" . }}-redis-cache-master'

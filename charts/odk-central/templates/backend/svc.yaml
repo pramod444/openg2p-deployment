@@ -22,6 +22,6 @@ spec:
     - name: http
       port: {{ .Values.backend.service.port }}
       protocol: TCP
-      targetPort: {{ .Values.backend.containerPort }}
+      targetPort: http
   selector: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.backend.podLabels "context" $) | nindent 4 }}
 {{- end }}

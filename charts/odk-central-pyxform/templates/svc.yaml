@@ -2,14 +2,15 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "common.names.fullname" . }}
-  labels:
-    app.kubernetes.io/name: {{ include "common.names.fullname" . }}
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ .Values.service.type }}
   ports:
     - name: http
       port: {{ .Values.service.port }}
       protocol: TCP
-      targetPort: {{ .Values.containerPort }}
-  selector:
-    app.kubernetes.io/name: {{ include "common.names.fullname" . }}
+      targetPort: http
+  selector: {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 4 }}
