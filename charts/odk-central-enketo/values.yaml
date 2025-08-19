@@ -15,11 +15,11 @@ image:
 
 containerPort: 8005
 
+# There is no proper healthcheck api in enketo
 startupProbe:
   enabled: true
-  httpGet:
+  tcpSocket:
     port: http
-    path: /
   initialDelaySeconds: 0
   periodSeconds: 30
   timeoutSeconds: 5
@@ -28,9 +28,8 @@ startupProbe:
 
 livenessProbe:
   enabled: true
-  httpGet:
+  tcpSocket:
     port: http
-    path: /
   initialDelaySeconds: 20
   periodSeconds: 60
   timeoutSeconds: 5
@@ -39,17 +38,16 @@ livenessProbe:
 
 readinessProbe:
   enabled: true
-  httpGet:
+  tcpSocket:
     port: http
-    path: /
   initialDelaySeconds: 0
   periodSeconds: 20
   timeoutSeconds: 5
   failureThreshold: 2
   successThreshold: 1
 
-command: []
-args: []
+command: ['{{ include "common.tplvalues.render" (dict "value" .Values.enketoSrcDir "context" $) }}/start-enketo.sh']
+args: ["yarn", "workspace", "enketo-express", "start"]
 
 resources: {}
   # limits:
@@ -98,10 +96,10 @@ envVarsFrom:
       key: enketo-api-key
 
 startEnketoScript: |-
-  #!/bin/sh
+  #!/usr/bin/env bash
 
-  set -o pipefail
   set -e
+  set -o pipefail
 
   CONFIG_PATH=${ENKETO_SRC_DIR}/config/config.json
   echo "generating enketo configuration..."
@@ -110,7 +108,7 @@ startEnketoScript: |-
 
   echo "starting enketo..."
   cd $ENKETO_SRC_DIR
-  exec yarn workspace enketo-express start
+  exec $@
 
 configJsonTemplate: |-
   {

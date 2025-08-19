@@ -33,7 +33,7 @@ backend:
 
   podAnnotations: {}
   podLabels:
-    app.kubernetes.io/component: backend
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-backend'
 
   containerPort: 8383
   service:
@@ -45,11 +45,11 @@ backend:
     tag: v2025.2.1
     pullPolicy: Always
 
+  # There is no healthcheck api in odk-central-backend
   startupProbe:
     enabled: true
-    httpGet:
+    tcpSocket:
       port: http
-      path: /
     initialDelaySeconds: 0
     periodSeconds: 30
     timeoutSeconds: 5
@@ -58,9 +58,8 @@ backend:
 
   livenessProbe:
     enabled: true
-    httpGet:
+    tcpSocket:
       port: http
-      path: /
     initialDelaySeconds: 20
     periodSeconds: 60
     timeoutSeconds: 5
@@ -69,9 +68,8 @@ backend:
 
   readinessProbe:
     enabled: true
-    httpGet:
+    tcpSocket:
       port: http
-      path: /
     initialDelaySeconds: 0
     periodSeconds: 20
     timeoutSeconds: 5
@@ -302,7 +300,7 @@ frontend:
 
   podAnnotations: {}
   podLabels:
-    app.kubernetes.io/component: frontend
+    app.kubernetes.io/name: '{{ include "common.names.name" . }}-frontend'
 
   containerPort: 80
   service:
@@ -386,7 +384,7 @@ frontend:
 
   clientConfigJsonTemplate: |-
     {
-      "oidcEnabled": $OIDC_ENABLED
+      "oidcEnabled": ${OIDC_ENABLED}
     }
 
   setupOdkScript: |-
@@ -527,7 +525,7 @@ frontend:
 
       location ~ ^/v\d {
         proxy_set_header X-Forwarded-Proto https;
-        proxy_pass http://${BACKEND_URL}:8383;
+        proxy_pass http://${BACKEND_URL};
         proxy_redirect off;
 
         # buffer requests, but not responses, so streaming out works.
