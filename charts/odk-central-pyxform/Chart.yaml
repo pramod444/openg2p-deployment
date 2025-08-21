@@ -2,7 +2,7 @@ apiVersion: v2
 name: odk-central-pyxform
 description: A Helm chart for odk-central-pyxform.
 type: application
-version: v2024.2.1
+version: v2025.2.1
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
