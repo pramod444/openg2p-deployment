@@ -2,12 +2,12 @@ apiVersion: v2
 name: mock-identity-system
 description: A Helm chart for MOSIP Mock Identity System module
 type: application
-version: 0.9.4
+version: 0.9.5
 appVersion: 0.9.3
 dependencies:
 - name: common
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 2.x.x
+  repository: https://openg2p.github.io/openg2p-helm
+  version: 2.30.0
 home: https://mosip.io
 keywords:
   - mosip

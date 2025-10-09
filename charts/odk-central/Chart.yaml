@@ -2,16 +2,18 @@ apiVersion: v2
 name: odk-central
 description: A Helm chart for odk-central.
 type: application
-version: v2025.2.1
+version: v2025.2.2
 dependencies:
 - name: common
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 2.x.x
+  repository: https://openg2p.github.io/openg2p-helm
+  version: 2.30.0
 - name: odk-central-pyxform
-  version: v2025.2.1
+  repository: https://openg2p.github.io/openg2p-helm
+  version: v2025.2.2
   condition: odk-central-pyxform.enabled
 - name: odk-central-enketo
-  version: v2025.2.1
+  repository: https://openg2p.github.io/openg2p-helm
+  version: v2025.2.2
   condition: odk-central-enketo.enabled
 keywords:
   - odk
