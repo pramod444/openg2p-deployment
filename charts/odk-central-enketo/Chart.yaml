@@ -2,11 +2,11 @@ apiVersion: v2
 name: odk-central-enketo
 description: A Helm chart for odk-central-enketo.
 type: application
-version: v2025.2.1
+version: v2025.2.2
 dependencies:
 - name: common
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 2.x.x
+  repository: https://openg2p.github.io/openg2p-helm
+  version: 2.30.0
 keywords:
   - odk
   - odk-central

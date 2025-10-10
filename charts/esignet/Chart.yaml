@@ -2,12 +2,12 @@ apiVersion: v2
 name: esignet
 description: A Helm chart for MOSIP eSignet module
 type: application
-version: 1.4.2
+version: 1.4.3
 appVersion: 1.4.1
 dependencies:
 - name: common
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 2.x.x
+  repository: https://openg2p.github.io/openg2p-helm
+  version: 2.30.0
 home: https://mosip.io
 keywords:
   - mosip

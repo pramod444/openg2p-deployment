@@ -2,12 +2,12 @@ apiVersion: v2
 name: artifactory
 description: A Helm chart for MOSIP Artifactory
 type: application
-version: 12.0.2
+version: 12.0.3
 appVersion: ""
 dependencies:
   - name: common
-    repository: oci://registry-1.docker.io/bitnamicharts
-    version: 2.x.x
+    repository: https://openg2p.github.io/openg2p-helm
+    version: 2.30.0
 home: https://mosip.io
 keywords:
   - artifactory
