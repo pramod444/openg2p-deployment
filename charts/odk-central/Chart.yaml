@@ -8,11 +8,9 @@ dependencies:
   repository: https://openg2p.github.io/openg2p-helm
   version: 2.30.0
 - name: odk-central-pyxform
-  repository: https://openg2p.github.io/openg2p-helm
   version: v2025.2.2
   condition: odk-central-pyxform.enabled
 - name: odk-central-enketo
-  repository: https://openg2p.github.io/openg2p-helm
   version: v2025.2.2
   condition: odk-central-enketo.enabled
 keywords:
