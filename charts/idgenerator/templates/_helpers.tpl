@@ -71,6 +71,19 @@ Render Env values section
 {{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
 {{- end -}}
 
+{{- define "idgenerator.postgresInit.envVars" -}}
+{{- $envVars := merge (deepCopy .Values.postgresInit.envVars) (deepCopy .Values.postgresInit.envVarsFrom) -}}
+{{- include "idgenerator.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- end -}}
+
+{{- define "idgenerator.command" -}}
+{{- include "idgenerator.commandBase" (dict "command" .Values.command "args" .Values.args "startUpCommand" .Values.startUpCommand "context" $) }}
+{{- end -}}
+
+{{- define "idgenerator.postgresInit.command" -}}
+{{- include "idgenerator.commandBase" (dict "command" .Values.postgresInit.command "args" .Values.postgresInit.args "startUpCommand" .Values.postgresInit.startUpCommand "context" $) }}
+{{- end -}}
+
 {{- define "idgenerator.config-server.envVars" -}}
 {{- $overridesEnvVars := dict -}}
 {{- if .Values.springCloudConfig.enabled -}}
@@ -99,6 +112,3 @@ args: []
 {{- end }}
 {{- end -}}
 
-{{- define "idgenerator.command" -}}
-{{- include "idgenerator.commandBase" (dict "command" .Values.command "args" .Values.args "startUpCommand" .Values.startUpCommand "context" $) }}
-{{- end -}}
