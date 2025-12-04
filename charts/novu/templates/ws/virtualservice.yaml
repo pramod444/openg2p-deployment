@@ -1,0 +1,34 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ printf "%s-%s" .Release.Name "ws"  }}
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  hosts:
+    - {{ .Values.ws.istio.virtualservice.host }}
+  gateways:
+    - {{ .Values.ws.istio.virtualservice.gateway }}
+  http:
+    - headers:
+        request:
+          set:
+            x-forwarded-host: "{{ .Values.ws.istio.virtualservice.host }}"
+            x-forwarded-proto: "https"
+      match:
+        - authority:
+            exact: {{ .Values.ws.istio.virtualservice.host }}
+      route:
+        - destination:
+            host: {{ .Values.ws.istio.virtualservice.destination }}
+            port:
+              number: {{ .Values.ws.istio.virtualservice.destinationPort }}
+      {{- if .Values.ws.istio.virtualservice.prefix }}
+      match:
+        - uri:
+            prefix: {{ .Values.ws.istio.virtualservice.prefix }}
+      {{- end }}
+      {{- if .Values.ws.istio.virtualservice.rewriteUri }}
+      rewrite:
+        uri: {{ .Values.ws.istio.virtualservice.rewriteUri }}
+      {{- end }}
