@@ -1,0 +1,15 @@
+dependencies:
+- name: redis
+  repository: https://openg2p.github.io/openg2p-helm
+  version: 19.6.4
+- name: mongodb
+  repository: ""
+  version: 13.18.5
+- name: common
+  repository: https://openg2p.github.io/openg2p-helm
+  version: 2.30.0
+- name: localstack
+  repository: ""
+  version: 0.4.3
+digest: sha256:046d6c07308ab47376c05501d94c0e37b8e57bb302341777b275bbd17838679c
+generated: "2025-12-01T16:15:45.052680649+05:30"

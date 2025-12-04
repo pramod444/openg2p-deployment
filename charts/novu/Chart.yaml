@@ -1,0 +1,26 @@
+name: novu
+description: A Helm Chart for novu
+version: 0.1.6
+apiVersion: v2
+appVersion: 0.15.0
+keywords:
+  - novu
+  - notification framework
+sources:
+  - https://github.com/novuhq/novu/tree/next/docker/kubernetes/helm
+home: https://novu.co/
+dependencies:
+  - condition: redis.enabled
+    name: redis
+    repository: https://openg2p.github.io/openg2p-helm
+    version: 19.6.4
+  - condition: mongodb.enabled
+    alias: mongodb
+    name: mongodb
+    version: 13.18.5
+  - name: common
+    repository: https://openg2p.github.io/openg2p-helm
+    version: 2.30.0
+  - condition: localstack.enabled
+    name: localstack
+    version: 0.4.3
