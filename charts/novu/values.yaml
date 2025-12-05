@@ -381,7 +381,7 @@ api:
     enabled: true
     virtualservice:
       enabled: true
-      host: "novu-api.loadtest.openg2p.org"
+#      host: "novu-api.loadtest.openg2p.org"
       gateway: "internal"
       destination: "novu-api"
       destinationPort: 3000
@@ -1187,7 +1187,7 @@ ws:
     enabled: true
     virtualservice:
       enabled: true
-      host: "novu-ws.loadtest.openg2p.org"
+#      host: "novu-ws.loadtest.openg2p.org"
       gateway: "internal"
       destination: "novu-ws"
       destinationPort: 3002
@@ -1485,7 +1485,7 @@ web:
     enabled: true
     virtualservice:
       enabled: true
-      host: "novu.loadtest.openg2p.org"
+#      host: "novu.loadtest.openg2p.org"
       gateway: "internal"
       destination: "novu-web"
       destinationPort: 4200

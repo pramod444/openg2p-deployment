@@ -1,0 +1,38 @@
+questions:
+  # -----------------------
+  # API Configuration Group
+  # -----------------------
+  - variable: api.env.API_ROOT_URL
+    group: "API Configuration"
+    label: "API Root URL"
+    description: "Base URL for the Novu API service"
+    type: string
+    required: true
+    default: "https://novu-api.loadtest.openg2p.org"
+
+  - variable: api.env.FRONT_BASE_URL
+    group: "API Configuration"
+    label: "Frontend Base URL"
+    description: "The base URL where Novu Frontend is accessible"
+    type: string
+    required: true
+    default: "https://novu.loadtest.openg2p.org"
+
+  # -----------------------
+  # Web Configuration Group
+  # -----------------------
+  - variable: web.apiExternalEndpoint
+    group: "Web Configuration"
+    label: "API External Endpoint"
+    description: "Public API endpoint used by the Web UI"
+    type: string
+    required: true
+    default: "https://novu-api.loadtest.openg2p.org"
+
+  - variable: web.wsExternalEndpoint
+    group: "Web Configuration"
+    label: "WebSocket External Endpoint"
+    description: "Public WebSocket endpoint used by the Web UI"
+    type: string
+    required: true
+    default: "https://novu-ws.loadtest.openg2p.org"
