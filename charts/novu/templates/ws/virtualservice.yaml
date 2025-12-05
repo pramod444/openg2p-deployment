@@ -6,18 +6,18 @@ metadata:
   labels: {{- include "common.labels.standard" . | nindent 4 }}
 spec:
   hosts:
-    - {{ .Values.ws.istio.virtualservice.host }}
+    - {{ (trimPrefix "https://" (trimPrefix "http://" .Values.web.wsExternalEndpoint)) | trimSuffix "/" }}
   gateways:
     - {{ .Values.ws.istio.virtualservice.gateway }}
   http:
     - headers:
         request:
           set:
-            x-forwarded-host: "{{ .Values.ws.istio.virtualservice.host }}"
+            x-forwarded-host: "{{ (trimPrefix "https://" (trimPrefix "http://" .Values.web.wsExternalEndpoint)) | trimSuffix "/" }}"
             x-forwarded-proto: "https"
       match:
         - authority:
-            exact: {{ .Values.ws.istio.virtualservice.host }}
+            exact: {{ (trimPrefix "https://" (trimPrefix "http://" .Values.web.wsExternalEndpoint)) | trimSuffix "/" }}
       route:
         - destination:
             host: {{ .Values.ws.istio.virtualservice.destination }}
