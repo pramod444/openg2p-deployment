@@ -1,0 +1,22 @@
+apiVersion: v2
+name: strapi
+description: A Helm chart for deploying Strapi CMS on Kubernetes with Istio
+type: application
+version: 1.0.0
+appVersion: "4.25.0"
+
+keywords:
+  - strapi
+  - cms
+  - headless-cms
+  - istio
+
+maintainers:
+  - name: Shaket Shubham
+    email: shaketshubham276@gmail.com
+
+dependencies:
+  - name: postgresql
+    version: "16.4.2"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
