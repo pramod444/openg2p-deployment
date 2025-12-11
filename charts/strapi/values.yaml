@@ -16,7 +16,7 @@ istio:
   tlsSecretName: wildcard-cert
   # Gateway will be created in the same namespace as the release
   # TLS secret should exist in istio-system namespace
-  httpsRedirect: true  # Redirect HTTP to HTTPS
+  httpsRedirect: false  # Redirect HTTP to HTTPS
 
 ingress:
   enabled: false
@@ -49,19 +49,21 @@ postgresql:
   enabled: true
   image:
     registry: docker.io
-    repository: bitnami/postgresql
-    tag: latest
+    repository: openg2p/postgresql
+    tag: 16.4.0-debian-12-r14
     pullPolicy: IfNotPresent
 
   auth:
     username: strapi
-    password: "StrapiDB@123"
+    password: "StrapiDB@123"  # Consider using existingSecret instead
     database: strapi
+    # existingSecret: "postgresql-secret"  # Uncomment if using secrets
 
   primary:
     persistence:
       enabled: true
       size: 8Gi
+      # storageClass: ""  # Add if you need a specific storage class
 
 # Environment variables
 extraEnv:
@@ -93,3 +95,6 @@ healthCheck:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 6
+global:
+  security:
+    allowInsecureImages: true

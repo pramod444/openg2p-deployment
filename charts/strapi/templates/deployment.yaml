@@ -139,3 +139,4 @@ spec:
           persistentVolumeClaim:
             claimName: {{ include "strapi.fullname" . }}-pvc
       {{- end }}
+      
