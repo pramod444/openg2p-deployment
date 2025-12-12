@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: vin0dkhichar/strapi
+  repository: openg2p/strapi
   tag: v4
   pullPolicy: IfNotPresent
 
