@@ -8,7 +8,7 @@ metadata:
     {{- include "strapi.labels" . | nindent 4 }}
 spec:
   hosts:
-    - {{ .Values.istio.host | quote }}
+    - {{ (trimPrefix "https://" (trimPrefix "http://" .Values.strapi.url)) | trimSuffix "/" }}
   gateways:
     - {{ .Values.istio.gatewayName }}
   http:

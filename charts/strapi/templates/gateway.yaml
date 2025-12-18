@@ -1,4 +1,6 @@
 {{- if .Values.istio.enabled }}
+{{- $host := required "strapi.url must be set for Istio Gateway" .Values.strapi.url }}
+
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
@@ -10,19 +12,17 @@ spec:
   selector:
     istio: ingressgateway
   servers:
-    # HTTP Server (with redirect to HTTPS if enabled)
     - port:
         number: 80
         name: http
         protocol: HTTP
       {{- if .Values.istio.httpsRedirect }}
       tls:
-        httpsRedirect: false
+        httpsRedirect: true
       {{- end }}
       hosts:
-        - {{ .Values.istio.host | quote }}
-    
-    # HTTPS Server
+        - {{ $host | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}
+
     - port:
         number: 443
         name: https
@@ -31,5 +31,5 @@ spec:
         mode: SIMPLE
         credentialName: {{ .Values.istio.tlsSecretName }}
       hosts:
-        - {{ .Values.istio.host | quote }}
+        - {{ $host | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}
 {{- end }}
