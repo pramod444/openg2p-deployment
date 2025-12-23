@@ -1,0 +1,99 @@
+replicaCount: 1
+
+image:
+  repository: openg2p/strapi
+  tag: v4
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 1337
+  
+istio:
+  enabled: true
+  # host: ""
+  gatewayName: strapi-gateway
+  tlsSecretName: wildcard-cert
+  # Gateway will be created in the same namespace as the release
+  # TLS secret should exist in istio-system namespace
+  httpsRedirect: false  # Redirect HTTP to HTTPS
+
+ingress:
+  enabled: false
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: "nfs-csi"
+  accessMode: ReadWriteOnce
+  mountPath: /opt/app/public/uploads
+
+strapi:
+  url: https://strapi.devops.openg2p.org
+  adminUrl: https://strapi.devops.openg2p.org/admin
+
+  appKeys: "jkfhshfuwh"
+  apiTokenSalt: "jfsh78yfhsuj"
+  adminJwtSecret: "jnhwh78fwyf"
+  transferTokenSalt: "wfijwu98fujwf"
+  jwtSecret: "jkfnsiuhfiu"
+
+  admin:
+    email: ""
+    password: ""
+    firstname: Admin
+    lastname: User
+
+database:
+  client: postgres
+  ssl: false
+
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: openg2p/postgresql
+    tag: 16.3.0-debian-12-r16
+    pullPolicy: IfNotPresent
+
+  auth:
+    username: strapi
+    password: "skfjkjfhw8e"  # Consider using existingSecret instead
+    database: strapi
+    # existingSecret: "postgresql-secret"  # Uncomment if using secrets
+
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      # storageClass: ""  # Add if you need a specific storage class
+
+# Environment variables
+extraEnv:
+  - name: NODE_ENV
+    value: production
+  - name: HOST
+    value: "0.0.0.0"
+  - name: PORT
+    value: "1337"
+
+# Resource limits (recommended for production)
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+# Health checks
+healthCheck:
+  enabled: true
+  path: /_health
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+global:
+  security:
+    allowInsecureImages: true

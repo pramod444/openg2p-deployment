@@ -1,0 +1,22 @@
+questions:
+  - variable: strapi.url
+    group: "Strapi Configuration"
+    label: "Strapi Public URL"
+    description: "The public URL where Strapi will be accessible "
+    type: string
+    required: true
+    default: "https://strapi.devops.openg2p.org"
+
+  - variable: strapi.admin.email
+    label: "Strapi Admin Email"
+    description: "Email address for the Strapi admin user"
+    type: string
+    required: true
+    group: "Strapi Admin Configuration"
+
+  - variable: strapi.admin.password
+    label: "Strapi Admin Password"
+    description: "Password for the Strapi admin user"
+    type: password
+    required: true
+    group: "Strapi Admin Configuration"
