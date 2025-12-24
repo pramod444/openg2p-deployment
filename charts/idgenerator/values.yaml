@@ -10,6 +10,10 @@
 global:
   keycloakBaseUrl: 'https://keycloak.your.org'
   postgresqlHost: openg2p-commons-postgresql
+  kernelDB: mosip_kernel
+  kernelDBUser: kerneluser
+  kernelDBSecret: kernel
+  kernelDBUserPasswordKey: kernel_db_user
 
 hostname: idgenerator.openg2p.sandbox.net
 
@@ -408,44 +412,20 @@ istio:
       mode: SIMPLE
       credentialName: ""
 
-postgresInit:
+postgres-init:
   enabled: true
-  image:
-    repository: mosipid/postgres-init
-    tag: 1.2.0.1-B4
-    pullPolicy: Always
-  containerSecurityContext:
-    enabled: false
-  podSecurityContext:
-    enabled: false
-  commonAnnotations:
-    "helm.sh/hook": post-install
-    "helm.sh/hook-weight": "0"
-    "helm.sh/hook-delete-policy": before-hook-creation
-  command:
-    - bash
-  args:
-    - -c
-    - until pg_isready -h ${DB_SERVERIP} -p ${DB_PORT}; do sleep 3; done && ./postgres-init.sh
-
-  envVars:
-    MOSIP_DB_NAME: mosip_kernel
-    DB_SERVERIP: '{{ tpl .Values.global.postgresqlHost $ }}'
-    DB_PORT: '5432'
-    SU_USER: postgres
-    DB_USER: kerneluser
-    DML_FLAG: '0'
-    GIT_REPO_URL: https://github.com/mosip/commons.git
-    GIT_BRANCH: v1.2.0.1
-  envVarsFrom:
-    SU_USER_PWD:
-      secretKeyRef:
-        name: '{{ tpl .Values.global.postgresqlHost $ }}'
-        key: postgres-password
-    DBUSER_PWD:
-      secretKeyRef:
-        name: '{{ tpl .Values.global.postgresqlHost $ }}-addl-user-passwords'
-        key: kerneluser
+  postgresql:
+    host: '{{ .Values.global.postgresqlHost }}'
+    port: 5432
+    # Hard coding. Same as one defined under Odoo
+    existingSecret: openg2p-commons-postgresql
+    existingSecretPostgresPasswordKey: postgres-password
+  databases:
+    # Same as db in Odoo
+    - name: '{{ tpl .Values.global.kernelDB $ }}'
+      user: '{{ tpl .Values.global.kernelDBUser $ }}'
+      secret: '{{ tpl .Values.global.kernelDBSecret $ }}'
+      secretUserPasswordKey: '{{ tpl .Values.global.kernelDBUserPasswordKey $ }}'
 
 ## Edit the following properties with names of installation of the dependencies.
 artifactoryInstallationName: '{{ .Release.Name }}-artifactory'
@@ -489,8 +469,8 @@ envVarsFrom:
   # Else they will be rendered on config-server as overrides.
   db_dbuser_password:
     secretKeyRef:
-      name: '{{ tpl .Values.postgresqlInstallationName $ }}'
-      key: password
+      name: kernel
+      key: kernel_db_user
 
 springCloudConfigEnvVars:
   # Env Vars in this section will be rendered on the service, when springCloudConfig.enabled=true.
