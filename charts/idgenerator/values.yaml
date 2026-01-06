@@ -9,7 +9,7 @@
 #   storageClass: myStorageClass
 global:
   keycloakBaseUrl: 'https://keycloak.your.org'
-  postgresqlHost: openg2p-commons-postgresql
+  postgresqlHost: commons-postgresql
   kernelDB: mosip_kernel
   kernelDBUser: kerneluser
   kernelDBSecret: kernel
@@ -418,7 +418,7 @@ postgres-init:
     host: '{{ .Values.global.postgresqlHost }}'
     port: 5432
     # Hard coding. Same as one defined under Odoo
-    existingSecret: openg2p-commons-postgresql
+    existingSecret: commons-postgresql
     existingSecretPostgresPasswordKey: postgres-password
   databases:
     # Same as db in Odoo
