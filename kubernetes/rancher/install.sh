@@ -9,10 +9,10 @@ export NS=${NS:-cattle-system}
 
 kubectl create ns $NS
 
-helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
+helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
 helm repo update
 
-helm -n $NS upgrade --install rancher rancher-latest/rancher \
+helm -n $NS upgrade --install rancher rancher-stable/rancher \
     --set ingress.enabled=false \
     --set tls=external \
     $@
