@@ -83,13 +83,40 @@ spec:
           {{- end }}
           {{- if .Values.diagnosticMode.enabled }}
           command: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.command "context" $) | nindent 12 }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.args "context" $) | nindent 12 }}
           {{- else if .Values.web.command }}
           command: {{- include "common.tplvalues.render" (dict "value" .Values.web.command "context" $) | nindent 12 }}
-          {{- end }}
-          {{- if .Values.diagnosticMode.enabled }}
-          args: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.args "context" $) | nindent 12 }}
-          {{- else if .Values.web.args }}
+          {{- if .Values.web.args }}
           args: {{- include "common.tplvalues.render" (dict "value" .Values.web.args "context" $) | nindent 12 }}
+          {{- end }}
+          {{- else }}
+          command: ["/bin/sh"]
+          args:
+            - "-c"
+            - |
+              #!/bin/sh
+              set -e
+              
+              echo "Generating env-config.js with runtime environment variables..."
+              
+              # Create env-config.js directly from environment variables
+              cat > /app/build/env-config.js << EOF
+              window._env_ = {
+                SKIP_PREFLIGHT_CHECK: '${SKIP_PREFLIGHT_CHECK:-true}',
+                REACT_APP_ENVIRONMENT: '${REACT_APP_ENVIRONMENT:-production}',
+                REACT_APP_DOCKER_HOSTED_ENV: '${REACT_APP_DOCKER_HOSTED_ENV:-true}',
+                REACT_APP_API_URL: '${REACT_APP_API_URL}',
+                REACT_APP_WS_URL: '${REACT_APP_WS_URL}',
+                REACT_APP_WEBHOOK_URL: '${REACT_APP_WEBHOOK_URL:-}',
+                REACT_APP_IS_SELF_HOSTED: 'true',
+              };
+              EOF
+              
+              echo "Generated env-config.js:"
+              cat /app/build/env-config.js
+              
+              echo "Starting http-server on port 4200 with SPA fallback..."
+              exec http-server build -p 4200 -a 0.0.0.0 --proxy http://localhost:4200?
           {{- end }}
           env:
             - name: REACT_APP_ENVIRONMENT
