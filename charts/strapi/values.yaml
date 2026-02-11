@@ -11,12 +11,11 @@ service:
   
 istio:
   enabled: true
-  # host: ""
-  gatewayName: strapi-gateway
-  tlsSecretName: wildcard-cert
-  # Gateway will be created in the same namespace as the release
-  # TLS secret should exist in istio-system namespace
-  httpsRedirect: false  # Redirect HTTP to HTTPS
+  virtualservice:
+      enabled: true
+      gateway: "internal"
+      
+     
 
 ingress:
   enabled: false
