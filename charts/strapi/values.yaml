@@ -11,9 +11,8 @@ service:
   
 istio:
   enabled: true
-  virtualservice:
-      enabled: true
-      gateway: "internal"
+  
+  gatewayName: "internal"
       
      
 
@@ -28,8 +27,8 @@ persistence:
   mountPath: /opt/app/public/uploads
 
 strapi:
-  url: https://strapi.devops.openg2p.org
-  adminUrl: https://strapi.devops.openg2p.org/admin
+  url: https://strapi.qa.openg2p.org
+  adminUrl: https://strapi.qa.openg2p.org/admin
 
   appKeys: "jkfhshfuwh"
   apiTokenSalt: "jfsh78yfhsuj"
