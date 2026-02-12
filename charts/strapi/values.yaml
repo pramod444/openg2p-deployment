@@ -11,12 +11,10 @@ service:
   
 istio:
   enabled: true
-  # host: ""
-  gatewayName: strapi-gateway
-  tlsSecretName: wildcard-cert
-  # Gateway will be created in the same namespace as the release
-  # TLS secret should exist in istio-system namespace
-  httpsRedirect: false  # Redirect HTTP to HTTPS
+  
+  gatewayName: "internal"
+      
+     
 
 ingress:
   enabled: false
@@ -29,8 +27,8 @@ persistence:
   mountPath: /opt/app/public/uploads
 
 strapi:
-  url: https://strapi.devops.openg2p.org
-  adminUrl: https://strapi.devops.openg2p.org/admin
+  url: https://strapi.qa.openg2p.org
+  adminUrl: https://strapi.qa.openg2p.org/admin
 
   appKeys: "jkfhshfuwh"
   apiTokenSalt: "jfsh78yfhsuj"
