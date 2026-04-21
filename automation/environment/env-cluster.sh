@@ -428,6 +428,7 @@ step4_commons_base() {
     log_step "4" "Installing openg2p-commons-base in '${env_name}'"
 
     local base_domain=$(cfg "base_domain")
+    local admin_email=$(cfg "admin_email" "")
     local chart_name=$(cfg "commons_base.chart_name" "openg2p-commons-base")
     local chart_ref=$(get_chart_ref "commons_base.chart_path" "$chart_name")
     local chart_version=$(cfg "commons_base.chart_version" "2.0.0-develop")
@@ -448,10 +449,11 @@ step4_commons_base() {
         log_info "Release '${release_name}' not found. Performing fresh install."
     fi
 
-    log_info "Chart:    ${chart_ref}"
-    log_info "Version:  ${chart_version}"
-    log_info "Release:  ${release_name}"
-    log_info "Domain:   ${base_domain}"
+    log_info "Chart:       ${chart_ref}"
+    log_info "Version:     ${chart_version}"
+    log_info "Release:     ${release_name}"
+    log_info "Domain:      ${base_domain}"
+    [[ -n "$admin_email" ]] && log_info "Admin email: ${admin_email}"
     echo ""
 
     # Extra helm args from config
@@ -462,9 +464,18 @@ step4_commons_base() {
         extra=($extra_args)
     fi
 
+    # Admin email maps to the chart's default staff-realm admin user.
+    # Only pass it if the user actually set admin_email in the config;
+    # otherwise let the chart use its own default.
+    local -a admin_args=()
+    if [[ -n "$admin_email" ]]; then
+        admin_args=(--set "keycloak-init.realms.staff.users[0].email=${admin_email}")
+    fi
+
     helm_install_chart "$env_name" "$release_name" "$chart_ref" "$chart_version" \
         "openg2p-commons-base" \
         --set "global.baseDomain=${base_domain}" \
+        "${admin_args[@]}" \
         "${extra[@]}" \
         || return 1
 
