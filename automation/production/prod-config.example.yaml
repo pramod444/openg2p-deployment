@@ -1,0 +1,155 @@
+# =============================================================================
+# OpenG2P 3-Node Production Infrastructure Configuration
+# =============================================================================
+# Copy this file to prod-config.yaml and fill in your values:
+#   cp prod-config.example.yaml prod-config.yaml
+#
+# Then run on your laptop:
+#   ./openg2p-prod.sh --config prod-config.yaml
+#
+# Architecture:
+#   • Reverse Proxy node — Nginx (TLS terminator), Wireguard server, dnsmasq, local CA
+#   • Compute node       — RKE2 single control-plane, Istio, Rancher, Keycloak, monitoring, logging
+#   • Storage node       — NFS server, Postgres host service (ready for env automation)
+#
+# Admin tools (Rancher, Keycloak) are reachable ONLY via Wireguard, on hostnames
+# under the internal_domain (e.g. rancher.openg2p.internal). The script generates
+# a local CA and self-signs certs for those hostnames; install the CA cert on
+# your laptop after first install.
+#
+# Customer-supplied public domains and certs come later, with environment automation.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Cluster identity
+# ---------------------------------------------------------------------------
+# Display name for the Rancher cluster (also used for NFS export path prefix).
+cluster_name: "openg2p"
+
+# Internal TLD for admin tools — see header note. Default is .openg2p.internal.
+# .internal is ICANN-reserved (2024) for private use, so it will never clash
+# with public DNS. Change only if it conflicts with an existing private zone
+# in the customer's network.
+internal_domain: "openg2p.internal"
+
+# ---------------------------------------------------------------------------
+# Reverse Proxy node
+# ---------------------------------------------------------------------------
+# Public IP — used as the Wireguard endpoint for admin laptops.
+rp_public_ip: ""
+
+# Private IP — on the same subnet as the compute and storage nodes.
+rp_private_ip: ""
+
+# SSH host the orchestrator dials from your laptop.
+# Defaults to rp_public_ip if blank. Override if you SSH via a different name.
+rp_ssh_host: ""
+# user must have passwordless sudo (NOPASSWD:ALL) or be root directly.
+rp_ssh_user: "ubuntu"
+rp_ssh_key:  "~/.ssh/id_rsa"
+
+# ---------------------------------------------------------------------------
+# Compute node (Kubernetes)
+# ---------------------------------------------------------------------------
+compute_private_ip: ""
+compute_node_name: "compute-1"
+# SSH host the orchestrator dials. Defaults to compute_private_ip.
+# Set to a public IP/hostname if your laptop can't reach the private subnet
+# directly (or use ssh_jump below to bastion through RP).
+compute_ssh_host: ""
+compute_ssh_user: "ubuntu"
+compute_ssh_key:  "~/.ssh/id_rsa"
+
+# ---------------------------------------------------------------------------
+# Storage node (NFS + Postgres host)
+# ---------------------------------------------------------------------------
+storage_private_ip: ""
+storage_node_name: "storage-1"
+# SSH host the orchestrator dials. Defaults to storage_private_ip.
+storage_ssh_host: ""
+storage_ssh_user: "ubuntu"
+storage_ssh_key:  "~/.ssh/id_rsa"
+
+# ---------------------------------------------------------------------------
+# SSH bastion (optional)
+# ---------------------------------------------------------------------------
+# If your laptop can only reach the RP node directly, set this to true and
+# the orchestrator will ProxyJump compute/storage SSH through the RP node.
+# The compute_ssh_host / storage_ssh_host then resolve from RP's perspective
+# (typically the private IPs).
+ssh_jump_via_rp: false
+
+# ---------------------------------------------------------------------------
+# Network
+# ---------------------------------------------------------------------------
+# CIDR covering all 3 nodes' private IPs. Used for ufw rules between nodes.
+private_subnet: "10.0.0.0/16"
+
+# Who is allowed to SSH into the public-facing RP node.
+# Tighten to your office/jump-host CIDR for production. 0.0.0.0/0 is open.
+admin_cidr: "0.0.0.0/0"
+
+# ---------------------------------------------------------------------------
+# Wireguard (admin VPN — server lives on the RP node)
+# ---------------------------------------------------------------------------
+# Endpoint clients dial. Defaults to rp_public_ip if blank.
+wg_endpoint: ""
+
+# Wireguard tunnel subnet. Must not overlap with private_subnet.
+wg_subnet: "10.15.0.0/16"
+
+# UDP port. Open this on RP's public security group.
+wg_port: "51820"
+
+# How many peer configs to pre-generate at /etc/wireguard/peers/peerN/.
+wg_peers: "8"
+
+# ---------------------------------------------------------------------------
+# RKE2 / Kubernetes
+# ---------------------------------------------------------------------------
+rke2_version: "v1.33.6+rke2r1"
+
+# Cluster join token. Auto-generated if blank — saved into the state dir on
+# the compute node so you can later add worker/server nodes via add-node.
+rke2_token: ""
+
+# ---------------------------------------------------------------------------
+# Rancher
+# ---------------------------------------------------------------------------
+rancher_version:  "2.12.3"
+rancher_replicas: "1"
+
+# ---------------------------------------------------------------------------
+# Keycloak (admin SSO for Rancher only — runs in-cluster with embedded Postgres)
+# ---------------------------------------------------------------------------
+keycloak_replicas: "1"
+
+# Email for the Keycloak admin user. Becomes the username after first login
+# (Keycloak treats email-as-username once enabled).
+keycloak_admin_email: "admin@openg2p.internal"
+
+# ---------------------------------------------------------------------------
+# Storage node — host PostgreSQL (installed and listening, no app DBs yet)
+# ---------------------------------------------------------------------------
+# Future environment automation will create per-environment databases on this
+# server. Infra installs and configures it; nothing in the cluster uses it yet.
+postgres_version: "16"
+
+# Bind address — must be the storage node's private IP so compute can reach it.
+# Leave blank to use storage_private_ip automatically.
+postgres_listen: ""
+
+postgres_port: "5432"
+
+# Superuser password — auto-generated if blank, saved at
+# /etc/openg2p/secrets/postgres-superuser.env (mode 0600) on the storage node.
+postgres_superuser_password: ""
+
+# ---------------------------------------------------------------------------
+# NFS (server on storage node, client on compute node)
+# ---------------------------------------------------------------------------
+# Export path on the storage node. Created if missing.
+nfs_export_path: "/srv/nfs"
+
+# Mount path on the compute node.
+nfs_mount_path: "/mnt/nfs"
