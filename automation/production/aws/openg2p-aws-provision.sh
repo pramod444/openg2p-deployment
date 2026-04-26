@@ -284,11 +284,15 @@ main() {
     fi
 
     # ── 10. Wait for running ────────────────────────────────────────────
+    # NOTE: 'wait' with no args blocks on ALL child processes, which includes
+    # the tee subprocess from `exec > >(tee ...)` at the top of the script.
+    # Track PIDs and wait on those explicitly to avoid the deadlock.
     log_step "4" "Waiting for all 3 instances to reach 'running' state"
-    aws_wait_running "$rp_id"      "RP"      &
-    aws_wait_running "$compute_id" "Compute" &
-    aws_wait_running "$storage_id" "Storage" &
-    wait
+    local rp_pid compute_pid storage_pid
+    aws_wait_running "$rp_id"      "RP"      & rp_pid=$!
+    aws_wait_running "$compute_id" "Compute" & compute_pid=$!
+    aws_wait_running "$storage_id" "Storage" & storage_pid=$!
+    wait "$rp_pid" "$compute_pid" "$storage_pid"
     log_success "All 3 instances running."
 
     # ── 11. Disable source/dest check on RP (Wireguard) ────────────────
@@ -303,10 +307,11 @@ main() {
     # ── 13. Wait for status checks (running != ready) ──────────────────
     log_step "5" "Waiting for all 3 instances to pass status checks"
     log_info "(This typically takes 2-5 minutes per instance.)"
-    aws_wait_status_ok "$rp_id"      "RP"      &
-    aws_wait_status_ok "$compute_id" "Compute" &
-    aws_wait_status_ok "$storage_id" "Storage" &
-    wait
+    local rp_status_pid compute_status_pid storage_status_pid
+    aws_wait_status_ok "$rp_id"      "RP"      & rp_status_pid=$!
+    aws_wait_status_ok "$compute_id" "Compute" & compute_status_pid=$!
+    aws_wait_status_ok "$storage_id" "Storage" & storage_status_pid=$!
+    wait "$rp_status_pid" "$compute_status_pid" "$storage_status_pid"
     log_success "All 3 instances passed status checks."
 
     # ── 14. Capture IPs ────────────────────────────────────────────────

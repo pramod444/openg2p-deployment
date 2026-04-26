@@ -194,20 +194,20 @@ validate_config() {
     for key in "${required_keys[@]}"; do
         if [[ -z "$(cfg "$key")" ]]; then
             log_warn "Missing required config key: '${key}'"
-            ((errors++))
+            errors=$((errors + 1))
         fi
     done
 
     local ip=$(cfg "node_ip")
     if [[ -n "$ip" ]] && ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         log_warn "Invalid IP address format: '${ip}'"
-        ((errors++))
+        errors=$((errors + 1))
     fi
 
     local email=$(cfg "letsencrypt_email")
     if [[ -n "$email" ]] && ! [[ "$email" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
         log_warn "Invalid email format: '${email}'"
-        ((errors++))
+        errors=$((errors + 1))
     fi
 
     if [[ $errors -gt 0 ]]; then

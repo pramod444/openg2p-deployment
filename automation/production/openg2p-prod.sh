@@ -233,13 +233,15 @@ preflight_all() {
     tmp=$(mktemp -d -t openg2p-preflight.XXXXXX)
     trap "rm -rf '$tmp'" RETURN
 
-    # Push config to each node first (sequential, fast — ssh_push uses rsync).
-    # This avoids the inline cat-stdin trick which is fragile.
+    # Push config to each node first. Track PIDs explicitly because `wait`
+    # with no args also blocks on the tee subprocess from `exec > >(tee ...)`.
+    local push_pids=()
     for role in storage compute rp; do
         ssh_push "$role" "${SCRIPT_DIR}/lib/shared/" "${REMOTE_WORK_DIR}/lib/shared/" \
             >"${tmp}/${role}.push" 2>&1 &
+        push_pids+=($!)
     done
-    wait
+    wait "${push_pids[@]}"
 
     # Build a merged config (prod-config + provision-output overlay) once,
     # then ship the same file to each node.
@@ -252,14 +254,17 @@ preflight_all() {
             cat "$PROVISION_OUTPUT"
         } >> "$merged"
     fi
+    local cfg_pids=()
     for role in storage compute rp; do
         ssh_run "$role" \
             "mkdir -p ${REMOTE_WORK_DIR} && cat > ${REMOTE_WORK_DIR}/prod-config.yaml" \
             < "$merged" >"${tmp}/${role}.cfg" 2>&1 &
+        cfg_pids+=($!)
     done
-    wait
+    wait "${cfg_pids[@]}"
 
     # Run preflight in parallel.
+    local pre_pids=()
     for role in storage compute rp; do
         (
             ssh_run "$role" \
@@ -267,8 +272,9 @@ preflight_all() {
                 >"${tmp}/${role}.out" 2>&1
             echo $? > "${tmp}/${role}.rc"
         ) &
+        pre_pids+=($!)
     done
-    wait
+    wait "${pre_pids[@]}"
 
     # Print all 3 outputs in fixed order.
     local total_fail=0
