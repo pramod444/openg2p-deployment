@@ -31,6 +31,8 @@ trap '
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
 NON_INTERACTIVE=false
+SKIP_SSH_WAIT=false
+SSH_WAIT_TIMEOUT=600
 LOG_FILE="${SCRIPT_DIR}/logs/aws-provision-$(date '+%Y%m%d-%H%M%S').log"
 
 # Reuse logging + cfg() from the production lib.
@@ -41,8 +43,10 @@ source "${SCRIPT_DIR}/lib/aws-utils.sh"
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --config)          CONFIG_FILE="$2";       shift 2 ;;
-            --non-interactive) NON_INTERACTIVE=true;   shift ;;
+            --config)          CONFIG_FILE="$2";        shift 2 ;;
+            --non-interactive) NON_INTERACTIVE=true;    shift ;;
+            --skip-ssh-wait)   SKIP_SSH_WAIT=true;      shift ;;
+            --ssh-timeout)     SSH_WAIT_TIMEOUT="$2";   shift 2 ;;
             --help|-h)         show_help; exit 0 ;;
             *)
                 log_error "Unknown option: $1" "" "Run with --help for usage"
@@ -72,10 +76,14 @@ Usage:
   ./openg2p-aws-provision.sh --config aws-config.yaml [options]
 
 Options:
-  --config <file>     Path to AWS config (required)
-  --non-interactive   Never prompt — fail if any required value is unspecified
-                      (use in CI; default is interactive when stdin is a TTY)
-  --help              Show this help
+  --config <file>      Path to AWS config (required)
+  --non-interactive    Never prompt — fail if any required value is unspecified
+                       (use in CI; default is interactive when stdin is a TTY)
+  --skip-ssh-wait      Don't wait for SSH after instances pass status checks.
+                       Use when you know SSH is up (or will be) but the wait
+                       is hanging due to a network/SG issue you'll fix later.
+  --ssh-timeout <sec>  Per-instance SSH wait timeout (default: 600).
+  --help               Show this help
 
 What gets created (all tagged with Project=<project>):
   • 1 key pair       (or referenced existing)
@@ -210,15 +218,26 @@ main() {
     aws_apply_sg_rules_storage "$storage_sg" "$admin_cidr" "$vpc_cidr"
     log_success "  Storage SG: ${storage_sg_name} (${storage_sg})"
 
-    # ── 8. Elastic IP for RP ────────────────────────────────────────────
-    log_step "2" "Allocating Elastic IP for RP"
-    local rp_eip_alloc
+    # ── 8. Elastic IP for RP (best-effort) ─────────────────────────────
+    # Only the RP gets a static IP. Compute and storage use auto-assigned
+    # public IPs, which is fine — they're only for SSH from the laptop.
+    # The RP EIP exists so Wireguard peer configs survive instance restarts.
+    # If allocation fails (e.g. AddressLimitExceeded), we proceed with the
+    # auto-assigned public IP and warn the user.
+    log_step "2" "Allocating Elastic IP for RP (best-effort)"
+    local rp_eip_alloc rp_eip_addr=""
     rp_eip_alloc=$(aws_ensure_eip "$project" "reverse-proxy-eip")
-    aws_require_nonempty "RP Elastic IP allocation" "$rp_eip_alloc"
-    local rp_eip_addr
-    rp_eip_addr=$(aws_get_eip_address "$rp_eip_alloc")
-    aws_require_nonempty "RP Elastic IP address"    "$rp_eip_addr"
-    log_success "  RP EIP: ${rp_eip_addr} (alloc: ${rp_eip_alloc})"
+    if [[ -n "$rp_eip_alloc" && "$rp_eip_alloc" != "None" ]]; then
+        rp_eip_addr=$(aws_get_eip_address "$rp_eip_alloc")
+        aws_require_nonempty "RP Elastic IP address" "$rp_eip_addr"
+        log_success "  RP EIP: ${rp_eip_addr} (alloc: ${rp_eip_alloc})"
+    else
+        log_warn "  No Elastic IP allocated — falling back to auto-assigned public IP."
+        log_warn "  Trade-off: the RP's public IP will change after a stop/start,"
+        log_warn "  invalidating Wireguard peer configs (Endpoint mismatch). Allocate"
+        log_warn "  one EIP later and re-run this script to attach it."
+        rp_eip_alloc=""
+    fi
 
     # ── 9. Launch instances (parallel) ──────────────────────────────────
     log_step "3" "Launching 3 EC2 instances in parallel"
@@ -266,9 +285,9 @@ main() {
 
     # ── 10. Wait for running ────────────────────────────────────────────
     log_step "4" "Waiting for all 3 instances to reach 'running' state"
-    aws_wait_running "$rp_id"      &
-    aws_wait_running "$compute_id" &
-    aws_wait_running "$storage_id" &
+    aws_wait_running "$rp_id"      "RP"      &
+    aws_wait_running "$compute_id" "Compute" &
+    aws_wait_running "$storage_id" "Storage" &
     wait
     log_success "All 3 instances running."
 
@@ -276,26 +295,34 @@ main() {
     aws_disable_source_dest_check "$rp_id"
     log_success "Source/dest check disabled on RP (required for Wireguard forwarding)."
 
-    # ── 12. Associate Elastic IP with RP ───────────────────────────────
-    aws_associate_eip "$rp_eip_alloc" "$rp_id"
+    # ── 12. Associate Elastic IP with RP (if we got one) ───────────────
+    if [[ -n "$rp_eip_alloc" ]]; then
+        aws_associate_eip "$rp_eip_alloc" "$rp_id"
+    fi
 
     # ── 13. Wait for status checks (running != ready) ──────────────────
     log_step "5" "Waiting for all 3 instances to pass status checks"
     log_info "(This typically takes 2-5 minutes per instance.)"
-    aws_wait_status_ok "$rp_id"      &
-    aws_wait_status_ok "$compute_id" &
-    aws_wait_status_ok "$storage_id" &
+    aws_wait_status_ok "$rp_id"      "RP"      &
+    aws_wait_status_ok "$compute_id" "Compute" &
+    aws_wait_status_ok "$storage_id" "Storage" &
     wait
     log_success "All 3 instances passed status checks."
 
     # ── 14. Capture IPs ────────────────────────────────────────────────
+    # describe-instances reflects the EIP after association, but to be robust
+    # (and to handle the EIP-skipped case) we prefer the EIP we tracked.
     local rp_ips compute_ips storage_ips
     rp_ips=$(aws_get_instance_ips "$rp_id")
     compute_ips=$(aws_get_instance_ips "$compute_id")
     storage_ips=$(aws_get_instance_ips "$storage_id")
 
-    # RP public is the EIP we just attached, not the prior dynamic public IP
-    local rp_public="$rp_eip_addr"
+    local rp_public
+    if [[ -n "$rp_eip_addr" ]]; then
+        rp_public="$rp_eip_addr"     # static EIP
+    else
+        rp_public="${rp_ips%|*}"     # auto-assigned dynamic IP
+    fi
     local rp_private="${rp_ips#*|}"
     local compute_public="${compute_ips%|*}"
     local compute_private="${compute_ips#*|}"
@@ -306,25 +333,21 @@ main() {
     log_info "  Compute: public=${compute_public}  private=${compute_private}"
     log_info "  Storage: public=${storage_public}  private=${storage_private}"
 
-    # ── 15. Wait for SSH on all 3 (uses the EIP for RP) ────────────────
-    log_step "6" "Waiting for SSH to come up on all 3 instances"
-    if ! aws_wait_ssh "$rp_public"      "ubuntu" "$key_path" 300; then
-        log_error "Timed out waiting for SSH on RP (${rp_public})" \
-                  "Instance is running but sshd may still be starting" \
-                  "Try: ssh -i ${key_path} ubuntu@${rp_public}"
-        exit 1
+    # ── 15. Wait for SSH on all 3 ──────────────────────────────────────
+    if [[ "$SKIP_SSH_WAIT" == "true" ]]; then
+        log_step "6" "Skipping SSH wait (--skip-ssh-wait)"
+        log_warn "Provision-output will be written but SSH wasn't verified."
+        log_warn "If openg2p-prod.sh fails its --probe step, fix SG/network and retry."
+    else
+        log_step "6" "Waiting for SSH to come up on all 3 instances"
+        log_info "Common causes of slow SSH: cloud-init still installing the key,"
+        log_info "your laptop's public IP not in admin_cidr (SG), or key perms."
+        log_info "Pass --skip-ssh-wait to bypass; --ssh-timeout <sec> to extend the wait."
+
+        aws_wait_ssh "$rp_public"      "ubuntu" "$key_path" "$SSH_WAIT_TIMEOUT" "RP"      || exit 1
+        aws_wait_ssh "$compute_public" "ubuntu" "$key_path" "$SSH_WAIT_TIMEOUT" "Compute" || exit 1
+        aws_wait_ssh "$storage_public" "ubuntu" "$key_path" "$SSH_WAIT_TIMEOUT" "Storage" || exit 1
     fi
-    log_success "  RP:      SSH up"
-    if ! aws_wait_ssh "$compute_public" "ubuntu" "$key_path" 300; then
-        log_error "Timed out waiting for SSH on compute (${compute_public})"
-        exit 1
-    fi
-    log_success "  Compute: SSH up"
-    if ! aws_wait_ssh "$storage_public" "ubuntu" "$key_path" 300; then
-        log_error "Timed out waiting for SSH on storage (${storage_public})"
-        exit 1
-    fi
-    log_success "  Storage: SSH up"
 
     # ── 16. Write provision-output.yaml ─────────────────────────────────
     write_provision_output \

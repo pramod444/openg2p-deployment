@@ -589,6 +589,9 @@ aws_apply_sg_rules_storage() {
 # ---------------------------------------------------------------------------
 # Elastic IP — allocate-or-find by Project tag + Role tag
 # ---------------------------------------------------------------------------
+# Try to allocate (or find existing) an Elastic IP. Soft-fails: on any error
+# (typically AddressLimitExceeded), echoes empty and returns 0 — caller must
+# fall back to the auto-assigned dynamic public IP.
 aws_ensure_eip() {
     local project="$1"
     local role_tag="$2"     # e.g. "reverse-proxy-eip"
@@ -605,10 +608,21 @@ aws_ensure_eip() {
     fi
 
     log_info "Allocating new Elastic IP for ${role_tag}..." >&2
-    alloc_id=$(aws_cli ec2 allocate-address --domain vpc \
-        --tag-specifications "ResourceType=elastic-ip,Tags=[{Key=Project,Value=${project}},{Key=Role,Value=${role_tag}},{Key=ManagedBy,Value=openg2p-aws-provision}]" \
-        --query 'AllocationId' --output text)
-    echo "$alloc_id"
+    local result
+    if ! result=$(aws_cli ec2 allocate-address --domain vpc \
+            --tag-specifications "ResourceType=elastic-ip,Tags=[{Key=Project,Value=${project}},{Key=Role,Value=${role_tag}},{Key=ManagedBy,Value=openg2p-aws-provision}]" \
+            --query 'AllocationId' --output text 2>&1); then
+        log_warn "Could not allocate Elastic IP: ${result}" >&2
+        if echo "$result" | grep -q 'AddressLimitExceeded'; then
+            log_warn "  EIP quota reached. Free unused ones with:" >&2
+            log_warn "    aws ec2 describe-addresses --query 'Addresses[?AssociationId==null].[AllocationId,PublicIp]' --output table" >&2
+            log_warn "    aws ec2 release-address --allocation-id <alloc-id>" >&2
+            log_warn "  Or request a quota increase in the AWS console." >&2
+        fi
+        echo ""
+        return 0
+    fi
+    echo "$result"
 }
 
 aws_get_eip_address() {
@@ -699,32 +713,63 @@ aws_get_instance_ips() {
 }
 
 aws_wait_running() {
-    local id="$1"
-    log_info "Waiting for ${id} to reach 'running'..." >&2
+    local id="$1"; local label="${2:-$id}"
+    log_info "Waiting for ${label} (${id}) to reach 'running'..." >&2
     aws_cli ec2 wait instance-running --instance-ids "$id"
+    log_success "  ${label}: running" >&2
 }
 
 aws_wait_status_ok() {
-    local id="$1"
-    log_info "Waiting for ${id} status checks (this can take 2-5 min)..." >&2
+    local id="$1"; local label="${2:-$id}"
+    log_info "Waiting for ${label} (${id}) status checks (typically 2-5 min)..." >&2
     aws_cli ec2 wait instance-status-ok --instance-ids "$id"
+    log_success "  ${label}: status checks passed" >&2
 }
 
+# Wait for SSH to be reachable. Verbose: prints a progress line every ~30s
+# with the last SSH error so a stalled wait is visible. Returns 0 on success,
+# 1 on timeout. Increase the per-call timeout if your AMI's cloud-init is slow.
 aws_wait_ssh() {
-    local host="$1"; local user="$2"; local key="$3"; local timeout="${4:-300}"
-    log_info "Waiting for SSH on ${user}@${host}..." >&2
-    local end=$(( $(date +%s) + timeout ))
+    local host="$1"
+    local user="$2"
+    local key="$3"
+    local timeout="${4:-600}"
+    local label="${5:-$host}"
+
+    log_info "Waiting for SSH on ${label} (${user}@${host}, up to ${timeout}s)..." >&2
+
+    local start_ts; start_ts=$(date +%s)
+    local end=$(( start_ts + timeout ))
+    local attempt=0 last_err=""
+
     while [[ $(date +%s) -lt $end ]]; do
-        if ssh -i "$key" \
+        attempt=$((attempt + 1))
+        if last_err=$(ssh -i "$key" \
                 -o BatchMode=yes \
                 -o StrictHostKeyChecking=accept-new \
                 -o ConnectTimeout=5 \
                 -o UserKnownHostsFile=/dev/null \
-                "${user}@${host}" "true" 2>/dev/null; then
+                -o LogLevel=ERROR \
+                "${user}@${host}" "true" 2>&1); then
+            local elapsed=$(( $(date +%s) - start_ts ))
+            log_success "  ${label}: SSH up (attempt ${attempt}, ${elapsed}s)" >&2
             return 0
+        fi
+        # Periodic progress every ~30s so the user sees it's still trying
+        # and what's blocking — common causes: SG missing your IP, key perms,
+        # cloud-init not yet finished installing the public key.
+        if (( attempt % 6 == 0 )); then
+            local elapsed=$(( $(date +%s) - start_ts ))
+            local err_summary; err_summary=$(echo "$last_err" | tr '\n' ' ' | cut -c1-120)
+            log_info "  ${label}: still waiting (${elapsed}s / ${timeout}s, attempt ${attempt}) — last error: ${err_summary}" >&2
         fi
         sleep 5
     done
+
+    log_error "Timed out waiting for SSH on ${label}" \
+              "Could not SSH to ${user}@${host} within ${timeout}s" \
+              "Last error: ${last_err}" \
+              "ssh -i ${key} ${user}@${host}"
     return 1
 }
 
