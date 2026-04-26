@@ -42,7 +42,9 @@ aws ec2 describe-vpcs --query 'Vpcs[].[VpcId,IsDefault,CidrBlock]' --output tabl
 ```bash
 cd automation/production/aws
 cp aws-config.example.yaml aws-config.yaml
-# Edit aws-config.yaml — at minimum set: project, region
+# Edit aws-config.yaml — minimum: project, region. Leave vpc_id, subnet_id,
+# key_mode etc. blank to be prompted interactively (you don't need to look
+# anything up in the AWS Console).
 ./openg2p-aws-provision.sh --config aws-config.yaml
 # ~5–8 minutes. Creates resources, waits for status checks AND SSH,
 # writes ../provision-output.yaml.
@@ -83,10 +85,10 @@ For a non-AWS install (any cloud, on-prem), put everything in `prod-config.yaml`
 ## What the provision script does, step by step
 
 1. **AWS credentials sanity check** (`aws sts get-caller-identity`)
-2. **VPC + subnet resolution** — uses your config, falls back to default VPC + default-AZ subnet, or `--interactive` to pick from a list
+2. **VPC + subnet resolution** — uses your config if set; otherwise queries AWS, auto-picks if there's exactly one match, or prompts you with a numbered menu when there are multiple. Selections are saved back to `aws-config.yaml`. `--non-interactive` makes ambiguity an error instead of a prompt.
 3. **`admin_cidr` resolution** — uses your config, falls back to auto-detecting your laptop's current public IP via `checkip.amazonaws.com`
 4. **AMI resolution** — auto-resolves the latest Canonical Ubuntu 24.04 LTS amd64 AMI in your region (or uses `ubuntu_ami` if set)
-5. **Key pair** — creates a new one and saves the .pem to `./keys/<name>.pem` (mode 0400), or verifies an existing one
+5. **Key pair** — if `key_mode` is set, behaves as configured. If blank: lists existing AWS key pairs with a "create new" option, lets you pick interactively, and saves your choice back to `aws-config.yaml`
 6. **3 security groups** — `<project>-reverse-proxy`, `<project>-k8s-node`, `<project>-storage`. All allow SSH + ICMP from `admin_cidr` and all-traffic from VPC CIDR; the RP also opens UDP `wg_port` (default 51820) to the world
 7. **1 Elastic IP** — allocated and tagged for the RP
 8. **3 EC2 instances launched in parallel** — RP, compute, storage with the configured types (defaults match minimums)
@@ -143,6 +145,27 @@ The RP additionally allows:
 - Wireguard (UDP 51820 by default) from `0.0.0.0/0` — the public entry point for admin VPN
 
 The OpenG2P orchestrator configures `ufw` on each node to lock down further (e.g. NFS only from compute IP, K8s API only from VPC CIDR + WG subnet). The cloud SG is the outer perimeter; ufw is the host-level depth.
+
+---
+
+## Interactive selection (default)
+
+When you leave `vpc_id`, `subnet_id`, or `key_mode` blank in `aws-config.yaml`, the script queries AWS and presents a numbered menu — no need to leave the terminal to look anything up. Example:
+
+```
+[INFO] No vpc_id in config — querying available VPCs...
+[INFO] Multiple VPCs available in region ap-south-1:
+  [1] vpc-0a1b2c3d4e5f67890  10.0.0.0/16 (default)
+  [2] vpc-0123456789abcdef0  10.10.0.0/16 — staging
+  [3] vpc-abcdef0123456789a  10.20.0.0/16 — prod
+  Select [1-3] or paste VPC ID:
+```
+
+Your selection is written back to `aws-config.yaml`, so the next run is fully non-interactive.
+
+The same applies to subnet selection and to the SSH key pair: existing AWS key pairs are listed with an "Create new" option at the top.
+
+For CI / automation, pass `--non-interactive` and pre-fill all required values in `aws-config.yaml`. The script will fail loudly (with a list of options) on anything ambiguous instead of hanging on a prompt.
 
 ---
 

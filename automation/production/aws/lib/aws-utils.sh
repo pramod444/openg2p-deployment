@@ -49,102 +49,218 @@ aws_detect_my_public_ip() {
 }
 
 # ---------------------------------------------------------------------------
-# VPC + subnet resolution
+# Interactivity helpers
 # ---------------------------------------------------------------------------
-aws_resolve_vpc() {
-    local vpc_id="$1"
-    if [[ -n "$vpc_id" ]]; then
-        # Validate it exists
-        if ! aws_cli ec2 describe-vpcs --vpc-ids "$vpc_id" \
-                --query 'Vpcs[0].VpcId' --output text >/dev/null 2>&1; then
-            log_error "VPC '${vpc_id}' not found in region ${AWS_REGION:-default}" \
-                      "vpc_id in config does not exist or wrong region" \
-                      "List VPCs: aws ec2 describe-vpcs --query 'Vpcs[].[VpcId,IsDefault,CidrBlock,Tags]' --output table"
-            return 1
-        fi
-        echo "$vpc_id"
-        return 0
-    fi
-
-    # Auto-detect default VPC
-    local default_vpc
-    default_vpc=$(aws_cli ec2 describe-vpcs --filters "Name=isDefault,Values=true" \
-        --query 'Vpcs[0].VpcId' --output text 2>/dev/null)
-    if [[ -z "$default_vpc" || "$default_vpc" == "None" ]]; then
-        log_error "No default VPC in this region" \
-                  "Cannot auto-detect VPC" \
-                  "Specify vpc_id in your config, or pass --interactive"
-        return 1
-    fi
-    echo "$default_vpc"
+# True if stdin is a real terminal (so prompting makes sense).
+aws_is_tty() {
+    [[ "${NON_INTERACTIVE:-false}" != "true" && -t 0 ]]
 }
 
-aws_resolve_subnet() {
-    local vpc_id="$1"
-    local subnet_id="$2"
+# Persist a choice back to the user's aws-config.yaml so re-runs are stable.
+# CONFIG_FILE is set by the provision script's parse_args.
+aws_save_choice() {
+    local key="$1"
+    local value="$2"
+    if [[ -n "${CONFIG_FILE:-}" && -f "${CONFIG_FILE}" ]]; then
+        yaml_set_key "$CONFIG_FILE" "$key" "$value"
+        log_info "  ↳ Saved ${key}=${value} to $(basename "$CONFIG_FILE")" >&2
+    fi
+}
 
-    if [[ -n "$subnet_id" ]]; then
-        # Validate it belongs to the VPC
-        local got_vpc
-        got_vpc=$(aws_cli ec2 describe-subnets --subnet-ids "$subnet_id" \
-            --query 'Subnets[0].VpcId' --output text 2>/dev/null)
-        if [[ "$got_vpc" != "$vpc_id" ]]; then
-            log_error "Subnet '${subnet_id}' is not in VPC '${vpc_id}'" \
-                      "subnet_id and vpc_id mismatch" \
-                      "List subnets in VPC: aws ec2 describe-subnets --filters Name=vpc-id,Values=${vpc_id}"
+# ---------------------------------------------------------------------------
+# VPC: smart picker
+#   • config-set    → validate and use
+#   • exactly one   → auto-pick (and save)
+#   • multiple+TTY  → numbered prompt (and save)
+#   • multiple+CI   → fail with clear list of options
+# Echoes the chosen VPC ID on stdout. Logs go to stderr.
+# ---------------------------------------------------------------------------
+aws_pick_vpc() {
+    local cfg_vpc="$1"
+
+    if [[ -n "$cfg_vpc" ]]; then
+        if ! aws_cli ec2 describe-vpcs --vpc-ids "$cfg_vpc" \
+                --query 'Vpcs[0].VpcId' --output text >/dev/null 2>&1; then
+            log_error "VPC '${cfg_vpc}' not found in region ${AWS_REGION:-default}" \
+                      "vpc_id in your config doesn't exist or is in another region" \
+                      "Clear vpc_id in aws-config.yaml to pick interactively"
             return 1
         fi
-        echo "$subnet_id"
+        echo "$cfg_vpc"
         return 0
     fi
 
-    # Auto-detect: prefer DefaultForAz=true, fall back to first MapPublicIpOnLaunch=true.
-    local sub
-    sub=$(aws_cli ec2 describe-subnets \
-        --filters "Name=vpc-id,Values=${vpc_id}" "Name=defaultForAz,Values=true" \
-        --query 'Subnets[0].SubnetId' --output text 2>/dev/null)
-    if [[ -z "$sub" || "$sub" == "None" ]]; then
-        sub=$(aws_cli ec2 describe-subnets \
-            --filters "Name=vpc-id,Values=${vpc_id}" "Name=map-public-ip-on-launch,Values=true" \
-            --query 'Subnets[0].SubnetId' --output text 2>/dev/null)
-    fi
-    if [[ -z "$sub" || "$sub" == "None" ]]; then
-        log_error "No suitable subnet found in VPC ${vpc_id}" \
-                  "Need a default-AZ subnet or one with MapPublicIpOnLaunch=true" \
-                  "Specify subnet_id in your config"
+    log_info "No vpc_id in config — querying available VPCs..." >&2
+
+    # Tab-separated: VPC_ID  IsDefault  CIDR  Name
+    local lines
+    lines=$(aws_cli ec2 describe-vpcs \
+        --query 'Vpcs[].[VpcId,IsDefault,CidrBlock,Tags[?Key==`Name`]|[0].Value]' \
+        --output text 2>/dev/null)
+
+    if [[ -z "$lines" ]]; then
+        log_error "No VPCs found in region ${AWS_REGION:-default}" \
+                  "Cannot proceed without a VPC" \
+                  "Create one: aws ec2 create-default-vpc"
         return 1
     fi
-    echo "$sub"
+
+    local -a ids descs
+    while IFS=$'\t' read -r id is_default cidr name; do
+        [[ -z "$id" ]] && continue
+        ids+=("$id")
+        local marker=""; [[ "$is_default" == "True" ]] && marker=" (default)"
+        local namestr=""; [[ -n "$name" && "$name" != "None" ]] && namestr=" — ${name}"
+        descs+=("${id}  ${cidr}${marker}${namestr}")
+    done <<< "$lines"
+
+    if [[ ${#ids[@]} -eq 1 ]]; then
+        log_info "Only one VPC available — using ${ids[0]} (${descs[0]#* })" >&2
+        aws_save_choice vpc_id "${ids[0]}"
+        echo "${ids[0]}"
+        return 0
+    fi
+
+    if ! aws_is_tty; then
+        log_error "Multiple VPCs in region ${AWS_REGION:-default}, no TTY for prompt" \
+                  "Cannot pick automatically, --non-interactive set or no terminal" \
+                  "Set vpc_id in aws-config.yaml from the list below"
+        for d in "${descs[@]}"; do echo "    ${d}" >&2; done
+        return 1
+    fi
+
+    log_info "Multiple VPCs available in region ${AWS_REGION:-default}:" >&2
+    for ((i=0; i<${#ids[@]}; i++)); do
+        printf "  [%d] %s\n" "$((i+1))" "${descs[$i]}" >&2
+    done
+
+    while true; do
+        local pick
+        read -rp "  Select [1-${#ids[@]}] or paste VPC ID: " pick </dev/tty
+        if [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= ${#ids[@]} )); then
+            local chosen="${ids[$((pick-1))]}"
+            aws_save_choice vpc_id "$chosen"
+            echo "$chosen"
+            return 0
+        fi
+        if [[ "$pick" =~ ^vpc-[0-9a-f]+$ ]]; then
+            # Validate the pasted ID
+            if aws_cli ec2 describe-vpcs --vpc-ids "$pick" >/dev/null 2>&1; then
+                aws_save_choice vpc_id "$pick"
+                echo "$pick"
+                return 0
+            fi
+            echo "  '${pick}' not found, try again." >&2
+            continue
+        fi
+        echo "  Invalid selection, try again." >&2
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Subnet: smart picker
+# Same pattern as VPC. Filters to public subnets (MapPublicIpOnLaunch=true)
+# since the OpenG2P deployment requires public IPs on all 3 nodes.
+# ---------------------------------------------------------------------------
+aws_pick_subnet() {
+    local vpc_id="$1"
+    local cfg_subnet="$2"
+
+    if [[ -n "$cfg_subnet" ]]; then
+        local got_vpc
+        got_vpc=$(aws_cli ec2 describe-subnets --subnet-ids "$cfg_subnet" \
+            --query 'Subnets[0].VpcId' --output text 2>/dev/null)
+        if [[ "$got_vpc" != "$vpc_id" ]]; then
+            log_error "Subnet '${cfg_subnet}' is not in VPC '${vpc_id}'" \
+                      "subnet_id and vpc_id in config don't match" \
+                      "Clear subnet_id in aws-config.yaml to pick interactively"
+            return 1
+        fi
+        echo "$cfg_subnet"
+        return 0
+    fi
+
+    log_info "No subnet_id in config — querying subnets in ${vpc_id}..." >&2
+
+    # Tab-separated: SubnetId  AZ  CIDR  MapPublicIpOnLaunch  DefaultForAz  Name
+    local lines
+    lines=$(aws_cli ec2 describe-subnets --filters "Name=vpc-id,Values=${vpc_id}" \
+        --query 'Subnets[].[SubnetId,AvailabilityZone,CidrBlock,MapPublicIpOnLaunch,DefaultForAz,Tags[?Key==`Name`]|[0].Value]' \
+        --output text 2>/dev/null)
+
+    if [[ -z "$lines" ]]; then
+        log_error "No subnets in VPC ${vpc_id}" "" "Create a subnet first"
+        return 1
+    fi
+
+    local -a public_ids public_descs all_ids all_descs
+    while IFS=$'\t' read -r id az cidr is_pub is_def name; do
+        [[ -z "$id" ]] && continue
+        local namestr=""; [[ -n "$name" && "$name" != "None" ]] && namestr=" — ${name}"
+        local def_marker=""; [[ "$is_def" == "True" ]] && def_marker=" (default-AZ)"
+        local desc="${id}  ${az}  ${cidr}${def_marker}${namestr}"
+        all_ids+=("$id");      all_descs+=("$desc")
+        if [[ "$is_pub" == "True" ]]; then
+            public_ids+=("$id"); public_descs+=("$desc")
+        fi
+    done <<< "$lines"
+
+    # Prefer public subnets — that's what we need for public IP assignment.
+    local -a ids descs
+    if [[ ${#public_ids[@]} -gt 0 ]]; then
+        ids=("${public_ids[@]}"); descs=("${public_descs[@]}")
+    else
+        log_warn "No subnets with MapPublicIpOnLaunch=true in this VPC." >&2
+        log_warn "Showing all subnets — instances may not get public IPs unless the subnet is reconfigured." >&2
+        ids=("${all_ids[@]}"); descs=("${all_descs[@]}")
+    fi
+
+    if [[ ${#ids[@]} -eq 1 ]]; then
+        log_info "Only one suitable subnet — using ${ids[0]} (${descs[0]#* })" >&2
+        aws_save_choice subnet_id "${ids[0]}"
+        echo "${ids[0]}"
+        return 0
+    fi
+
+    if ! aws_is_tty; then
+        log_error "Multiple subnets in VPC ${vpc_id}, no TTY for prompt" \
+                  "Cannot pick automatically" \
+                  "Set subnet_id in aws-config.yaml from the list below"
+        for d in "${descs[@]}"; do echo "    ${d}" >&2; done
+        return 1
+    fi
+
+    log_info "Available subnets in ${vpc_id}:" >&2
+    for ((i=0; i<${#ids[@]}; i++)); do
+        printf "  [%d] %s\n" "$((i+1))" "${descs[$i]}" >&2
+    done
+
+    while true; do
+        local pick
+        read -rp "  Select [1-${#ids[@]}] or paste Subnet ID: " pick </dev/tty
+        if [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= ${#ids[@]} )); then
+            local chosen="${ids[$((pick-1))]}"
+            aws_save_choice subnet_id "$chosen"
+            echo "$chosen"
+            return 0
+        fi
+        if [[ "$pick" =~ ^subnet-[0-9a-f]+$ ]]; then
+            if aws_cli ec2 describe-subnets --subnet-ids "$pick" >/dev/null 2>&1; then
+                aws_save_choice subnet_id "$pick"
+                echo "$pick"
+                return 0
+            fi
+            echo "  '${pick}' not found, try again." >&2
+            continue
+        fi
+        echo "  Invalid selection, try again." >&2
+    done
 }
 
 aws_get_vpc_cidr() {
     local vpc_id="$1"
     aws_cli ec2 describe-vpcs --vpc-ids "$vpc_id" \
         --query 'Vpcs[0].CidrBlock' --output text
-}
-
-# ---------------------------------------------------------------------------
-# Interactive picker — used when --interactive and config is blank
-# ---------------------------------------------------------------------------
-aws_interactive_pick_vpc() {
-    log_info "Available VPCs in region ${AWS_REGION:-default}:"
-    aws_cli ec2 describe-vpcs \
-        --query 'Vpcs[].[VpcId,CidrBlock,IsDefault,Tags[?Key==`Name`]|[0].Value]' \
-        --output table >&2
-    local pick
-    read -rp "Enter VPC ID: " pick
-    echo "$pick"
-}
-
-aws_interactive_pick_subnet() {
-    local vpc_id="$1"
-    log_info "Available subnets in VPC ${vpc_id}:"
-    aws_cli ec2 describe-subnets --filters "Name=vpc-id,Values=${vpc_id}" \
-        --query 'Subnets[].[SubnetId,AvailabilityZone,CidrBlock,MapPublicIpOnLaunch,Tags[?Key==`Name`]|[0].Value]' \
-        --output table >&2
-    local pick
-    read -rp "Enter Subnet ID: " pick
-    echo "$pick"
 }
 
 # ---------------------------------------------------------------------------
@@ -192,6 +308,90 @@ aws_resolve_ubuntu_ami() {
     fi
     log_info "Resolved AMI: ${resolved}" >&2
     echo "$resolved"
+}
+
+# ---------------------------------------------------------------------------
+# Key pair: smart picker
+#   • key_mode=create        → create new (or reuse if AWS already has it)
+#   • key_mode=existing      → use the named existing key
+#   • key_mode blank + TTY   → list keys + offer create-new menu
+#   • key_mode blank + CI    → default to "create" with the configured name
+# Echoes "<mode>|<name>|<path>" so the caller can hand off to aws_ensure_key_pair.
+# ---------------------------------------------------------------------------
+aws_pick_key_pair() {
+    local cfg_mode="$1"
+    local cfg_name="$2"
+    local cfg_path="$3"
+    local project="$4"
+    local default_dir="$5"
+
+    # Resolve defaults for name + path
+    [[ -z "$cfg_name" ]] && cfg_name="${project}-key"
+    [[ -z "$cfg_path" ]] && cfg_path="${default_dir}/${cfg_name}.pem"
+
+    # If mode is set explicitly, just pass through.
+    if [[ "$cfg_mode" == "create" || "$cfg_mode" == "existing" ]]; then
+        echo "${cfg_mode}|${cfg_name}|${cfg_path}"
+        return 0
+    fi
+
+    # Mode blank — list existing keys and offer interactive choice
+    log_info "No key_mode in config — querying existing key pairs..." >&2
+
+    local lines
+    lines=$(aws_cli ec2 describe-key-pairs \
+        --query 'KeyPairs[].[KeyName,KeyType]' --output text 2>/dev/null || true)
+
+    if ! aws_is_tty; then
+        log_info "Non-interactive — defaulting to key_mode=create with name '${cfg_name}'" >&2
+        aws_save_choice key_mode create
+        aws_save_choice key_name "$cfg_name"
+        echo "create|${cfg_name}|${cfg_path}"
+        return 0
+    fi
+
+    log_info "Choose how to handle the SSH key pair:" >&2
+    printf "  [%d] %s\n" 1 "Create new key pair  (will be saved to ${cfg_path})" >&2
+    local -a names=()
+    if [[ -n "$lines" ]]; then
+        local i=1
+        while IFS=$'\t' read -r name ktype; do
+            [[ -z "$name" ]] && continue
+            ((i++))
+            names+=("$name")
+            printf "  [%d] %s\n" "$i" "Use existing: ${name} (${ktype})" >&2
+        done <<< "$lines"
+    fi
+
+    while true; do
+        local pick
+        read -rp "  Select [1-$((${#names[@]}+1))]: " pick </dev/tty
+        if [[ "$pick" == "1" ]]; then
+            # Confirm / customize the new key name (default = pre-set value)
+            local custom
+            read -rp "  Name for new key pair [${cfg_name}]: " custom </dev/tty
+            [[ -n "$custom" ]] && cfg_name="$custom"
+            cfg_path="${default_dir}/${cfg_name}.pem"
+            aws_save_choice key_mode create
+            aws_save_choice key_name "$cfg_name"
+            echo "create|${cfg_name}|${cfg_path}"
+            return 0
+        fi
+        if [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 2 && pick <= ${#names[@]}+1 )); then
+            local chosen="${names[$((pick-2))]}"
+            # Existing key needs a local .pem path — ask user
+            local default_path="${default_dir}/${chosen}.pem"
+            local user_path
+            read -rp "  Path to your local .pem for '${chosen}' [${default_path}]: " user_path </dev/tty
+            [[ -z "$user_path" ]] && user_path="$default_path"
+            aws_save_choice key_mode existing
+            aws_save_choice key_name "$chosen"
+            aws_save_choice key_path "$user_path"
+            echo "existing|${chosen}|${user_path}"
+            return 0
+        fi
+        echo "  Invalid selection, try again." >&2
+    done
 }
 
 # ---------------------------------------------------------------------------

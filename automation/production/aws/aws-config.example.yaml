@@ -29,12 +29,15 @@ region: "ap-south-1"
 # ---------------------------------------------------------------------------
 # VPC and subnet
 # ---------------------------------------------------------------------------
-# Three modes:
-#   • Both blank   — auto-detect default VPC + a default-AZ subnet
-#   • vpc_id set, subnet_id blank — pick a default-AZ subnet in that VPC
-#   • Both set     — use as-is
-# Or pass --interactive on the CLI to be prompted with a list of available
-# VPCs and subnets in the region.
+# Both blank? The script queries AWS:
+#   • exactly one match  → auto-picks
+#   • multiple matches   → presents a numbered menu (TTY only)
+#   • non-interactive    → fails with a clear list, asking you to set the value
+#
+# Either way, the script writes the resolved IDs back to THIS file so the
+# next run is fully non-interactive.
+#
+# You can also fill them in upfront (skips the prompt entirely).
 vpc_id:    ""
 subnet_id: ""
 
@@ -55,18 +58,21 @@ admin_cidr: ""
 # ---------------------------------------------------------------------------
 # SSH key pair
 # ---------------------------------------------------------------------------
-# Mode "create"    — create a new key pair in AWS, save .pem locally
-# Mode "existing"  — reference an already-imported key pair by name
-key_mode: "create"
+# Modes:
+#   "create"     — create a new key pair in AWS, save the .pem locally
+#   "existing"   — reference an already-imported AWS key pair by name
+#   ""  (blank)  — interactive: lists existing keys + offers "create new"
+#                  Selection is saved back to this file.
+key_mode: ""
 
 # Name of the key pair in AWS.
-# For "create": will be created if missing. For "existing": must already exist.
-key_name: "openg2p-prod-key"
+# Default: "<project>-key" if blank.
+key_name: ""
 
 # Local path for the .pem file.
-# For "create": where the new private key gets saved (mode 0400).
-# For "existing": path to your existing .pem (must already be present here).
-# Leave blank to default to ./keys/<key_name>.pem.
+# Default: ./keys/<key_name>.pem.
+# For "create": where the private key is saved (mode 0400).
+# For "existing": path to your existing .pem (must already be present).
 key_path: ""
 
 # ---------------------------------------------------------------------------

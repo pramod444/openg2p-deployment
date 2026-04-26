@@ -19,7 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
-INTERACTIVE=false
+NON_INTERACTIVE=false
 LOG_FILE="${SCRIPT_DIR}/logs/aws-provision-$(date '+%Y%m%d-%H%M%S').log"
 
 # Reuse logging + cfg() from the production lib.
@@ -30,9 +30,9 @@ source "${SCRIPT_DIR}/lib/aws-utils.sh"
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --config)      CONFIG_FILE="$2"; shift 2 ;;
-            --interactive) INTERACTIVE=true; shift ;;
-            --help|-h)     show_help; exit 0 ;;
+            --config)          CONFIG_FILE="$2";       shift 2 ;;
+            --non-interactive) NON_INTERACTIVE=true;   shift ;;
+            --help|-h)         show_help; exit 0 ;;
             *)
                 log_error "Unknown option: $1" "" "Run with --help for usage"
                 exit 1
@@ -48,6 +48,8 @@ parse_args() {
         exit 1
     fi
     [[ "$CONFIG_FILE" = /* ]] || CONFIG_FILE="${SCRIPT_DIR}/${CONFIG_FILE}"
+    export NON_INTERACTIVE
+    export CONFIG_FILE
 }
 
 show_help() {
@@ -59,9 +61,10 @@ Usage:
   ./openg2p-aws-provision.sh --config aws-config.yaml [options]
 
 Options:
-  --config <file>   Path to AWS config (required)
-  --interactive     Prompt for VPC/subnet selection (overrides blank config)
-  --help            Show this help
+  --config <file>     Path to AWS config (required)
+  --non-interactive   Never prompt — fail if any required value is unspecified
+                      (use in CI; default is interactive when stdin is a TTY)
+  --help              Show this help
 
 What gets created (all tagged with Project=<project>):
   • 1 key pair       (or referenced existing)
@@ -69,7 +72,12 @@ What gets created (all tagged with Project=<project>):
   • 1 Elastic IP     (attached to the RP node)
   • 3 EC2 instances  (RP, compute, storage)
 
-After provisioning, prod-config.yaml is populated. Then run:
+When values like vpc_id, subnet_id, or key_mode are blank in your config,
+the script queries AWS, presents a menu, and saves your selection back to
+aws-config.yaml so subsequent runs are stable.
+
+After provisioning, provision-output.yaml is written next to prod-config.yaml.
+Then run:
   cd .. && ./openg2p-prod.sh --config prod-config.yaml
 EOF
 }
@@ -114,17 +122,11 @@ main() {
     log_info "Project: ${project}"
 
     # ── 3. VPC + subnet ─────────────────────────────────────────────────
-    local cfg_vpc=$(cfg vpc_id)
-    local cfg_subnet=$(cfg subnet_id)
-
-    if [[ "$INTERACTIVE" == "true" ]] && [[ -z "$cfg_vpc" || -z "$cfg_subnet" ]]; then
-        [[ -z "$cfg_vpc" ]]    && cfg_vpc=$(aws_interactive_pick_vpc)
-        [[ -z "$cfg_subnet" ]] && cfg_subnet=$(aws_interactive_pick_subnet "$cfg_vpc")
-    fi
-
+    # Smart pickers: use config if set, auto-pick when single match, prompt
+    # interactively when multiple, or fail with a list in --non-interactive.
     local vpc_id subnet_id vpc_cidr
-    vpc_id=$(aws_resolve_vpc "$cfg_vpc")
-    subnet_id=$(aws_resolve_subnet "$vpc_id" "$cfg_subnet")
+    vpc_id=$(aws_pick_vpc "$(cfg vpc_id)")          || exit 1
+    subnet_id=$(aws_pick_subnet "$vpc_id" "$(cfg subnet_id)")  || exit 1
     vpc_cidr=$(aws_get_vpc_cidr "$vpc_id")
     log_success "VPC:    ${vpc_id} (CIDR: ${vpc_cidr})"
     log_success "Subnet: ${subnet_id}"
@@ -152,10 +154,16 @@ main() {
     log_success "AMI: ${ami}"
 
     # ── 6. Key pair ─────────────────────────────────────────────────────
-    local key_name=$(cfg key_name)
-    local key_path=$(cfg key_path)
-    [[ -z "$key_path" ]] && key_path="${SCRIPT_DIR}/keys/${key_name}.pem"
-    local key_mode=$(cfg key_mode)
+    # Smart picker — if key_mode is blank and stdin is a TTY, list existing
+    # keys with a "create new" option. Otherwise default to create.
+    local key_resolved
+    key_resolved=$(aws_pick_key_pair \
+        "$(cfg key_mode)" "$(cfg key_name)" "$(cfg key_path)" \
+        "$project" "${SCRIPT_DIR}/keys") || exit 1
+    local key_mode="${key_resolved%%|*}"
+    local key_rest="${key_resolved#*|}"
+    local key_name="${key_rest%%|*}"
+    local key_path="${key_rest##*|}"
     aws_ensure_key_pair "$key_name" "$key_path" "$key_mode" "$project"
 
     # ── 7. Security groups ──────────────────────────────────────────────
