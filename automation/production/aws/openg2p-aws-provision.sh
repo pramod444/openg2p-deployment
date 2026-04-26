@@ -17,6 +17,17 @@
 
 set -euo pipefail
 
+# Trap any non-zero exit (including silent set-e exits) and emit a line number.
+# Preserves the original exit code.
+trap '
+    rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo "" >&2
+        echo "[FATAL] script exited with status ${rc} at line ${LINENO} (${BASH_COMMAND})" >&2
+        echo "[FATAL] log: ${LOG_FILE:-<not set>}" >&2
+    fi
+' EXIT
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
 NON_INTERACTIVE=false
@@ -171,30 +182,42 @@ main() {
     local rp_sg compute_sg storage_sg
     local wg_port=$(cfg wg_port "51820")
 
+    # AWS SG descriptions must be ASCII-only — keep them simple.
+    # SG names default to <project>-<role> if not set in config.
+    local rp_sg_name=$(cfg rp_sg_name "${project}-reverse-proxy")
+    local compute_sg_name=$(cfg compute_sg_name "${project}-k8s-node")
+    local storage_sg_name=$(cfg storage_sg_name "${project}-storage")
+
+    # AWS SG descriptions must be ASCII-only — keep them simple.
     rp_sg=$(aws_ensure_security_group \
-        "${project}-reverse-proxy" "OpenG2P RP — Wireguard, Nginx" \
+        "$rp_sg_name" "OpenG2P RP - Wireguard and Nginx" \
         "$vpc_id" "$project" "reverse-proxy")
+    aws_require_nonempty "RP security group" "$rp_sg"
     aws_apply_sg_rules_rp "$rp_sg" "$admin_cidr" "$vpc_cidr" "$wg_port"
-    log_success "  RP SG:      ${rp_sg}"
+    log_success "  RP SG:      ${rp_sg_name} (${rp_sg})"
 
     compute_sg=$(aws_ensure_security_group \
-        "${project}-k8s-node" "OpenG2P K8s compute node" \
+        "$compute_sg_name" "OpenG2P K8s compute node" \
         "$vpc_id" "$project" "k8s-node")
+    aws_require_nonempty "Compute security group" "$compute_sg"
     aws_apply_sg_rules_compute "$compute_sg" "$admin_cidr" "$vpc_cidr"
-    log_success "  Compute SG: ${compute_sg}"
+    log_success "  Compute SG: ${compute_sg_name} (${compute_sg})"
 
     storage_sg=$(aws_ensure_security_group \
-        "${project}-storage" "OpenG2P storage node — NFS + Postgres host" \
+        "$storage_sg_name" "OpenG2P storage node - NFS and Postgres" \
         "$vpc_id" "$project" "storage")
+    aws_require_nonempty "Storage security group" "$storage_sg"
     aws_apply_sg_rules_storage "$storage_sg" "$admin_cidr" "$vpc_cidr"
-    log_success "  Storage SG: ${storage_sg}"
+    log_success "  Storage SG: ${storage_sg_name} (${storage_sg})"
 
     # ── 8. Elastic IP for RP ────────────────────────────────────────────
     log_step "2" "Allocating Elastic IP for RP"
     local rp_eip_alloc
     rp_eip_alloc=$(aws_ensure_eip "$project" "reverse-proxy-eip")
+    aws_require_nonempty "RP Elastic IP allocation" "$rp_eip_alloc"
     local rp_eip_addr
     rp_eip_addr=$(aws_get_eip_address "$rp_eip_alloc")
+    aws_require_nonempty "RP Elastic IP address"    "$rp_eip_addr"
     log_success "  RP EIP: ${rp_eip_addr} (alloc: ${rp_eip_alloc})"
 
     # ── 9. Launch instances (parallel) ──────────────────────────────────
@@ -209,6 +232,7 @@ main() {
             "$(cfg rp_name)" "$project" "reverse-proxy" \
             "$ami" "$(cfg rp_instance_type)" "$subnet_id" "$rp_sg" "$key_name" \
             "$(cfg rp_disk_gb 64)" "$(cfg rp_disk_iops 3000)" "$(cfg rp_disk_throughput 125)")
+        aws_require_nonempty "RP instance ID" "$rp_id"
         log_success "  RP launched:      ${rp_id}"
     else
         log_info "  RP already exists: ${rp_id}"
@@ -221,6 +245,7 @@ main() {
             "$(cfg compute_name)" "$project" "k8s-node" \
             "$ami" "$(cfg compute_instance_type)" "$subnet_id" "$compute_sg" "$key_name" \
             "$(cfg compute_disk_gb 128)" "$(cfg compute_disk_iops 3000)" "$(cfg compute_disk_throughput 125)")
+        aws_require_nonempty "Compute instance ID" "$compute_id"
         log_success "  Compute launched:      ${compute_id}"
     else
         log_info "  Compute already exists: ${compute_id}"
@@ -233,6 +258,7 @@ main() {
             "$(cfg storage_name)" "$project" "storage" \
             "$ami" "$(cfg storage_instance_type)" "$subnet_id" "$storage_sg" "$key_name" \
             "$(cfg storage_disk_gb 256)" "$(cfg storage_disk_iops 3000)" "$(cfg storage_disk_throughput 125)")
+        aws_require_nonempty "Storage instance ID" "$storage_id"
         log_success "  Storage launched:      ${storage_id}"
     else
         log_info "  Storage already exists: ${storage_id}"

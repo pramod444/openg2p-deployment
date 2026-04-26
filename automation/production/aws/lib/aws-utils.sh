@@ -19,19 +19,47 @@ aws_cli() {
 # ---------------------------------------------------------------------------
 # Sanity check — credentials work, account is accessible
 # ---------------------------------------------------------------------------
+# Expand a leading ~ to $HOME. Bash doesn't expand ~ in quoted strings or
+# in values read from YAML, so config-supplied paths like "~/keys/foo.pem"
+# wouldn't otherwise resolve. Echoes the expanded path on stdout.
+aws_expand_path() {
+    local p="$1"
+    [[ -z "$p" ]] && { echo ""; return 0; }
+    p="${p/#\~\//${HOME}/}"   # ~/foo  → /home/user/foo
+    p="${p/#\~/${HOME}}"      # bare ~ → /home/user
+    echo "$p"
+}
+
+# Fail loudly if a value is empty — guards the silent-empty trap that
+# `var=$(fn_calling_aws)` falls into (set -e is suppressed inside $() so
+# functions that should fail can leak through with an empty result).
+aws_require_nonempty() {
+    local label="$1"
+    local value="$2"
+    if [[ -z "$value" || "$value" == "None" ]]; then
+        log_error "Empty/missing value: ${label}" \
+                  "An AWS call returned no result (probably failed)" \
+                  "Look for an AWS error in the lines above" \
+                  "" ""
+        exit 1
+    fi
+}
+
 aws_check_credentials() {
-    local who
-    if ! who=$(aws_cli sts get-caller-identity --output json 2>&1); then
+    # Use --query to pull out exactly what we need as tab-separated text.
+    # Avoids fragile string parsing of JSON.
+    # `if !` keeps the failing case inside an "ignored by set -e" context.
+    local result
+    if ! result=$(aws_cli sts get-caller-identity --query '[Account,Arn]' --output text 2>&1); then
         log_error "AWS credentials check failed" \
                   "aws sts get-caller-identity returned an error" \
-                  "Verify your credentials and region" \
+                  "Verify your credentials, region, and that aws CLI v2 is installed" \
                   "aws sts get-caller-identity"
-        echo "$who"
+        echo "$result" >&2
         return 1
     fi
-    local account user
-    account=$(echo "$who" | grep -o '"Account": "[^"]*"' | cut -d\" -f4)
-    user=$(echo    "$who" | grep -o '"Arn":     *"[^"]*"' | cut -d\" -f4)
+    local account="${result%%$'\t'*}"
+    local user="${result##*$'\t'}"
     log_success "AWS account ${account} accessible (${user})"
 }
 
@@ -105,7 +133,7 @@ aws_pick_vpc() {
         return 1
     fi
 
-    local -a ids descs
+    local -a ids=() descs=()
     while IFS=$'\t' read -r id is_default cidr name; do
         [[ -z "$id" ]] && continue
         ids+=("$id")
@@ -193,7 +221,7 @@ aws_pick_subnet() {
         return 1
     fi
 
-    local -a public_ids public_descs all_ids all_descs
+    local -a public_ids=() public_descs=() all_ids=() all_descs=()
     while IFS=$'\t' read -r id az cidr is_pub is_def name; do
         [[ -z "$id" ]] && continue
         local namestr=""; [[ -n "$name" && "$name" != "None" ]] && namestr=" — ${name}"
@@ -206,7 +234,7 @@ aws_pick_subnet() {
     done <<< "$lines"
 
     # Prefer public subnets — that's what we need for public IP assignment.
-    local -a ids descs
+    local -a ids=() descs=()
     if [[ ${#public_ids[@]} -gt 0 ]]; then
         ids=("${public_ids[@]}"); descs=("${public_descs[@]}")
     else
@@ -328,6 +356,7 @@ aws_pick_key_pair() {
     # Resolve defaults for name + path
     [[ -z "$cfg_name" ]] && cfg_name="${project}-key"
     [[ -z "$cfg_path" ]] && cfg_path="${default_dir}/${cfg_name}.pem"
+    cfg_path=$(aws_expand_path "$cfg_path")    # ~/keys/x → /home/u/keys/x
 
     # If mode is set explicitly, just pass through.
     if [[ "$cfg_mode" == "create" || "$cfg_mode" == "existing" ]]; then
@@ -384,6 +413,7 @@ aws_pick_key_pair() {
             local user_path
             read -rp "  Path to your local .pem for '${chosen}' [${default_path}]: " user_path </dev/tty
             [[ -z "$user_path" ]] && user_path="$default_path"
+            user_path=$(aws_expand_path "$user_path")
             aws_save_choice key_mode existing
             aws_save_choice key_name "$chosen"
             aws_save_choice key_path "$user_path"
@@ -471,12 +501,12 @@ aws_ensure_security_group() {
         --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || true)
 
     if [[ -n "$sg_id" && "$sg_id" != "None" ]]; then
-        log_info "Security group '${name}' already exists (${sg_id})." >&2
+        log_info "Reusing existing security group '${name}' (${sg_id}) — will verify rules" >&2
         echo "$sg_id"
         return 0
     fi
 
-    log_info "Creating security group '${name}'..." >&2
+    log_info "Creating new security group '${name}'..." >&2
     sg_id=$(aws_cli ec2 create-security-group \
         --group-name "$name" \
         --description "$description" \
@@ -486,11 +516,33 @@ aws_ensure_security_group() {
     echo "$sg_id"
 }
 
-# Add ingress rule (idempotent — ignores DuplicatePermission errors).
+# Add ingress rule (idempotent). Reports per-rule status:
+#   "added"    — rule did not exist and was created
+#   "exists"   — rule already present (idempotent skip; expected on re-runs
+#                or when a pre-existing SG is being reused)
+#   "FAILED"   — anything else (real error); script halts.
+# Args after sg_id are passed verbatim to authorize-security-group-ingress.
 aws_add_ingress() {
     local sg_id="$1"; shift
-    aws_cli ec2 authorize-security-group-ingress --group-id "$sg_id" "$@" \
-        2>&1 | grep -v -E '(InvalidPermission.Duplicate|already exists)' >&2 || true
+    local label="$1"; shift   # short human label, e.g. "TCP/22 from admin"
+
+    local result rc
+    result=$(aws_cli ec2 authorize-security-group-ingress --group-id "$sg_id" "$@" 2>&1) && rc=0 || rc=$?
+
+    if [[ $rc -eq 0 ]]; then
+        log_info "    + ${label}: added" >&2
+        return 0
+    fi
+    if echo "$result" | grep -q 'InvalidPermission.Duplicate'; then
+        log_info "    · ${label}: already present" >&2
+        return 0
+    fi
+    log_error "Failed to add ingress rule '${label}'" \
+              "AWS rejected authorize-security-group-ingress" \
+              "Inspect the SG and re-run" \
+              "$result" \
+              ""
+    exit 1
 }
 
 # ---------------------------------------------------------------------------
@@ -502,35 +554,35 @@ aws_apply_sg_rules_rp() {
     local vpc_cidr="$3"
     local wg_port="$4"
 
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "TCP/22  from ${admin_cidr}" \
         --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${admin_cidr},Description=admin SSH}]"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "ICMP    from ${admin_cidr}" \
         --ip-permissions "IpProtocol=icmp,FromPort=-1,ToPort=-1,IpRanges=[{CidrIp=${admin_cidr},Description=admin ping}]"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "UDP/${wg_port} (Wireguard) from 0.0.0.0/0" \
         --ip-permissions "IpProtocol=udp,FromPort=${wg_port},ToPort=${wg_port},IpRanges=[{CidrIp=0.0.0.0/0,Description=Wireguard}]"
     # All TCP/UDP from VPC CIDR — intra-VPC traffic. ufw on each node provides
     # fine-grained restriction.
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "ALL     from ${vpc_cidr} (intra-VPC)" \
         --ip-permissions "IpProtocol=-1,IpRanges=[{CidrIp=${vpc_cidr},Description=intra-VPC}]"
 }
 
 aws_apply_sg_rules_compute() {
     local sg_id="$1"; local admin_cidr="$2"; local vpc_cidr="$3"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "TCP/22  from ${admin_cidr}" \
         --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${admin_cidr},Description=admin SSH}]"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "ICMP    from ${admin_cidr}" \
         --ip-permissions "IpProtocol=icmp,FromPort=-1,ToPort=-1,IpRanges=[{CidrIp=${admin_cidr},Description=admin ping}]"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "ALL     from ${vpc_cidr} (intra-VPC)" \
         --ip-permissions "IpProtocol=-1,IpRanges=[{CidrIp=${vpc_cidr},Description=intra-VPC}]"
 }
 
 aws_apply_sg_rules_storage() {
     local sg_id="$1"; local admin_cidr="$2"; local vpc_cidr="$3"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "TCP/22  from ${admin_cidr}" \
         --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${admin_cidr},Description=admin SSH}]"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "ICMP    from ${admin_cidr}" \
         --ip-permissions "IpProtocol=icmp,FromPort=-1,ToPort=-1,IpRanges=[{CidrIp=${admin_cidr},Description=admin ping}]"
-    aws_add_ingress "$sg_id" \
+    aws_add_ingress "$sg_id" "ALL     from ${vpc_cidr} (intra-VPC)" \
         --ip-permissions "IpProtocol=-1,IpRanges=[{CidrIp=${vpc_cidr},Description=intra-VPC}]"
 }
 

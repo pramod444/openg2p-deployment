@@ -10,6 +10,14 @@
 
 set -euo pipefail
 
+trap '
+    rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo "" >&2
+        echo "[FATAL] script exited with status ${rc} at line ${LINENO} (${BASH_COMMAND})" >&2
+    fi
+' EXIT
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
 KEEP_KEY=false

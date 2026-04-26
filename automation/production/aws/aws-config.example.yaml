@@ -73,6 +73,11 @@ key_name: ""
 # Default: ./keys/<key_name>.pem.
 # For "create": where the private key is saved (mode 0400).
 # For "existing": path to your existing .pem (must already be present).
+#
+# Path notes:
+#   • A leading ~ (e.g. ~/keys/mine.pem) is expanded to your home directory.
+#   • Relative paths are resolved against this aws/ directory.
+#   • Absolute paths (/Users/...) work as-is.
 key_path: ""
 
 # ---------------------------------------------------------------------------
@@ -114,6 +119,27 @@ storage_disk_throughput:  125
 rp_name:      "openg2p-prod-reverse-proxy"
 compute_name: "openg2p-prod-k8s-node-1"
 storage_name: "openg2p-prod-storage"
+
+# ---------------------------------------------------------------------------
+# Security group names
+# ---------------------------------------------------------------------------
+# The script does describe-or-create per name in the chosen VPC:
+#   • If a SG with the given name already exists in that VPC, REUSE it.
+#     Required ingress rules are applied idempotently — anything already
+#     present is left alone, anything missing is added.
+#   • Otherwise, CREATE a new SG with that name and apply all rules.
+#
+# Useful patterns:
+#   • Defaults below — leave them and the script creates the standard SGs
+#     under your project prefix.
+#   • Pre-created — your infra team has already created SGs and you just
+#     want to reuse them. Set the names below to match their existing SGs;
+#     the script will fill in any missing rules.
+#   • Shared — same SG name across multiple OpenG2P installations on the
+#     same VPC. Just point all installs at the same name.
+rp_sg_name:      "openg2p-prod-reverse-proxy"
+compute_sg_name: "openg2p-prod-k8s-node"
+storage_sg_name: "openg2p-prod-storage"
 
 # ---------------------------------------------------------------------------
 # Wireguard port

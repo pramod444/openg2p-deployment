@@ -134,6 +134,23 @@ The destroy script finds everything by `Project=<project>` and tears it down.
 
 ---
 
+## Reusing existing security groups
+
+The script does **describe-or-create** by name in the chosen VPC. If a security group already exists with the configured name, it's reused — no new SG created. The required ingress rules are then verified one-by-one and added if missing (no rules are removed).
+
+Three ways to drive this:
+
+1. **Defaults** — leave `rp_sg_name` / `compute_sg_name` / `storage_sg_name` blank (or at the example values). The script creates SGs named `<project>-reverse-proxy`, `<project>-k8s-node`, `<project>-storage` on first run; reuses them on subsequent runs.
+2. **Pre-created by your infra team** — set the SG name fields in `aws-config.yaml` to match the SGs they've already created. The script reuses them and adds any missing rules.
+3. **Shared across installs** — point multiple OpenG2P deployments at the same SG names. They'll all share the rule set.
+
+Per-rule status is logged so you can see what changed:
+```
+    + TCP/22  from 203.0.113.5/32: added
+    · ICMP    from 203.0.113.5/32: already present
+    · UDP/51820 (Wireguard) from 0.0.0.0/0: already present
+```
+
 ## Security group rules
 
 All three SGs allow:
