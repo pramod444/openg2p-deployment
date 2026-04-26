@@ -24,6 +24,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
+PROVISION_OUTPUT=""
 RUN_ROLE="all"
 RUN_PHASE=""
 FORCE_MODE=false
@@ -45,9 +46,10 @@ STATE_DIR="${SCRIPT_DIR}/.state"
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --config)  CONFIG_FILE="$2"; shift 2 ;;
-            --role)    RUN_ROLE="$2";    shift 2 ;;
-            --phase)   RUN_PHASE="$2";   shift 2 ;;
+            --config)            CONFIG_FILE="$2";       shift 2 ;;
+            --provision-output)  PROVISION_OUTPUT="$2";  shift 2 ;;
+            --role)              RUN_ROLE="$2";          shift 2 ;;
+            --phase)             RUN_PHASE="$2";         shift 2 ;;
             --force)   FORCE_MODE=true;  shift ;;
             --dry-run) DRY_RUN=true;     shift ;;
             --probe)           PROBE_ONLY=true;     shift ;;
@@ -103,16 +105,24 @@ Usage:
   ./openg2p-prod.sh --config prod-config.yaml [options]
 
 Options:
-  --config <file>      Path to configuration file (required)
-  --role  <name>       Run only one role: rp | compute | storage  (default: all)
-  --phase <n>          Run only one phase within the role (1, 2, 3)
-  --probe              SSH-probe all 3 nodes and exit (no changes)
-  --preflight          Run preflight checks on all 3 nodes and exit (no changes)
-  --skip-preflight     Skip preflight (use with caution — for re-runs only)
-  --force              Ignore completion markers, re-run all steps
-  --dry-run            Print what would run, do nothing
-  --reset-laptop       Clear laptop-side state and exit
-  --help               Show this help
+  --config <file>            Path to user prod-config.yaml (required)
+  --provision-output <file>  Path to provision-output.yaml (auto-detected if blank)
+                             AWS-derived values that override --config keys
+  --role  <name>             Run only one role: rp | compute | storage  (default: all)
+  --phase <n>                Run only one phase within the role (1, 2, 3)
+  --probe                    SSH-probe all 3 nodes and exit (no changes)
+  --preflight                Run preflight on all 3 nodes and exit (no changes)
+  --skip-preflight           Skip preflight (use with caution — for re-runs only)
+  --force                    Ignore completion markers, re-run all steps
+  --dry-run                  Print what would run, do nothing
+  --reset-laptop             Clear laptop-side state and exit
+  --help                     Show this help
+
+Config layering:
+  1. prod-config.yaml         — your preferences (versions, hostnames, emails)
+  2. provision-output.yaml    — AWS-derived state (IPs, SSH paths, private_subnet)
+                                Auto-detected next to prod-config.yaml. Loaded
+                                second; its keys win on conflict.
 
 Order when --role all (default):
   1. SSH probes for all 3 nodes
@@ -231,12 +241,21 @@ preflight_all() {
     done
     wait
 
-    # Send the config file by piping its content (rsync of a single file is
-    # also fine but stdin keeps perms predictable on the remote).
+    # Build a merged config (prod-config + provision-output overlay) once,
+    # then ship the same file to each node.
+    local merged="${tmp}/prod-config.yaml"
+    cat "$CONFIG_FILE" > "$merged"
+    if [[ -n "$PROVISION_OUTPUT" && -f "$PROVISION_OUTPUT" ]]; then
+        {
+            echo ""
+            echo "# ─── merged from provision-output.yaml at preflight time ───"
+            cat "$PROVISION_OUTPUT"
+        } >> "$merged"
+    fi
     for role in storage compute rp; do
         ssh_run "$role" \
             "mkdir -p ${REMOTE_WORK_DIR} && cat > ${REMOTE_WORK_DIR}/prod-config.yaml" \
-            < "$CONFIG_FILE" >"${tmp}/${role}.cfg" 2>&1 &
+            < "$merged" >"${tmp}/${role}.cfg" 2>&1 &
     done
     wait
 
@@ -315,7 +334,7 @@ run_role_phase() {
         return 0
     fi
 
-    ssh_stage_role "$role" "$SCRIPT_DIR" "$CONFIG_FILE"
+    ssh_stage_role "$role" "$SCRIPT_DIR" "$CONFIG_FILE" "$PROVISION_OUTPUT"
 
     local extra=""
     [[ "$FORCE_MODE" == "true" ]] && extra="--force"
@@ -337,6 +356,20 @@ main() {
     echo ""
 
     load_config "$CONFIG_FILE"
+
+    # Auto-detect provision-output.yaml next to prod-config.yaml unless
+    # --provision-output was given explicitly.
+    if [[ -z "$PROVISION_OUTPUT" ]]; then
+        PROVISION_OUTPUT="$(dirname "$CONFIG_FILE")/provision-output.yaml"
+    fi
+    if [[ -f "$PROVISION_OUTPUT" ]]; then
+        log_info "Loading provision-output overlay: ${PROVISION_OUTPUT}"
+        load_config "$PROVISION_OUTPUT"
+    else
+        PROVISION_OUTPUT=""   # not present — orchestrator behaves as before
+        log_info "No provision-output.yaml found — using prod-config.yaml only"
+    fi
+
     validate_orchestrator_config
 
     ssh_init

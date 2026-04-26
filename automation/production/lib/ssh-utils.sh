@@ -260,15 +260,17 @@ ssh_pull() {
 # ---------------------------------------------------------------------------
 # Stage role bundle — push lib/shared/, role dir, and the config to remote.
 # ---------------------------------------------------------------------------
-# ssh_stage_role <role>
+# ssh_stage_role <role> <repo_root> <config_file> [provision_output]
+# If provision_output is provided AND exists, it's appended to the staged
+# prod-config.yaml so its keys override prod-config.yaml on the remote node.
 ssh_stage_role() {
     local role="$1"
     local repo_root="$2"
     local config_file="$3"
+    local provision_output="${4:-}"
 
     log_info "Staging role bundle '${role}' on remote..."
 
-    # We assemble a clean staging dir on the laptop, then rsync it as a unit.
     local stage
     stage=$(mktemp -d -t openg2p-stage.XXXXXX)
     trap "rm -rf '$stage'" RETURN
@@ -279,7 +281,18 @@ ssh_stage_role() {
     cp -r "${repo_root}/charts" "${stage}/charts"
     [[ -f "${repo_root}/helmfile-infra.yaml.gotmpl" ]] && \
         cp "${repo_root}/helmfile-infra.yaml.gotmpl" "${stage}/helmfile-infra.yaml.gotmpl"
-    cp "$config_file" "${stage}/prod-config.yaml"
+
+    # Merge prod-config + provision-output into a single staged config.
+    # The remote role scripts only read prod-config.yaml — append-then-load
+    # gives provision-output values precedence (last writer wins).
+    cat "$config_file" > "${stage}/prod-config.yaml"
+    if [[ -n "$provision_output" && -f "$provision_output" ]]; then
+        {
+            echo ""
+            echo "# ─── merged from provision-output.yaml at stage time ───"
+            cat "$provision_output"
+        } >> "${stage}/prod-config.yaml"
+    fi
 
     ssh_push "$role" "${stage}/" "${REMOTE_WORK_DIR}/"
 

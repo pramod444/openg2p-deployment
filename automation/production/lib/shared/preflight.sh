@@ -80,7 +80,7 @@ check_resources() {
     case "$ROLE" in
         storage) req_cpu=8;  req_ram=32; req_disk=256 ;;
         compute) req_cpu=16; req_ram=64; req_disk=128 ;;
-        rp)      req_cpu=4;  req_ram=16; req_disk=64  ;;
+        rp)      req_cpu=2;  req_ram=4;  req_disk=64  ;;
         *) emit_fail "Unknown role '${ROLE}'"; return ;;
     esac
 

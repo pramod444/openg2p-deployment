@@ -1,0 +1,130 @@
+# =============================================================================
+# OpenG2P AWS Provisioning Configuration
+# =============================================================================
+# Copy to aws-config.yaml and edit:
+#   cp aws-config.example.yaml aws-config.yaml
+#
+# Then run from this directory:
+#   ./openg2p-aws-provision.sh --config aws-config.yaml
+#
+# This creates: 1 key pair, 3 security groups, 1 Elastic IP, 3 EC2 instances.
+# It then writes (or merges into) ../prod-config.yaml so that:
+#   cd .. && ./openg2p-prod.sh --config prod-config.yaml
+# Just works.
+#
+# All AWS resources are tagged with Project=<project> for later identification
+# and teardown by openg2p-aws-destroy.sh.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Project / region
+# ---------------------------------------------------------------------------
+# Used as a prefix for every resource name and as the Project tag.
+# Keep it short, lowercase, hyphenated.
+project: "openg2p-prod"
+
+# AWS region. Can also be set via AWS_REGION env var; this takes precedence.
+region: "ap-south-1"
+
+# ---------------------------------------------------------------------------
+# VPC and subnet
+# ---------------------------------------------------------------------------
+# Three modes:
+#   • Both blank   — auto-detect default VPC + a default-AZ subnet
+#   • vpc_id set, subnet_id blank — pick a default-AZ subnet in that VPC
+#   • Both set     — use as-is
+# Or pass --interactive on the CLI to be prompted with a list of available
+# VPCs and subnets in the region.
+vpc_id:    ""
+subnet_id: ""
+
+# ---------------------------------------------------------------------------
+# Network ingress
+# ---------------------------------------------------------------------------
+# CIDR allowed to SSH/ping the instances over the public internet.
+#
+# Special values:
+#   ""            — auto-detect this laptop's current public IP (recommended)
+#   "0.0.0.0/0"   — open to the world (only do this if you know why)
+#   custom CIDR   — your office or VPN egress range, e.g. "203.0.113.0/24"
+#
+# This is independent of VPC choice. The security group ALSO always allows
+# all traffic from the VPC CIDR for intra-VPC communication between nodes.
+admin_cidr: ""
+
+# ---------------------------------------------------------------------------
+# SSH key pair
+# ---------------------------------------------------------------------------
+# Mode "create"    — create a new key pair in AWS, save .pem locally
+# Mode "existing"  — reference an already-imported key pair by name
+key_mode: "create"
+
+# Name of the key pair in AWS.
+# For "create": will be created if missing. For "existing": must already exist.
+key_name: "openg2p-prod-key"
+
+# Local path for the .pem file.
+# For "create": where the new private key gets saved (mode 0400).
+# For "existing": path to your existing .pem (must already be present here).
+# Leave blank to default to ./keys/<key_name>.pem.
+key_path: ""
+
+# ---------------------------------------------------------------------------
+# AMI
+# ---------------------------------------------------------------------------
+# Leave blank to auto-resolve the latest Ubuntu Server 24.04 LTS amd64 AMI
+# in the configured region (Canonical owner ID 099720109477).
+ubuntu_ami: ""
+
+# ---------------------------------------------------------------------------
+# Instance types  (defaults match the OpenG2P resource minimums)
+# ---------------------------------------------------------------------------
+rp_instance_type:      "t3a.medium"     # 2 vCPU, 4 GB
+compute_instance_type: "m5a.4xlarge"    # 16 vCPU, 64 GB
+storage_instance_type: "t3a.2xlarge"    # 8 vCPU, 32 GB
+
+# ---------------------------------------------------------------------------
+# Root EBS volume sizes (gp3)
+# ---------------------------------------------------------------------------
+# Override if you want larger disks. Minimums shown; larger is fine.
+# Storage gets the most because the NFS export AND host PostgreSQL data
+# both live on its root disk in v1 (separate data volume = future work).
+rp_disk_gb:      64
+compute_disk_gb: 128
+storage_disk_gb: 256
+
+# Optional gp3 tuning. Defaults (3000 IOPS / 125 MB-s) are fine for most
+# workloads — bump for the storage node if you expect heavy DB traffic.
+rp_disk_iops:        3000
+rp_disk_throughput:  125
+compute_disk_iops:        3000
+compute_disk_throughput:  125
+storage_disk_iops:        3000
+storage_disk_throughput:  125
+
+# ---------------------------------------------------------------------------
+# Instance Name tags
+# ---------------------------------------------------------------------------
+rp_name:      "openg2p-prod-reverse-proxy"
+compute_name: "openg2p-prod-k8s-node-1"
+storage_name: "openg2p-prod-storage"
+
+# ---------------------------------------------------------------------------
+# Wireguard port
+# ---------------------------------------------------------------------------
+# Must match wg_port in prod-config.yaml. The RP security group opens this
+# UDP port to 0.0.0.0/0 so admin laptops can connect.
+wg_port: 51820
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+# Path to the provision-output.yaml that this script writes.
+# The orchestrator (openg2p-prod.sh) auto-detects this file next to your
+# prod-config.yaml and loads it as an overlay — values here override any
+# matching keys in prod-config.yaml.
+#
+# Default ("../provision-output.yaml") puts the file next to prod-config.yaml.
+# Don't change unless you have a specific reason — auto-detection assumes
+# the default location.
+provision_output_file: "../provision-output.yaml"

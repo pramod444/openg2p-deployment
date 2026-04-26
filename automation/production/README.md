@@ -29,11 +29,13 @@ Admin tools (Rancher, Keycloak) are reachable **only via Wireguard**, on hostnam
 | | Reverse Proxy | Compute | Storage |
 |---|---|---|---|
 | **OS** | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
-| **vCPU / RAM / disk** | 4 / 16 GB / 64 GB | 16 / 64 GB / 128 GB | 8 / 32 GB / 256 GB |
+| **vCPU / RAM / disk** | 2 / 4 GB / 64 GB | 16 / 64 GB / 128 GB | 8 / 32 GB / 256 GB |
 | **Network** | Public IP for Wireguard | Private IP only | Private IP only |
 | **All three** | On the same private subnet, internet egress, root/sudo SSH access from your laptop | | |
 
 Your laptop needs: bash, ssh, rsync. Nothing else.
+
+If you're on AWS and want the 3 VMs created for you, see [`aws/README.md`](aws/README.md). The `aws/` scripts provision the EC2 instances + supporting resources, then write the IPs/SSH details into `prod-config.yaml` for the orchestrator below.
 
 ---
 
@@ -42,13 +44,31 @@ Your laptop needs: bash, ssh, rsync. Nothing else.
 ```bash
 cd automation/production
 cp prod-config.example.yaml prod-config.yaml
-# Edit prod-config.yaml — fill in IP addresses, SSH user/key paths, admin_cidr
+# Edit prod-config.yaml — preferences only (cluster_name, internal_domain,
+# keycloak_admin_email, versions). For a non-AWS install also fill in IPs,
+# SSH paths, and private_subnet. AWS users skip those — see aws/ for the
+# provisioning that fills them automatically into provision-output.yaml.
 ./openg2p-prod.sh --probe     --config prod-config.yaml  # SSH + sudo to all 3 nodes
 ./openg2p-prod.sh --preflight --config prod-config.yaml  # CPU/RAM/disk/internet/IP checks
 ./openg2p-prod.sh             --config prod-config.yaml  # run everything end-to-end
 ```
 
 Total runtime: 25–40 minutes. Idempotent — re-run on failure to resume.
+
+## Two configuration files (one for you, one for your provisioning)
+
+The orchestrator loads two flat YAML files and merges them:
+
+| File | Source | Contains | Load order |
+|---|---|---|---|
+| `prod-config.yaml` | You author it | preferences: `cluster_name`, `internal_domain`, `keycloak_admin_email`, `wg_subnet/port/peers`, `rke2_version`, `rancher_version`, `postgres_*`, `nfs_*`, `ssh_jump_via_rp` | First |
+| `provision-output.yaml` | Auto-written by `aws/openg2p-aws-provision.sh` | provisioning state: `*_public_ip`, `*_private_ip`, `*_ssh_host`, `*_ssh_key`, `private_subnet`, `admin_cidr`, `wg_endpoint`, `cluster_name` | Second — **overrides matches** |
+
+The orchestrator auto-detects `provision-output.yaml` next to your `--config` file. Pass `--provision-output <path>` to override.
+
+For a non-AWS install (any other cloud, on-prem), put everything in `prod-config.yaml` and skip `provision-output.yaml` — the orchestrator works fine with just one file.
+
+The `[USER]` and `[AWS]` tags in `prod-config.example.yaml` mark which keys come from where.
 
 ## Preflight checks (built-in)
 
@@ -57,8 +77,8 @@ Before any installation work starts, the orchestrator runs `lib/shared/preflight
 | Check | RP | Compute | Storage |
 |---|---|---|---|
 | OS = Ubuntu 24.04 LTS+ | ✓ | ✓ | ✓ |
-| CPU vCPU minimum | 4 | 16 | 8 |
-| RAM minimum (10% slack) | 16 GB | 64 GB | 32 GB |
+| CPU vCPU minimum | 2 | 16 | 8 |
+| RAM minimum (10% slack) | 4 GB | 64 GB | 32 GB |
 | Disk on `/` (20% slack) | 64 GB | 128 GB | 256 GB |
 | Internet egress (`get.rke2.io`) | ✓ | ✓ | ✓ |
 | Configured `*_private_ip` actually bound on the host | ✓ | ✓ | ✓ |
@@ -183,11 +203,19 @@ automation/production/
 │   ├── ssh-utils.sh                   # ControlMaster SSH, rsync push/pull, optional ProxyJump
 │   └── shared/
 │       ├── utils.sh                   # Vendored from single-node — logging, state, config loader
+│       ├── preflight.sh               # Per-node OS/CPU/RAM/disk/internet/IP checks
 │       ├── hostnames.sh               # Hostname helpers + config-key bridge
 │       └── phase3.sh                  # Vendored — Rancher-Keycloak SAML
 ├── charts/
 │   ├── raw/                           # Minimal chart for applying K8s manifests
 │   └── istio-install/                 # Istio operator config
+├── aws/                                # Optional — provisions 3 EC2 instances + supporting resources
+│   ├── aws-config.example.yaml
+│   ├── openg2p-aws-provision.sh       # Creates EC2 + writes prod-config.yaml
+│   ├── openg2p-aws-destroy.sh         # Tears down by Project tag
+│   ├── lib/aws-utils.sh
+│   ├── keys/                          # Auto-saved .pem files (gitignored)
+│   └── README.md
 └── roles/
     ├── reverse-proxy/
     │   ├── run.sh

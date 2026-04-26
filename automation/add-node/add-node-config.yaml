@@ -27,7 +27,7 @@
 #
 # To confirm a candidate node IS a control-plane node, SSH to it and check:
 #     systemctl is-active rke2-server          # must return "active"
-#     sudo ls /var/lib/rancher/rke2/server/token   # file must exist
+#     sudo ls /var/lib/rancher/rke2/server/node-token   # file must exist
 #
 # Protocol/IP:
 #   • Always https (the supervisor speaks TLS only; the token authenticates).
@@ -35,13 +35,13 @@
 #     Public IP only needed if the new node is outside that network.
 #
 # The port is always 9345 (RKE2 supervisor), NOT 6443 (which is the K8s API).
-server_url: ""
+server_url: "https://172.29.2.4:9345"
 
 # Cluster-wide RKE2 join token.
 # On an existing control-plane node, get it with:
 #   sudo cat /var/lib/rancher/rke2/server/node-token
 # (Full value, including the "K10..." prefix.)
-rke2_token: ""
+rke2_token: "K10dca2514a52835cbb9b6bcfc5bc3dc2064bad70d0e52011da65f50814d014a900"
 
 # RKE2 version — MUST match the version running on the existing cluster.
 # Check on primary: rke2 --version
@@ -51,11 +51,11 @@ rke2_version: "v1.33.6+rke2r1"
 # This new node
 # ---------------------------------------------------------------------------
 # Private IP of this node (used by RKE2, firewall rules, kubelet).
-node_ip: ""
+node_ip: "172.29.1.98"
 
 # Unique name for this node in the cluster (visible in 'kubectl get nodes').
 # Must not collide with an existing node.
-node_name: "node2"
+node_name: "node7"
 
 # Role: "server" (control-plane) or "worker" (agent / data-plane only).
 # Leave empty to be prompted interactively, or override with --role on CLI.
@@ -63,7 +63,7 @@ node_name: "node2"
 #   server — Joins etcd, runs apiserver, participates in control-plane HA.
 #            Choose this for true HA (needs odd number of servers: 3, 5, ...).
 #   worker — Runs application pods only. Most common choice when scaling.
-node_role: ""
+node_role: "worker"
 
 # ---------------------------------------------------------------------------
 # Network
@@ -71,7 +71,7 @@ node_role: ""
 # VPC / private network CIDR used for inter-node firewall rules.
 # If empty, the script derives a /16 from node_ip (e.g. 10.0.0.6 → 10.0.0.0/16).
 # Override explicitly if your VPC uses a different mask.
-vpc_subnet: ""
+vpc_subnet: "172.29.0.0/16"
 
 # Wireguard peer subnet — MUST match the primary's wireguard.subnet setting.
 # Used only for ufw rules (Wireguard itself is NOT installed on this node).
@@ -88,4 +88,4 @@ vpc_subnet: ""
 #
 # Default if the primary was installed without customising this: 10.15.0.0/16
 # (which is what the example keeps). Most users can leave this as-is.
-wireguard_subnet: "10.15.0.0/16"
+wireguard_subnet: "10.11.0.1/32"

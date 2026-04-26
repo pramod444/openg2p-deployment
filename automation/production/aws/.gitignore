@@ -1,0 +1,8 @@
+# Auto-generated SSH key material
+keys/*.pem
+
+# Per-install configs (keep .example, ignore real ones)
+aws-config.yaml
+
+# Logs
+logs/

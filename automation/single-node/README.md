@@ -91,6 +91,10 @@ wireguard:
 
 Takes ~15-25 minutes. Idempotent — re-run on failure.
 
+### AWS EC2: Recommended Instance Type
+
+**Recommended: `m5a.4xlarge`** — 16 vCPU / 64 GB RAM (AMD EPYC). Meets the single-node resource requirements at the lowest hourly cost among comparable types (cheaper than `m5.4xlarge`, `c5.4xlarge`, and `m6a.4xlarge`). Pair it with a 128 GB gp3 EBS volume.
+
 ### AWS EC2: Security Group Setup
 
 Before running the script on an EC2 instance, create and attach the required security group:
