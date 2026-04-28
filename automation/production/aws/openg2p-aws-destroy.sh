@@ -154,38 +154,44 @@ main() {
         log_step "4" "Keeping key pair (--keep-key set)"
     else
         log_step "4" "Deleting key pair (only if script-created)"
-        local key_name
-        key_name=$(cfg key_name)
-        local key_path
-        key_path=$(cfg key_path)
-        if [[ -z "$key_path" ]]; then key_path="${SCRIPT_DIR}/keys/${key_name}.pem"; fi
-        # Tilde-expand in case the user has ~/...
-        key_path="${key_path/#\~\//${HOME}/}"
 
-        # Does the key exist in AWS at all?
-        if ! aws_cli ec2 describe-key-pairs --key-names "$key_name" \
-                --query 'KeyPairs[0].KeyName' --output text >/dev/null 2>&1; then
-            log_info "  Key pair '${key_name}' not in AWS — nothing to delete."
+        # Find key(s) we created for this project — tag-based, so it works
+        # whether key_name is filled in config or auto-derived. Pre-existing
+        # user keys won't have these tags and won't be touched.
+        local owned_keys
+        owned_keys=$(aws_cli ec2 describe-key-pairs \
+            --filters "Name=tag:Project,Values=${project}" \
+                      "Name=tag:ManagedBy,Values=openg2p-aws-provision" \
+            --query 'KeyPairs[].KeyName' --output text 2>/dev/null || true)
+
+        if [[ -z "$owned_keys" ]]; then
+            # Maybe user explicitly named one in config — sanity-check that it
+            # exists but has no tags (= user-imported), and report accordingly.
+            local cfg_kn
+            cfg_kn=$(cfg key_name)
+            if [[ -n "$cfg_kn" ]] && \
+               aws_cli ec2 describe-key-pairs --key-names "$cfg_kn" \
+                   --query 'KeyPairs[0].KeyName' --output text >/dev/null 2>&1; then
+                log_warn "  Key pair '${cfg_kn}' is NOT tagged Project=${project}"
+                log_warn "  → pre-existing / user-supplied; keeping it in AWS"
+            else
+                log_info "  No script-created key pair found for Project=${project}"
+            fi
         else
-            # Does it have OUR Project tag? (= we created it)
-            local owned
-            owned=$(aws_cli ec2 describe-key-pairs --key-names "$key_name" \
-                --filters "Name=tag:Project,Values=${project}" \
-                          "Name=tag:ManagedBy,Values=openg2p-aws-provision" \
-                --query 'KeyPairs[0].KeyName' --output text 2>/dev/null || true)
-
-            if [[ -n "$owned" && "$owned" != "None" ]]; then
+            for key_name in $owned_keys; do
                 aws_cli ec2 delete-key-pair --key-name "$key_name"
-                log_success "  Deleted key pair '${key_name}' (created by this script)."
+                log_success "  Deleted key pair '${key_name}' (created by this script)"
+
+                # Also remove any local .pem matching the configured/default path
+                local key_path
+                key_path=$(cfg key_path)
+                if [[ -z "$key_path" ]]; then key_path="${SCRIPT_DIR}/keys/${key_name}.pem"; fi
+                key_path="${key_path/#\~\//${HOME}/}"
                 if [[ -f "$key_path" ]]; then
                     rm -f "$key_path"
                     log_success "  Removed local .pem at ${key_path}"
                 fi
-            else
-                log_warn "  Key pair '${key_name}' is NOT tagged Project=${project}"
-                log_warn "  → treating as pre-existing / user-supplied; keeping it in AWS"
-                log_warn "  → local .pem at ${key_path} also kept"
-            fi
+            done
         fi
     fi
 

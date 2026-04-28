@@ -66,7 +66,7 @@ admin_cidr: ""
 key_mode: ""
 
 # Name of the key pair in AWS.
-# Default: "<project>-key" if blank.
+# Leave blank to auto-derive: "<project>-key"
 key_name: ""
 
 # Local path for the .pem file.
@@ -116,9 +116,16 @@ storage_disk_throughput:  125
 # ---------------------------------------------------------------------------
 # Instance Name tags
 # ---------------------------------------------------------------------------
-rp_name:      "openg2p-prod-reverse-proxy"
-compute_name: "openg2p-prod-k8s-node-1"
-storage_name: "openg2p-prod-storage"
+# Leave blank to auto-derive from `project`:
+#   rp_name      → <project>-reverse-proxy
+#   compute_name → <project>-k8s-node-1     (the "-1" suffix is intentional;
+#                                            future add-node automation uses
+#                                            -2, -3, etc.)
+#   storage_name → <project>-storage
+# Override only if you want different names.
+rp_name:      ""
+compute_name: ""
+storage_name: ""
 
 # ---------------------------------------------------------------------------
 # Security group names
@@ -129,17 +136,20 @@ storage_name: "openg2p-prod-storage"
 #     present is left alone, anything missing is added.
 #   • Otherwise, CREATE a new SG with that name and apply all rules.
 #
-# Useful patterns:
-#   • Defaults below — leave them and the script creates the standard SGs
-#     under your project prefix.
-#   • Pre-created — your infra team has already created SGs and you just
-#     want to reuse them. Set the names below to match their existing SGs;
-#     the script will fill in any missing rules.
+# Leave blank to auto-derive from `project`:
+#   rp_sg_name      → <project>-reverse-proxy
+#   compute_sg_name → <project>-k8s-node
+#   storage_sg_name → <project>-storage
+#
+# Override patterns:
+#   • Pre-created — your infra team has already created SGs and you want to
+#     reuse them. Set the names below to match their existing SGs; the
+#     script will fill in any missing rules.
 #   • Shared — same SG name across multiple OpenG2P installations on the
-#     same VPC. Just point all installs at the same name.
-rp_sg_name:      "openg2p-prod-reverse-proxy"
-compute_sg_name: "openg2p-prod-k8s-node"
-storage_sg_name: "openg2p-prod-storage"
+#     same VPC. Set all installs to the same name.
+rp_sg_name:      ""
+compute_sg_name: ""
+storage_sg_name: ""
 
 # ---------------------------------------------------------------------------
 # Wireguard port

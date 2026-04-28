@@ -360,6 +360,16 @@ aws_pick_key_pair() {
     if [[ -z "$cfg_path" ]]; then cfg_path="${default_dir}/${cfg_name}.pem"; fi
     cfg_path=$(aws_expand_path "$cfg_path")    # ~/keys/x → /home/u/keys/x
 
+    # If the resolved path is a directory (or ends in /), it's missing the
+    # filename. Append <key_name>.pem so writes go to a file, not a dir.
+    if [[ -d "$cfg_path" || "$cfg_path" == */ ]]; then
+        local original="$cfg_path"
+        cfg_path="${cfg_path%/}/${cfg_name}.pem"
+        log_info "key_path was a directory ('${original}') — using '${cfg_path}'" >&2
+        # Persist the resolved full path so subsequent runs don't re-derive it.
+        aws_save_choice key_path "$cfg_path"
+    fi
+
     # If mode is set explicitly, just pass through.
     if [[ "$cfg_mode" == "create" || "$cfg_mode" == "existing" ]]; then
         echo "${cfg_mode}|${cfg_name}|${cfg_path}"
@@ -451,6 +461,15 @@ aws_ensure_key_pair() {
                 return 1
             fi
             log_info "Creating new key pair '${key_name}'..."
+            # Sanity-check the path is a file, not a directory. Shell '>'
+            # to a directory gives the cryptic "Is a directory" error.
+            if [[ -d "$key_path" || "$key_path" == */ ]]; then
+                log_error "key_path '${key_path}' is a directory, not a file" \
+                          "Set key_path to a full .pem file path in aws-config.yaml" \
+                          "Example: key_path: \"~/.ssh/openg2p-prod-key.pem\"" \
+                          "" ""
+                return 1
+            fi
             mkdir -p "$(dirname "$key_path")"
             aws_cli ec2 create-key-pair \
                 --key-name "$key_name" \

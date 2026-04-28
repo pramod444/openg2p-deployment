@@ -112,15 +112,17 @@ EOF
 # Validate AWS-specific config keys
 # ---------------------------------------------------------------------------
 validate_aws_config() {
-    # Required upfront. Note: vpc_id, subnet_id, key_mode, key_name, key_path
-    # are deliberately NOT required here — the smart pickers in aws-utils.sh
-    # query AWS, prompt the user (or auto-pick), and save selections back to
-    # the config when those fields are blank.
+    # Required upfront. The following are deliberately NOT in the required
+    # list — they're either prompted interactively, or auto-derived from
+    # `project` when blank:
+    #   • vpc_id, subnet_id           — interactive picker
+    #   • key_mode, key_name, key_path — interactive picker
+    #   • rp_name, compute_name, storage_name           — derive from project
+    #   • rp_sg_name, compute_sg_name, storage_sg_name  — derive from project
     validate_config \
         project region \
         rp_instance_type compute_instance_type storage_instance_type \
         rp_disk_gb compute_disk_gb storage_disk_gb \
-        rp_name compute_name storage_name \
         wg_port provision_output_file
 }
 
@@ -252,45 +254,50 @@ main() {
     # ── 9. Launch instances (parallel) ──────────────────────────────────
     log_step "3" "Launching 3 EC2 instances in parallel"
 
+    # Auto-derive instance Name tags from project when blank in config.
+    local rp_name=$(cfg rp_name "${project}-reverse-proxy")
+    local compute_name=$(cfg compute_name "${project}-k8s-node-1")
+    local storage_name=$(cfg storage_name "${project}-storage")
+
     local rp_id compute_id storage_id
 
     # RP
-    rp_id=$(aws_find_instance "$(cfg rp_name)" "$project")
+    rp_id=$(aws_find_instance "$rp_name" "$project")
     if [[ -z "$rp_id" || "$rp_id" == "None" ]]; then
         rp_id=$(aws_run_instance \
-            "$(cfg rp_name)" "$project" "reverse-proxy" \
+            "$rp_name" "$project" "reverse-proxy" \
             "$ami" "$(cfg rp_instance_type)" "$subnet_id" "$rp_sg" "$key_name" \
             "$(cfg rp_disk_gb 64)" "$(cfg rp_disk_iops 3000)" "$(cfg rp_disk_throughput 125)")
         aws_require_nonempty "RP instance ID" "$rp_id"
-        log_success "  RP launched:      ${rp_id}"
+        log_success "  RP launched (${rp_name}):      ${rp_id}"
     else
-        log_info "  RP already exists: ${rp_id}"
+        log_info "  RP already exists (${rp_name}): ${rp_id}"
     fi
 
     # Compute
-    compute_id=$(aws_find_instance "$(cfg compute_name)" "$project")
+    compute_id=$(aws_find_instance "$compute_name" "$project")
     if [[ -z "$compute_id" || "$compute_id" == "None" ]]; then
         compute_id=$(aws_run_instance \
-            "$(cfg compute_name)" "$project" "k8s-node" \
+            "$compute_name" "$project" "k8s-node" \
             "$ami" "$(cfg compute_instance_type)" "$subnet_id" "$compute_sg" "$key_name" \
             "$(cfg compute_disk_gb 128)" "$(cfg compute_disk_iops 3000)" "$(cfg compute_disk_throughput 125)")
         aws_require_nonempty "Compute instance ID" "$compute_id"
-        log_success "  Compute launched:      ${compute_id}"
+        log_success "  Compute launched (${compute_name}):      ${compute_id}"
     else
-        log_info "  Compute already exists: ${compute_id}"
+        log_info "  Compute already exists (${compute_name}): ${compute_id}"
     fi
 
     # Storage
-    storage_id=$(aws_find_instance "$(cfg storage_name)" "$project")
+    storage_id=$(aws_find_instance "$storage_name" "$project")
     if [[ -z "$storage_id" || "$storage_id" == "None" ]]; then
         storage_id=$(aws_run_instance \
-            "$(cfg storage_name)" "$project" "storage" \
+            "$storage_name" "$project" "storage" \
             "$ami" "$(cfg storage_instance_type)" "$subnet_id" "$storage_sg" "$key_name" \
             "$(cfg storage_disk_gb 256)" "$(cfg storage_disk_iops 3000)" "$(cfg storage_disk_throughput 125)")
         aws_require_nonempty "Storage instance ID" "$storage_id"
-        log_success "  Storage launched:      ${storage_id}"
+        log_success "  Storage launched (${storage_name}):      ${storage_id}"
     else
-        log_info "  Storage already exists: ${storage_id}"
+        log_info "  Storage already exists (${storage_name}): ${storage_id}"
     fi
 
     # ── 10. Wait for running ────────────────────────────────────────────
