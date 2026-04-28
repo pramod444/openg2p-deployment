@@ -179,7 +179,7 @@ clean_uninstall_release() {
     # Clean up orphaned hook resources
     log_info "Cleaning up orphaned hook resources for '${release_name}'..."
     kubectl delete jobs -n "$env_name" --all --ignore-not-found > /dev/null 2>&1 || true
-    for suffix in postgres-init keycloak-init client-secrets-sync; do
+    for suffix in postgres-init keycloak-init client-secrets-sync iam-pg-init audit-pg-init master-data-postgres-init; do
         kubectl delete serviceaccount "${release_name}-${suffix}" -n "$env_name" --ignore-not-found > /dev/null 2>&1 || true
         kubectl delete configmap "${release_name}-${suffix}" -n "$env_name" --ignore-not-found > /dev/null 2>&1 || true
     done
@@ -472,6 +472,44 @@ step4_commons_base() {
         admin_args=(--set "keycloak-init.realms.staff.users[0].email=${admin_email}")
     fi
 
+    # Pre-flight: resource name length check (Kubernetes DNS-1123 limit = 63 chars).
+    # Run for local chart paths only (remote charts may not be locally inspectable).
+    if [[ "$chart_ref" == /* ]]; then
+        log_info "Pre-flight: checking rendered resource names..."
+        local long_names
+        long_names=$(helm template "$release_name" "$chart_ref" \
+            --set "global.baseDomain=${base_domain}" \
+            "${admin_args[@]}" \
+            "${extra[@]}" \
+            -n "$env_name" 2>/dev/null \
+            | grep -E '^  name: ' | sed 's/^  name: //' | sed 's/"//g' \
+            | awk '{ if (length($0) > 63) print length($0), $0 }' || true)
+        if [[ -n "$long_names" ]]; then
+            log_error "Resource names exceed Kubernetes 63-char limit:" \
+                      "$long_names" \
+                      "Shorten the corresponding nameOverride in values.yaml"
+            return 1
+        fi
+        log_success "All resource names within 63-char limit."
+    fi
+
+    # Pre-flight: external PostgreSQL secret check.
+    # If extras include `postgresql.enabled=false`, verify the superuser secret
+    # exists in the namespace before install. Helm cannot create it on the fly.
+    if printf '%s\n' "${extra[@]}" | grep -qE 'postgresql\.enabled=false'; then
+        local ext_pg_secret
+        ext_pg_secret=$(printf '%s\n' "${extra[@]}" | grep -oE 'global\.postgresqlSecret=[^ ]+' | cut -d= -f2 || true)
+        ext_pg_secret="${ext_pg_secret:-${release_name}-postgresql}"
+        log_info "Pre-flight: checking external PostgreSQL secret '${ext_pg_secret}'..."
+        if ! kubectl get secret "$ext_pg_secret" -n "$env_name" &>/dev/null; then
+            log_error "External PostgreSQL secret '${ext_pg_secret}' not found in '${env_name}'" \
+                      "Pre-create the secret before installing:" \
+                      "  kubectl create secret generic ${ext_pg_secret} -n ${env_name} --from-literal=postgres-password='<superuser-password>'"
+            return 1
+        fi
+        log_success "External PostgreSQL secret '${ext_pg_secret}' found."
+    fi
+
     helm_install_chart "$env_name" "$release_name" "$chart_ref" "$chart_version" \
         "openg2p-commons-base" \
         --set "global.baseDomain=${base_domain}" \
@@ -542,10 +580,34 @@ step5_commons_services() {
         extra=($extra_args)
     fi
 
+    # Pre-flight: resource name length check (Kubernetes DNS-1123 limit = 63 chars).
+    if [[ "$chart_ref" == /* ]]; then
+        log_info "Pre-flight: checking rendered resource names..."
+        local long_names
+        long_names=$(helm template "$release_name" "$chart_ref" \
+            --set "global.baseDomain=${base_domain}" \
+            -n "$env_name" 2>/dev/null \
+            | grep -E '^  name: ' | sed 's/^  name: //' | sed 's/"//g' \
+            | awk '{ if (length($0) > 63) print length($0), $0 }' || true)
+        if [[ -n "$long_names" ]]; then
+            log_error "Resource names exceed Kubernetes 63-char limit:" \
+                      "$long_names" \
+                      "Shorten the corresponding nameOverride in values.yaml"
+            return 1
+        fi
+        log_success "All resource names within 63-char limit."
+    fi
+
     helm_install_chart "$env_name" "$release_name" "$chart_ref" "$chart_version" \
         "openg2p-commons-services" \
         --set "global.baseDomain=${base_domain}" \
+        --set "global.keycloakInternalUrl=http://${base_release}-keycloak:80" \
+        --set "global.keycloakBaseUrl=https://keycloak.${base_domain}" \
+        --set "openg2p-iam-service.global.keycloakBaseUrl=https://keycloak.${base_domain}" \
+        --set "openg2p-audit-manager.global.kafkaBootstrapServers=${base_release}-kafka:9092" \
+        --set "global.iamServiceUrl=http://${release_name}-iam-staff-portal-api" \
         --set "global.postgresqlHost=${base_release}-postgresql" \
+        --set "global.postgresqlSecret=${base_release}-postgresql" \
         --set "global.redisInstallationName=${base_release}-redis" \
         --set "global.redisAuthInstallationName=${base_release}-redis-auth" \
         --set "global.minioInstallationName=${base_release}-minio" \

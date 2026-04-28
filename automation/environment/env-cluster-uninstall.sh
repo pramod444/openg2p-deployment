@@ -329,8 +329,9 @@ step_clean_hook_resources() {
     run_cmd "kubectl delete jobs -n '${env_name}' --all --ignore-not-found"
 
     # Hook ServiceAccounts, ConfigMaps, Roles, RoleBindings
+    # Includes per-subchart postgres-init suffixes (iam-pg-init, audit-pg-init).
     for release in commons commons-services; do
-        for suffix in postgres-init keycloak-init client-secrets-sync; do
+        for suffix in postgres-init keycloak-init client-secrets-sync iam-pg-init audit-pg-init master-data-postgres-init; do
             run_cmd "kubectl delete serviceaccount '${release}-${suffix}' -n '${env_name}' --ignore-not-found > /dev/null 2>&1 || true"
             run_cmd "kubectl delete configmap '${release}-${suffix}' -n '${env_name}' --ignore-not-found > /dev/null 2>&1 || true"
             run_cmd "kubectl delete rolebinding '${release}-${suffix}' -n '${env_name}' --ignore-not-found > /dev/null 2>&1 || true"
