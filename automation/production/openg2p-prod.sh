@@ -22,6 +22,30 @@
 
 set -euo pipefail
 
+# Trap any non-zero exit (including silent set-e exits) and emit a line number.
+trap '
+    rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo "" >&2
+        echo "[FATAL] openg2p-prod.sh exited with status ${rc} at line ${LINENO} (${BASH_COMMAND})" >&2
+        echo "[FATAL] log: ${LOG_FILE:-<not set>}" >&2
+    fi
+' EXIT
+
+# Early visibility — anything before the tee redirect goes straight to the
+# terminal. If the script silently dies, you should still see "starting".
+echo "[boot] openg2p-prod.sh starting (bash ${BASH_VERSION})" >&2
+
+# We use bash-4+ features (mapfile, parameter substitutions, process subs).
+# Linux ships bash 5+ by default; macOS ships /bin/bash 3.2 — install a newer
+# bash with `brew install bash` (and ensure it's first in PATH).
+if (( BASH_VERSINFO[0] < 4 )); then
+    echo "[FATAL] bash 4 or later required (detected ${BASH_VERSION})." >&2
+    echo "[FATAL] macOS: 'brew install bash', then re-open the shell." >&2
+    echo "[FATAL] Linux: your distro's bash should already be 4+; check PATH." >&2
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
 PROVISION_OUTPUT=""
@@ -90,8 +114,12 @@ parse_args() {
             ;;
     esac
 
-    # Normalize alias
-    [[ "$RUN_ROLE" == "reverse-proxy" ]] && RUN_ROLE="rp"
+    # Normalize alias.
+    # Avoid the `[[ test ]] && var=...` form: when the test is false (the
+    # common case here), the whole compound returns 1 and `set -e` exits.
+    if [[ "$RUN_ROLE" == "reverse-proxy" ]]; then
+        RUN_ROLE="rp"
+    fi
 }
 
 show_help() {
@@ -231,20 +259,26 @@ preflight_all() {
 
     local tmp
     tmp=$(mktemp -d -t openg2p-preflight.XXXXXX)
-    trap "rm -rf '$tmp'" RETURN
+    # NB: keep tmp around until end of function so we can show captured
+    # output on failure. Cleaned up at the end on success.
 
-    # Push config to each node first. Track PIDs explicitly because `wait`
-    # with no args also blocks on the tee subprocess from `exec > >(tee ...)`.
-    local push_pids=()
+    # Step 1 — push lib/shared to each node. Sequential foreground pushes
+    # with per-node progress so a stall is immediately visible.
+    log_info "Pushing preflight bundle to all 3 nodes..."
     for role in storage compute rp; do
-        ssh_push "$role" "${SCRIPT_DIR}/lib/shared/" "${REMOTE_WORK_DIR}/lib/shared/" \
-            >"${tmp}/${role}.push" 2>&1 &
-        push_pids+=($!)
+        log_info "  → ${role}"
+        if ! ssh_push "$role" "${SCRIPT_DIR}/lib/shared/" "${REMOTE_WORK_DIR}/lib/shared/" \
+                > "${tmp}/${role}.push" 2>&1; then
+            log_error "Failed to push preflight bundle to ${role}" \
+                      "ssh/rsync returned non-zero" \
+                      "$(cat "${tmp}/${role}.push")" \
+                      "" ""
+            rm -rf "$tmp"
+            exit 1
+        fi
     done
-    wait "${push_pids[@]}"
 
-    # Build a merged config (prod-config + provision-output overlay) once,
-    # then ship the same file to each node.
+    # Step 2 — ship the merged config (prod-config + provision-output overlay).
     local merged="${tmp}/prod-config.yaml"
     cat "$CONFIG_FILE" > "$merged"
     if [[ -n "$PROVISION_OUTPUT" && -f "$PROVISION_OUTPUT" ]]; then
@@ -254,27 +288,39 @@ preflight_all() {
             cat "$PROVISION_OUTPUT"
         } >> "$merged"
     fi
-    local cfg_pids=()
+    log_info "Pushing merged config to all 3 nodes..."
     for role in storage compute rp; do
-        ssh_run "$role" \
-            "mkdir -p ${REMOTE_WORK_DIR} && cat > ${REMOTE_WORK_DIR}/prod-config.yaml" \
-            < "$merged" >"${tmp}/${role}.cfg" 2>&1 &
-        cfg_pids+=($!)
+        log_info "  → ${role}"
+        if ! ssh_run "$role" \
+                "mkdir -p ${REMOTE_WORK_DIR} && cat > ${REMOTE_WORK_DIR}/prod-config.yaml" \
+                < "$merged" > "${tmp}/${role}.cfg" 2>&1; then
+            log_error "Failed to ship config to ${role}" \
+                      "ssh returned non-zero" \
+                      "$(cat "${tmp}/${role}.cfg")" \
+                      "" ""
+            rm -rf "$tmp"
+            exit 1
+        fi
     done
-    wait "${cfg_pids[@]}"
 
-    # Run preflight in parallel.
+    # Step 3 — run preflight on each node. Parallel is fine here because
+    # the slowest leg dominates and we already verified push/config worked.
+    log_info "Running preflight on all 3 nodes (parallel)..."
     local pre_pids=()
     for role in storage compute rp; do
         (
             ssh_run "$role" \
                 "cd ${REMOTE_WORK_DIR} && bash lib/shared/preflight.sh --role ${role} --config prod-config.yaml" \
-                >"${tmp}/${role}.out" 2>&1
+                > "${tmp}/${role}.out" 2>&1
             echo $? > "${tmp}/${role}.rc"
         ) &
         pre_pids+=($!)
     done
-    wait "${pre_pids[@]}"
+    # Wait per-PID — `wait <pid>` ignores other children (notably the tee
+    # subprocess from the script's exec-redirect, which would otherwise hang).
+    for pid in "${pre_pids[@]}"; do
+        wait "$pid" || true   # status is already captured in ${role}.rc
+    done
 
     # Print all 3 outputs in fixed order.
     local total_fail=0
@@ -315,13 +361,31 @@ preflight_all() {
     echo ""
 
     if [[ $total_fail -gt 0 ]]; then
+        # Surface each failing node's [FAIL] lines right above the error
+        # banner, so the user doesn't have to scroll up through the per-node
+        # preflight output.
+        echo ""
+        log_warn "Failure summary (full per-node output is above):"
+        for role in storage compute rp; do
+            local rrc
+            rrc=$(cat "${tmp}/${role}.rc" 2>/dev/null || echo 1)
+            if [[ "$rrc" != "0" ]]; then
+                echo -e "  ${RED}${role}${NC}:"
+                grep '^\[FAIL\]' "${tmp}/${role}.out" 2>/dev/null | sed 's/^/    /' \
+                    || echo "    (no [FAIL] lines captured — see ${tmp}/${role}.out)"
+            fi
+        done
+        echo ""
+
         log_error "Preflight failed on ${total_fail} node(s)" \
                   "Resource or environment checks did not pass" \
-                  "Fix the [FAIL] items shown above and re-run, or pass --skip-preflight (advanced)" \
+                  "Fix the [FAIL] items above and re-run, or pass --skip-preflight (advanced)" \
                   "$0 --config $(basename "$CONFIG_FILE") --preflight"
+        log_info "Preflight artifacts kept at: ${tmp}"
         exit 1
     fi
     log_success "Preflight passed on all 3 nodes."
+    rm -rf "$tmp"
 }
 
 run_role_phase() {
@@ -343,7 +407,7 @@ run_role_phase() {
     ssh_stage_role "$role" "$SCRIPT_DIR" "$CONFIG_FILE" "$PROVISION_OUTPUT"
 
     local extra=""
-    [[ "$FORCE_MODE" == "true" ]] && extra="--force"
+    if [[ "$FORCE_MODE" == "true" ]]; then extra="--force"; fi
     ssh_run_role "$role" --phase "$phase" $extra
 
     mark_step_done "$marker"
@@ -434,42 +498,129 @@ show_summary() {
     local keycloak_host="keycloak.${internal}"
     local rp_user=$(cfg rp_ssh_user ubuntu)
     local rp_host=$(cfg rp_ssh_host)
-    [[ -z "$rp_host" ]] && rp_host=$(cfg rp_public_ip)
+    if [[ -z "$rp_host" ]]; then rp_host=$(cfg rp_public_ip); fi
     local rp_key=$(cfg rp_ssh_key "~/.ssh/id_rsa")
     local compute_user=$(cfg compute_ssh_user ubuntu)
     local compute_host=$(cfg compute_ssh_host)
-    [[ -z "$compute_host" ]] && compute_host=$(cfg compute_private_ip)
+    if [[ -z "$compute_host" ]]; then compute_host=$(cfg compute_private_ip); fi
+    local kc_email=$(cfg keycloak_admin_email "admin@openg2p.internal")
+    local wg_subnet=$(cfg wg_subnet "10.15.0.0/16")
+    local wg_server_ip="${wg_subnet%.*.*/*}.0.1"
+
+    # Live-fetch the local Rancher admin password and Keycloak password from
+    # the cluster, so the summary contains exact ready-to-use credentials.
+    # Errors here are non-fatal — we just print '<failed to fetch>'.
+    local rancher_pw="<failed to fetch — see kubectl command below>"
+    local keycloak_pw="<failed to fetch — see kubectl command below>"
+    if ssh_run compute "true" >/dev/null 2>&1; then
+        rancher_pw=$(ssh_run compute \
+            "KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl -n cattle-system get secret rancher-secret -o jsonpath='{.data.adminPassword}' 2>/dev/null | base64 -d 2>/dev/null" \
+            2>/dev/null) || rancher_pw="<failed to fetch>"
+        keycloak_pw=$(ssh_run compute \
+            "KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl -n keycloak-system get secret keycloak -o jsonpath='{.data.admin-password}' 2>/dev/null | base64 -d 2>/dev/null" \
+            2>/dev/null) || keycloak_pw="<failed to fetch>"
+        [[ -z "$rancher_pw"  ]] && rancher_pw="<empty — secret may not exist>"
+        [[ -z "$keycloak_pw" ]] && keycloak_pw="<empty — secret may not exist>"
+    fi
 
     cat <<EOF
 
-╔════════════════════════════════════════════════════════════════════╗
-║  OpenG2P 3-Node Production Infrastructure — Setup Complete       ║
-╠════════════════════════════════════════════════════════════════════╣
-║                                                                    ║
-║  Admin tools (reachable only via Wireguard):                       ║
-║    Rancher:   https://${rancher_host}
-║    Keycloak:  https://${keycloak_host}
-║
-║  Post-install steps on your laptop:
-║
-║  1) Wireguard peer config:
-║     scp -i ${rp_key} ${rp_user}@${rp_host}:/etc/wireguard/peers/peer1/peer1.conf .
-║     # then import into the Wireguard client app
-║
-║  2) Local CA certificate (trust on your laptop):
-║     scp -i ${rp_key} ${rp_user}@${rp_host}:/etc/openg2p/ca/ca.crt .
-║     # macOS:    sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt
-║     # Linux:    sudo cp ca.crt /usr/local/share/ca-certificates/openg2p-ca.crt && sudo update-ca-certificates
-║     # Windows:  import into "Trusted Root Certification Authorities"
-║
-║  3) kubectl access (after Wireguard is up):
-║     scp -i ${rp_key} ${compute_user}@${compute_host}:/etc/rancher/rke2/rke2-remote.yaml ~/.kube/openg2p-prod
-║     export KUBECONFIG=~/.kube/openg2p-prod
-║     kubectl get nodes
-║
-║  Log: ${LOG_FILE}
-║
-╚════════════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║    OpenG2P 3-Node Production Infrastructure — SETUP COMPLETE                 ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  ADMIN URLS (reachable only via Wireguard)
+
+    Rancher:   https://${rancher_host}
+    Keycloak:  https://${keycloak_host}
+
+  CREDENTIALS — KEEP THESE SAFE
+
+    ┌─ Rancher local admin (use this for the FIRST login) ─────────────────────┐
+    │   username:  admin                                                       │
+    │   password:  ${rancher_pw}
+    └──────────────────────────────────────────────────────────────────────────┘
+
+    ┌─ Keycloak admin (use this AFTER you switch to "Login with Keycloak") ────┐
+    │   username:  ${kc_email}
+    │   password:  ${keycloak_pw}
+    └──────────────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════════════
+  WHAT TO DO NEXT — on your laptop
+══════════════════════════════════════════════════════════════════════════════
+
+  STEP 1.  Pull the Wireguard peer config and connect
+
+      ssh -i ${rp_key} ${rp_user}@${rp_host} \\
+          "sudo cat /etc/wireguard/peers/peer1/peer1.conf" > peer1.conf
+
+      Import peer1.conf into the Wireguard app and activate the tunnel.
+      Verify: ping ${wg_server_ip}    (should respond)
+
+  STEP 2.  Install the local CA on your laptop (trust the self-signed cert)
+
+      ssh -i ${rp_key} ${rp_user}@${rp_host} \\
+          "sudo cat /etc/openg2p/ca/ca.crt" > openg2p-ca.crt
+
+      macOS:    sudo security add-trusted-cert -d -r trustRoot \\
+                  -k /Library/Keychains/System.keychain openg2p-ca.crt
+      Linux:    sudo cp openg2p-ca.crt /usr/local/share/ca-certificates/ \\
+                && sudo update-ca-certificates
+      Windows:  certmgr.msc → Trusted Root Certification Authorities
+
+  STEP 3.  (macOS only) DNS resolver entry
+
+      sudo mkdir -p /etc/resolver
+      echo "nameserver ${wg_server_ip}" | sudo tee /etc/resolver/${internal}
+
+      Verify: dscacheutil -q host -a name ${rancher_host}
+              (must return the RP private IP)
+
+  STEP 4.  Login to Rancher — FIRST TIME (use the LOCAL admin)
+
+      Open:     https://${rancher_host}
+      Click:    "Use a local user"   (the small link below the Keycloak button)
+      Username: admin
+      Password: (the Rancher local admin password from above)
+
+      You're now in the Rancher UI as the local 'admin'.
+
+  STEP 5.  (Optional) From inside Rancher, browse to the keycloak-system
+           namespace → Secrets → "keycloak" → reveal the 'admin-password'
+           value. This is the same password we already printed above; the
+           UI is just a convenient way to retrieve it without using kubectl.
+
+  STEP 6.  Logout, then login again — but this time with KEYCLOAK SSO
+
+      In Rancher: top-right user menu → "Log Out".
+      Back at the login page, click the "Login with Keycloak" button.
+      You will be redirected to https://${keycloak_host}/...
+      Username: ${kc_email}
+      Password: (the Keycloak admin password from above)
+
+      After authenticating, Keycloak will redirect you back to Rancher with
+      a SAML assertion. Rancher should land you on the home page as the
+      Keycloak-authenticated admin user. SAML SSO is now verified working.
+
+
+══════════════════════════════════════════════════════════════════════════════
+  OPTIONAL — kubectl from your laptop (Wireguard must be active)
+══════════════════════════════════════════════════════════════════════════════
+
+      mkdir -p ~/.kube
+      ssh -i ${rp_key} ${compute_user}@${compute_host} \\
+          "sudo cat /etc/rancher/rke2/rke2-remote.yaml" > ~/.kube/openg2p-prod
+      chmod 600 ~/.kube/openg2p-prod
+      export KUBECONFIG=~/.kube/openg2p-prod
+      kubectl get nodes
+
+
+  Log file:  ${LOG_FILE}
 
 EOF
 }

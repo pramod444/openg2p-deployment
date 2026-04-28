@@ -33,19 +33,19 @@ ssh_resolve_role() {
         rp)
             user=$(cfg "rp_ssh_user" "ubuntu")
             host=$(cfg "rp_ssh_host")
-            [[ -z "$host" ]] && host=$(cfg "rp_public_ip")
+            if [[ -z "$host" ]]; then host=$(cfg "rp_public_ip"); fi
             key=$(cfg "rp_ssh_key" "~/.ssh/id_rsa")
             ;;
         compute)
             user=$(cfg "compute_ssh_user" "ubuntu")
             host=$(cfg "compute_ssh_host")
-            [[ -z "$host" ]] && host=$(cfg "compute_private_ip")
+            if [[ -z "$host" ]]; then host=$(cfg "compute_private_ip"); fi
             key=$(cfg "compute_ssh_key" "~/.ssh/id_rsa")
             ;;
         storage)
             user=$(cfg "storage_ssh_user" "ubuntu")
             host=$(cfg "storage_ssh_host")
-            [[ -z "$host" ]] && host=$(cfg "storage_private_ip")
+            if [[ -z "$host" ]]; then host=$(cfg "storage_private_ip"); fi
             key=$(cfg "storage_ssh_key" "~/.ssh/id_rsa")
             ;;
         *)
@@ -76,12 +76,18 @@ ssh_resolve_role() {
 ssh_options_for() {
     local role="$1"
 
+    # Host key checking is disabled — we just provisioned these VMs ourselves
+    # and the AWS API attests their identity. Trying to track host keys for
+    # ephemeral cloud VMs and have them propagate through ProxyJump's inner
+    # ssh causes interactive prompts in practice. Trade-off: a MITM during
+    # initial connection wouldn't be caught — acceptable inside your own VPC.
     local opts=(
         -o "ControlMaster=auto"
         -o "ControlPath=${SSH_CTRL_DIR}/%r@%h:%p"
         -o "ControlPersist=300"
-        -o "StrictHostKeyChecking=accept-new"
-        -o "UserKnownHostsFile=${SSH_CTRL_DIR}/known_hosts"
+        -o "StrictHostKeyChecking=no"
+        -o "UserKnownHostsFile=/dev/null"
+        -o "LogLevel=ERROR"
         -o "ServerAliveInterval=30"
         -o "ServerAliveCountMax=3"
     )
@@ -109,7 +115,6 @@ ssh_options_for() {
 ssh_init() {
     mkdir -p "$SSH_CTRL_DIR"
     chmod 700 "$SSH_CTRL_DIR"
-    touch "${SSH_CTRL_DIR}/known_hosts"
     mkdir -p "$LAPTOP_ARTIFACT_DIR"
 }
 
@@ -140,22 +145,30 @@ ssh_probe() {
     local opts
     mapfile -t opts < <(ssh_options_for "$role")
 
-    if ! ssh -i "$key" "${opts[@]}" \
+    # Debug: print the exact ssh command we're about to run so any host /
+    # ProxyJump / option discrepancy is visible.
+    if [[ "${SSH_DEBUG:-0}" == "1" ]]; then
+        log_info "  cmd: ssh -i ${key} ${opts[*]} -o BatchMode=yes -o ConnectTimeout=10 ${user}@${host} true" >&2
+    fi
+
+    # Show real ssh errors — don't squelch stderr.
+    local ssh_err
+    if ! ssh_err=$(ssh -i "$key" "${opts[@]}" \
             -o "BatchMode=yes" -o "ConnectTimeout=10" \
-            "${user}@${host}" "true" 2>/dev/null; then
+            "${user}@${host}" "true" 2>&1); then
         log_error "SSH connection failed: ${user}@${host}" \
                   "Cannot connect to the ${role} node" \
-                  "Check the host, key, and network reachability" \
+                  "ssh said: ${ssh_err}" \
                   "ssh -i ${key} ${user}@${host}"
         return 1
     fi
 
     # Verify passwordless sudo
-    if ! ssh -i "$key" "${opts[@]}" -o "BatchMode=yes" \
-             "${user}@${host}" "sudo -n true" 2>/dev/null; then
+    if ! ssh_err=$(ssh -i "$key" "${opts[@]}" -o "BatchMode=yes" \
+             "${user}@${host}" "sudo -n true" 2>&1); then
         log_error "Passwordless sudo not available for ${user}@${host}" \
                   "The user must have NOPASSWD:ALL in sudoers (or run as root)" \
-                  "Add the user to /etc/sudoers.d/ on the ${role} node" \
+                  "ssh said: ${ssh_err}" \
                   "echo '${user} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/openg2p"
         return 1
     fi
@@ -217,11 +230,13 @@ ssh_push() {
     local opts
     mapfile -t opts < <(ssh_options_for "$role")
 
-    # Make sure the remote dir exists and is owned by the SSH user
-    # (rsync to root-owned dirs needs --rsync-path="sudo rsync"; we drop into
-    # /tmp/openg2p-deploy which the SSH user owns).
+    # Make sure the remote dir exists and is owned by the SSH user.
+    # We create the destination itself (not its parent) — `dirname` on a
+    # trailing-slash path like /tmp/openg2p-deploy/ returns /tmp, and the
+    # SSH user can't chmod root-owned /tmp.
+    local dest_clean="${dest%/}"
     ssh -i "$key" "${opts[@]}" "${user}@${host}" \
-        "mkdir -p $(dirname "$dest") && chmod 0755 $(dirname "$dest")" >/dev/null
+        "mkdir -p $(printf '%q' "$dest_clean") && chmod 0755 $(printf '%q' "$dest_clean")" >/dev/null
 
     local rsync_ssh="ssh -i ${key}"
     for o in "${opts[@]}"; do
@@ -275,9 +290,14 @@ ssh_stage_role() {
     stage=$(mktemp -d -t openg2p-stage.XXXXXX)
     trap "rm -rf '$stage'" RETURN
 
+    # The orchestrator uses short role names (rp / compute / storage) but
+    # the directory for the reverse-proxy role is named "reverse-proxy/".
+    local role_dir="$role"
+    if [[ "$role" == "rp" ]]; then role_dir="reverse-proxy"; fi
+
     mkdir -p "${stage}/lib"
     cp -r "${repo_root}/lib/shared" "${stage}/lib/shared"
-    cp -r "${repo_root}/roles/${role}" "${stage}/role"
+    cp -r "${repo_root}/roles/${role_dir}" "${stage}/role"
     cp -r "${repo_root}/charts" "${stage}/charts"
     [[ -f "${repo_root}/helmfile-infra.yaml.gotmpl" ]] && \
         cp "${repo_root}/helmfile-infra.yaml.gotmpl" "${stage}/helmfile-infra.yaml.gotmpl"

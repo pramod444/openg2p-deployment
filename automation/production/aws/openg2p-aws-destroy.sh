@@ -139,26 +139,115 @@ main() {
         log_info "  No SGs tagged Project=${project}"
     fi
 
-    # ── 4. Optionally delete key pair ───────────────────────────────────
+    # ── 4. Key pair — only delete if WE created it ─────────────────────
+    # When the script creates a new key pair (key_mode=create), it tags it
+    # with Project=<project> + ManagedBy=openg2p-aws-provision. Pre-existing
+    # keys (key_mode=existing) supplied by the user do NOT have those tags,
+    # so they're safe even if --keep-key isn't passed.
+    #
+    # Decision tree:
+    #   --keep-key                      → keep regardless
+    #   key has our Project tag         → script-created → delete (key + .pem)
+    #   key exists but missing our tag  → user-provided  → keep (loud log)
+    #   key doesn't exist at all        → already gone   → no-op
     if [[ "$KEEP_KEY" == "true" ]]; then
         log_step "4" "Keeping key pair (--keep-key set)"
     else
-        log_step "4" "Deleting key pair"
-        local key_name=$(cfg key_name)
-        local key_path=$(cfg key_path)
-        [[ -z "$key_path" ]] && key_path="${SCRIPT_DIR}/keys/${key_name}.pem"
+        log_step "4" "Deleting key pair (only if script-created)"
+        local key_name
+        key_name=$(cfg key_name)
+        local key_path
+        key_path=$(cfg key_path)
+        if [[ -z "$key_path" ]]; then key_path="${SCRIPT_DIR}/keys/${key_name}.pem"; fi
+        # Tilde-expand in case the user has ~/...
+        key_path="${key_path/#\~\//${HOME}/}"
 
-        if aws_cli ec2 describe-key-pairs --key-names "$key_name" >/dev/null 2>&1; then
-            aws_cli ec2 delete-key-pair --key-name "$key_name"
-            log_success "  Deleted key pair '${key_name}' from AWS."
-        fi
-        if [[ -f "$key_path" ]]; then
-            rm -f "$key_path"
-            log_success "  Removed local .pem at ${key_path}"
+        # Does the key exist in AWS at all?
+        if ! aws_cli ec2 describe-key-pairs --key-names "$key_name" \
+                --query 'KeyPairs[0].KeyName' --output text >/dev/null 2>&1; then
+            log_info "  Key pair '${key_name}' not in AWS — nothing to delete."
+        else
+            # Does it have OUR Project tag? (= we created it)
+            local owned
+            owned=$(aws_cli ec2 describe-key-pairs --key-names "$key_name" \
+                --filters "Name=tag:Project,Values=${project}" \
+                          "Name=tag:ManagedBy,Values=openg2p-aws-provision" \
+                --query 'KeyPairs[0].KeyName' --output text 2>/dev/null || true)
+
+            if [[ -n "$owned" && "$owned" != "None" ]]; then
+                aws_cli ec2 delete-key-pair --key-name "$key_name"
+                log_success "  Deleted key pair '${key_name}' (created by this script)."
+                if [[ -f "$key_path" ]]; then
+                    rm -f "$key_path"
+                    log_success "  Removed local .pem at ${key_path}"
+                fi
+            else
+                log_warn "  Key pair '${key_name}' is NOT tagged Project=${project}"
+                log_warn "  → treating as pre-existing / user-supplied; keeping it in AWS"
+                log_warn "  → local .pem at ${key_path} also kept"
+            fi
         fi
     fi
 
-    # ── 5. Remove provision-output.yaml (it's now stale) ───────────────
+    # ── 5. Delete any leftover EBS volumes / snapshots / ENIs ──────────
+    # Instance termination auto-deletes the root volume (DeleteOnTermination=true)
+    # and the primary ENI. This step catches resources that detached, were
+    # snapshotted, or were never tied to an instance — e.g. volumes left
+    # in 'available' state after a manual detach.
+    log_step "5" "Sweeping leftover EBS volumes / snapshots / ENIs"
+
+    # 5a. Volumes tagged Project=<project> in 'available' state
+    local stray_vols
+    stray_vols=$(aws_cli ec2 describe-volumes \
+        --filters "Name=tag:Project,Values=${project}" "Name=status,Values=available,creating,error" \
+        --query 'Volumes[].VolumeId' --output text 2>/dev/null || true)
+    if [[ -n "$stray_vols" ]]; then
+        log_info "  Deleting volumes: ${stray_vols}"
+        for v in $stray_vols; do
+            aws_cli ec2 delete-volume --volume-id "$v" 2>&1 \
+                | grep -v -E '^$' >&2 \
+                || log_warn "  Could not delete volume ${v} — may already be deleting"
+        done
+    else
+        log_info "  No stray volumes tagged Project=${project}"
+    fi
+
+    # 5b. Snapshots tagged Project=<project> (we don't create any, but if a
+    # user manually snapshotted with our tag, clean up here)
+    local stray_snaps
+    stray_snaps=$(aws_cli ec2 describe-snapshots \
+        --owner-ids self \
+        --filters "Name=tag:Project,Values=${project}" \
+        --query 'Snapshots[].SnapshotId' --output text 2>/dev/null || true)
+    if [[ -n "$stray_snaps" ]]; then
+        log_info "  Deleting snapshots: ${stray_snaps}"
+        for s in $stray_snaps; do
+            aws_cli ec2 delete-snapshot --snapshot-id "$s" 2>&1 \
+                | grep -v -E '^$' >&2 \
+                || log_warn "  Could not delete snapshot ${s}"
+        done
+    else
+        log_info "  No stray snapshots tagged Project=${project}"
+    fi
+
+    # 5c. ENIs that aren't attached to anything (primary ENIs auto-delete
+    # with the instance; this catches manually-created or detached ones)
+    local stray_enis
+    stray_enis=$(aws_cli ec2 describe-network-interfaces \
+        --filters "Name=tag:Project,Values=${project}" "Name=status,Values=available" \
+        --query 'NetworkInterfaces[].NetworkInterfaceId' --output text 2>/dev/null || true)
+    if [[ -n "$stray_enis" ]]; then
+        log_info "  Deleting ENIs: ${stray_enis}"
+        for e in $stray_enis; do
+            aws_cli ec2 delete-network-interface --network-interface-id "$e" 2>&1 \
+                | grep -v -E '^$' >&2 \
+                || log_warn "  Could not delete ENI ${e}"
+        done
+    else
+        log_info "  No stray network interfaces tagged Project=${project}"
+    fi
+
+    # ── 6. Remove provision-output.yaml (it's now stale) ───────────────
     local out=$(cfg provision_output_file "../provision-output.yaml")
     [[ "$out" = /* ]] || out="${SCRIPT_DIR}/${out}"
     if [[ -f "$out" ]]; then
@@ -166,8 +255,8 @@ main() {
         log_success "Removed stale ${out}"
     fi
 
-    # ── 6. Show anything left tagged Project=<project> ─────────────────
-    log_step "6" "Sweep — anything still tagged Project=${project}"
+    # ── 7. Final sweep — anything still tagged Project=<project> ───────
+    log_step "7" "Sweep — anything still tagged Project=${project}"
     local leftover
     leftover=$(aws_cli resourcegroupstaggingapi get-resources \
         --tag-filters "Key=Project,Values=${project}" \

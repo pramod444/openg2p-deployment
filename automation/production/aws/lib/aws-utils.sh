@@ -11,8 +11,8 @@
 # ---------------------------------------------------------------------------
 aws_cli() {
     local args=()
-    [[ -n "${AWS_REGION:-}" ]] && args+=(--region "$AWS_REGION")
-    [[ -n "${AWS_PROFILE:-}" ]] && args+=(--profile "$AWS_PROFILE")
+    if [[ -n "${AWS_REGION:-}"  ]]; then args+=(--region  "$AWS_REGION"); fi
+    if [[ -n "${AWS_PROFILE:-}" ]]; then args+=(--profile "$AWS_PROFILE"); fi
     aws "${args[@]}" "$@"
 }
 
@@ -137,8 +137,9 @@ aws_pick_vpc() {
     while IFS=$'\t' read -r id is_default cidr name; do
         [[ -z "$id" ]] && continue
         ids+=("$id")
-        local marker=""; [[ "$is_default" == "True" ]] && marker=" (default)"
-        local namestr=""; [[ -n "$name" && "$name" != "None" ]] && namestr=" — ${name}"
+        local marker="" namestr=""
+        if [[ "$is_default" == "True" ]]; then marker=" (default)"; fi
+        if [[ -n "$name" && "$name" != "None" ]]; then namestr=" — ${name}"; fi
         descs+=("${id}  ${cidr}${marker}${namestr}")
     done <<< "$lines"
 
@@ -224,8 +225,9 @@ aws_pick_subnet() {
     local -a public_ids=() public_descs=() all_ids=() all_descs=()
     while IFS=$'\t' read -r id az cidr is_pub is_def name; do
         [[ -z "$id" ]] && continue
-        local namestr=""; [[ -n "$name" && "$name" != "None" ]] && namestr=" — ${name}"
-        local def_marker=""; [[ "$is_def" == "True" ]] && def_marker=" (default-AZ)"
+        local namestr="" def_marker=""
+        if [[ -n "$name" && "$name" != "None" ]]; then namestr=" — ${name}"; fi
+        if [[ "$is_def" == "True" ]]; then def_marker=" (default-AZ)"; fi
         local desc="${id}  ${az}  ${cidr}${def_marker}${namestr}"
         all_ids+=("$id");      all_descs+=("$desc")
         if [[ "$is_pub" == "True" ]]; then
@@ -354,8 +356,8 @@ aws_pick_key_pair() {
     local default_dir="$5"
 
     # Resolve defaults for name + path
-    [[ -z "$cfg_name" ]] && cfg_name="${project}-key"
-    [[ -z "$cfg_path" ]] && cfg_path="${default_dir}/${cfg_name}.pem"
+    if [[ -z "$cfg_name" ]]; then cfg_name="${project}-key"; fi
+    if [[ -z "$cfg_path" ]]; then cfg_path="${default_dir}/${cfg_name}.pem"; fi
     cfg_path=$(aws_expand_path "$cfg_path")    # ~/keys/x → /home/u/keys/x
 
     # If mode is set explicitly, just pass through.
@@ -386,7 +388,7 @@ aws_pick_key_pair() {
         local i=1
         while IFS=$'\t' read -r name ktype; do
             [[ -z "$name" ]] && continue
-            ((i++))
+            i=$((i + 1))   # avoid ((i++)) which exits 1 when i is 0 under set -e
             names+=("$name")
             printf "  [%d] %s\n" "$i" "Use existing: ${name} (${ktype})" >&2
         done <<< "$lines"
@@ -399,7 +401,7 @@ aws_pick_key_pair() {
             # Confirm / customize the new key name (default = pre-set value)
             local custom
             read -rp "  Name for new key pair [${cfg_name}]: " custom </dev/tty
-            [[ -n "$custom" ]] && cfg_name="$custom"
+            if [[ -n "$custom" ]]; then cfg_name="$custom"; fi
             cfg_path="${default_dir}/${cfg_name}.pem"
             aws_save_choice key_mode create
             aws_save_choice key_name "$cfg_name"
@@ -412,7 +414,7 @@ aws_pick_key_pair() {
             local default_path="${default_dir}/${chosen}.pem"
             local user_path
             read -rp "  Path to your local .pem for '${chosen}' [${default_path}]: " user_path </dev/tty
-            [[ -z "$user_path" ]] && user_path="$default_path"
+            if [[ -z "$user_path" ]]; then user_path="$default_path"; fi
             user_path=$(aws_expand_path "$user_path")
             aws_save_choice key_mode existing
             aws_save_choice key_name "$chosen"

@@ -1,3 +1,20 @@
+# Per-install configs (keep .example, ignore real ones)
 prod-config.yaml
 provision-output.yaml
+provision-output.yaml.prev
+provision-output.yaml.*.bak
+
+# Orchestrator runtime state (laptop-side bookkeeping)
+.state/
+
+# Logs
 logs/
+
+# Helmfile-rendered values (regenerated each run)
+helmfile-infra-values.yaml
+
+# Pulled artifacts (CA cert, peer config, kubeconfig)
+artifacts/
+peer*.conf
+*-ca.crt
+openg2p-ca.crt

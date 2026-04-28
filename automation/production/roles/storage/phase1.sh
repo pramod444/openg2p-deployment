@@ -84,8 +84,8 @@ storage_configure_ufw() {
     # PostgreSQL — only the compute node (env automation will use this later)
     ufw allow from "$compute_ip" to any port "$pg_port" proto tcp comment "PG from compute"
 
-    # ICMP from anywhere within the private subnet — useful for health probes
-    ufw allow from "$private_subnet" proto icmp
+    # ICMP (ping, etc.) is already permitted via ufw's default
+    # /etc/ufw/before.rules. ufw's simple syntax doesn't accept "proto icmp".
 
     ufw --force enable
 
@@ -140,15 +140,39 @@ storage_configure_postgres() {
 
     log_step "S1.5" "Configure host PostgreSQL (no app DBs yet)"
 
-    local pg_version
-    pg_version=$(cfg "postgres_version" "16")
+    # Resolve the actual installed PG major version. Ubuntu 24.04 ships PG16,
+    # 22.04 shipped PG14, etc. — `apt install postgresql` pulls whatever the
+    # distro's metapackage points to. Trusting a hand-edited postgres_version
+    # value would fail when it disagrees with what's actually on disk.
+    local cfg_version
+    cfg_version=$(cfg "postgres_version" "")
+    local pg_version=""
+    if [[ -n "$cfg_version" && -d "/etc/postgresql/${cfg_version}/main" ]]; then
+        pg_version="$cfg_version"
+    fi
+    if [[ -z "$pg_version" ]]; then
+        # Auto-detect: pick the highest numbered version installed.
+        pg_version=$(ls -1 /etc/postgresql/ 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -1 || true)
+        if [[ -n "$cfg_version" && -n "$pg_version" && "$cfg_version" != "$pg_version" ]]; then
+            log_warn "Configured postgres_version=${cfg_version} not installed (got ${pg_version} from apt). Using ${pg_version}."
+        fi
+    fi
+    if [[ -z "$pg_version" ]]; then
+        log_error "No PostgreSQL installation detected" \
+                  "/etc/postgresql/ has no version subdirectory" \
+                  "Verify the apt install of postgresql succeeded" \
+                  "ls /etc/postgresql/; dpkg -l | grep '^ii  postgresql'"
+        exit 1
+    fi
+    log_info "Using PostgreSQL ${pg_version}"
+
     local pg_port
     pg_port=$(cfg "postgres_port" "5432")
     local listen
     listen=$(cfg "postgres_listen")
     local storage_ip
     storage_ip=$(cfg "storage_private_ip")
-    [[ -z "$listen" ]] && listen="$storage_ip"
+    if [[ -z "$listen" ]]; then listen="$storage_ip"; fi
     local compute_ip
     compute_ip=$(cfg "compute_private_ip")
 

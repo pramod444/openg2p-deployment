@@ -93,16 +93,21 @@ check_resources() {
         emit_pass "CPU: ${cpu} vCPU"
     fi
 
-    # RAM — allow 10% slack (hypervisors often report a hair under)
-    local ram_kb ram_gb ram_min
+    # RAM — compare in MB to avoid integer-truncation false fails.
+    # /proc/meminfo MemTotal on a "4 GiB" VM is typically ~3793 MB (the
+    # kernel reserves space). With kB→GB integer division this would be 3,
+    # and a 4-min check would falsely fail. We allow 10% slack and compare
+    # in MB.
+    local ram_kb ram_mb req_ram_mb ram_min_mb
     ram_kb=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}')
     ram_kb=${ram_kb:-0}
-    ram_gb=$((ram_kb / 1024 / 1024))
-    ram_min=$((req_ram - req_ram / 10))
-    if [[ "$ram_gb" -lt "$ram_min" ]]; then
-        emit_fail "RAM: ${ram_gb} GB (need ≥${req_ram})"
+    ram_mb=$((ram_kb / 1024))
+    req_ram_mb=$((req_ram * 1024))
+    ram_min_mb=$(( req_ram_mb * 9 / 10 ))
+    if [[ "$ram_mb" -lt "$ram_min_mb" ]]; then
+        emit_fail "RAM: ${ram_mb} MB (need ≥${req_ram} GB ≈ ${req_ram_mb} MB)"
     else
-        emit_pass "RAM: ${ram_gb} GB"
+        emit_pass "RAM: ${ram_mb} MB (~$(( (ram_mb + 512) / 1024 )) GB)"
     fi
 
     # Root disk size — allow 20% slack (cloud images sometimes ship smaller and

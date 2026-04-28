@@ -156,6 +156,32 @@ run_phase3() {
 
     sleep 10
 
+    # ── Step 3.1b: Verify we can actually REACH Rancher's API ─────────────
+    # Phase 3 has been silently failing because curl couldn't resolve or
+    # connect to rancher.<internal> — every login attempt returns an empty
+    # response that looks identical to "wrong password". Probe explicitly.
+    log_info "Probing Rancher API connectivity..."
+    local probe_code probe_err
+    probe_err=$(curl -sk -o /dev/null --max-time 10 \
+                -w '%{http_code}' "${rancher_url}/v3-public" 2>&1) && probe_code="$probe_err" || probe_code="curl_failed"
+
+    case "$probe_code" in
+        200|301|302|401|403)
+            log_success "Rancher API reachable (HTTP ${probe_code})"
+            ;;
+        000|curl_failed|"")
+            log_error "Cannot reach Rancher at ${rancher_url}" \
+                      "DNS resolution or TCP connect to ${rancher_url} failed" \
+                      "Check /etc/hosts maps rancher.<internal_domain> to RP's private IP, and that RP's nginx is routing 443 to compute:30080" \
+                      "getent hosts $(echo "$rancher_url" | sed 's|https*://||;s|/.*||'); curl -kv ${rancher_url}/ping" \
+                      ""
+            return 1
+            ;;
+        *)
+            log_warn "Rancher API returned HTTP ${probe_code} (proceeding anyway)"
+            ;;
+    esac
+
     # ── Step 3.2: Bootstrap Rancher admin password ───────────────────────
     log_info "Bootstrapping Rancher admin password..."
 

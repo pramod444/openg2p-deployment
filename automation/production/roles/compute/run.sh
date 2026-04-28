@@ -65,7 +65,14 @@ main() {
     case "$RUN_PHASE" in
         1) run_compute_phase1 ;;
         2) run_compute_phase2 ;;
-        3) run_phase3 ;;   # vendored from single-node — Rancher-Keycloak SAML
+        3)
+            # Phase 3 calls the Rancher API at https://rancher.<internal_domain>
+            # from this node, which only resolves if rancher/keycloak hostnames
+            # are in /etc/hosts pointing at the RP's private IP. Ensure they
+            # are — self-heals if phase 1 was run with an older script.
+            ensure_admin_hostnames_in_etc_hosts
+            run_phase3   # vendored from single-node — Rancher-Keycloak SAML
+            ;;
         *) log_error "Invalid phase: ${RUN_PHASE}"; exit 1 ;;
     esac
 

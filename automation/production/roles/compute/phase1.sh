@@ -139,7 +139,7 @@ compute_configure_ufw() {
         ufw allow from "$cidr" to any port 9796  proto tcp comment "node-exporter"
         ufw allow from "$cidr" to any port 8472  proto udp comment "VXLAN/CNI"
         ufw allow from "$cidr" to any port 30000:32767 proto tcp comment "NodePort"
-        ufw allow from "$cidr" proto icmp
+        # ICMP is already permitted via ufw's default before.rules.
     done
 
     # Istio ingress NodePort 30080 from RP only (RP forwards public HTTPS to it)
@@ -170,15 +170,18 @@ compute_configure_sysctl_hosts() {
     local storage_ip=$(cfg "storage_private_ip")
     local rp_ip=$(cfg "rp_private_ip")
 
-    # Idempotent /etc/hosts edits — replace any prior managed block
+    # Idempotent /etc/hosts edits — replace any prior managed block.
+    # rancher/keycloak resolve to the RP's private IP so that curl from this
+    # node (e.g. phase 3's API calls) reaches them via the RP's Nginx →
+    # Istio NodePort → cluster service path.
     sed -i '/# openg2p-managed-begin/,/# openg2p-managed-end/d' /etc/hosts
     cat >> /etc/hosts <<EOF
 # openg2p-managed-begin
 ${storage_ip}  storage.${internal} postgres.${internal}
-${rp_ip}       rp.${internal}
+${rp_ip}       rp.${internal} rancher.${internal} keycloak.${internal}
 # openg2p-managed-end
 EOF
-    log_info "Added /etc/hosts: storage.${internal}, postgres.${internal}, rp.${internal}"
+    log_info "Added /etc/hosts: storage.${internal}, postgres.${internal}, rp.${internal}, rancher.${internal}, keycloak.${internal}"
 
     mark_step_done "$step"
 }
@@ -232,7 +235,7 @@ compute_install_rke2() {
     local node_name=$(cfg "compute_node_name" "compute-1")
     local node_ip=$(cfg "compute_private_ip")
     local token=$(cfg "rke2_token")
-    [[ -z "$token" ]] && token="openg2p-$(openssl rand -hex 16)"
+    if [[ -z "$token" ]]; then token="openg2p-$(openssl rand -hex 16)"; fi
 
     if systemctl is-active --quiet rke2-server 2>/dev/null; then
         log_info "RKE2 already running. Verifying kubectl access..."

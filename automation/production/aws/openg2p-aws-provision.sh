@@ -28,6 +28,11 @@ trap '
     fi
 ' EXIT
 
+if (( BASH_VERSINFO[0] < 4 )); then
+    echo "[FATAL] bash 4+ required (detected ${BASH_VERSION}). On macOS: brew install bash" >&2
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
 NON_INTERACTIVE=false
@@ -284,15 +289,15 @@ main() {
     fi
 
     # ── 10. Wait for running ────────────────────────────────────────────
-    # NOTE: 'wait' with no args blocks on ALL child processes, which includes
-    # the tee subprocess from `exec > >(tee ...)` at the top of the script.
-    # Track PIDs and wait on those explicitly to avoid the deadlock.
+    # Sequential — instances typically reach 'running' within ~30s of
+    # launch, so all three are usually already there by the time we ask.
+    # We tried parallel + wait-on-PIDs but `wait` was observed hanging on
+    # Ubuntu after all backgrounded subshells exited (interaction between
+    # the EXIT trap and subshell reaping). Sequential is rock-solid.
     log_step "4" "Waiting for all 3 instances to reach 'running' state"
-    local rp_pid compute_pid storage_pid
-    aws_wait_running "$rp_id"      "RP"      & rp_pid=$!
-    aws_wait_running "$compute_id" "Compute" & compute_pid=$!
-    aws_wait_running "$storage_id" "Storage" & storage_pid=$!
-    wait "$rp_pid" "$compute_pid" "$storage_pid"
+    aws_wait_running "$rp_id"      "RP"
+    aws_wait_running "$compute_id" "Compute"
+    aws_wait_running "$storage_id" "Storage"
     log_success "All 3 instances running."
 
     # ── 11. Disable source/dest check on RP (Wireguard) ────────────────
@@ -305,13 +310,16 @@ main() {
     fi
 
     # ── 13. Wait for status checks (running != ready) ──────────────────
+    # Sequential. With three instances launching at the same time, AWS's
+    # status checks for all three usually complete close together — the
+    # third one's wait often returns nearly immediately. Worst-case ~6 min
+    # total, vs. ~5 min parallel. Trades a minute for reliability.
     log_step "5" "Waiting for all 3 instances to pass status checks"
-    log_info "(This typically takes 2-5 minutes per instance.)"
-    local rp_status_pid compute_status_pid storage_status_pid
-    aws_wait_status_ok "$rp_id"      "RP"      & rp_status_pid=$!
-    aws_wait_status_ok "$compute_id" "Compute" & compute_status_pid=$!
-    aws_wait_status_ok "$storage_id" "Storage" & storage_status_pid=$!
-    wait "$rp_status_pid" "$compute_status_pid" "$storage_status_pid"
+    log_info "(This typically takes 2-5 minutes for the first instance,"
+    log_info "then the others usually finish quickly after.)"
+    aws_wait_status_ok "$rp_id"      "RP"
+    aws_wait_status_ok "$compute_id" "Compute"
+    aws_wait_status_ok "$storage_id" "Storage"
     log_success "All 3 instances passed status checks."
 
     # ── 14. Capture IPs ────────────────────────────────────────────────
