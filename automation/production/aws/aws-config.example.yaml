@@ -149,6 +149,38 @@ storage_sg_name: "openg2p-prod-storage"
 wg_port: 51820
 
 # ---------------------------------------------------------------------------
+# Backup node (optional, opt-in)
+# ---------------------------------------------------------------------------
+# When enabled, provisions a 4th EC2 instance + a separate EBS data volume
+# for the OpenG2P backup automation (../../backups/openg2p-backup.sh).
+#
+# Specs (defaults — adjust if needed):
+#   • 4 vCPU / 8 GB RAM         — t3a.xlarge
+#   • 64 GB root (gp3)
+#   • 1024 GB data volume       — separate gp3 volume mounted at
+#                                  /var/lib/openg2p-backup on first boot via
+#                                  cloud-init userdata (formatted ext4, fstab).
+#
+# When disabled (default), this whole block is ignored and the provisioner
+# behaves exactly as the 3-node version. Run aws-provision again later with
+# enabled=true to add the backup node — existing 3 nodes are untouched.
+#
+# Docs: operations/deployment/automation/backups.md (Prerequisites)
+backup_node:
+  enabled: false
+
+  instance_type: "t3a.xlarge"     # 4 vCPU, 16 GB (closest to 8 GB on t3a; t3a.large is 2 vCPU 8 GB)
+  root_disk_gb: 64
+  data_disk_gb: 1024              # separate volume for the backup repo
+  data_disk_iops: 3000
+  data_disk_throughput: 125
+
+  name:    "openg2p-prod-backup"
+  sg_name: "openg2p-prod-backup"
+  # SSH ingress is from admin_cidr (same as other nodes); the backup node
+  # also accepts SSH from RP/compute/storage SGs for orchestration.
+
+# ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
 # Path to the provision-output.yaml that this script writes.

@@ -43,6 +43,8 @@ LOG_FILE="${SCRIPT_DIR}/logs/aws-provision-$(date '+%Y%m%d-%H%M%S').log"
 # Reuse logging + cfg() from the production lib.
 source "${SCRIPT_DIR}/../lib/shared/utils.sh"
 source "${SCRIPT_DIR}/lib/aws-utils.sh"
+# Optional backup-node helpers — only used when backup_node.enabled=true.
+[[ -f "${SCRIPT_DIR}/lib/backup-node.sh" ]] && source "${SCRIPT_DIR}/lib/backup-node.sh"
 
 # ---------------------------------------------------------------------------
 parse_args() {
@@ -110,9 +112,12 @@ EOF
 # Validate AWS-specific config keys
 # ---------------------------------------------------------------------------
 validate_aws_config() {
+    # Required upfront. Note: vpc_id, subnet_id, key_mode, key_name, key_path
+    # are deliberately NOT required here — the smart pickers in aws-utils.sh
+    # query AWS, prompt the user (or auto-pick), and save selections back to
+    # the config when those fields are blank.
     validate_config \
         project region \
-        key_mode key_name \
         rp_instance_type compute_instance_type storage_instance_type \
         rp_disk_gb compute_disk_gb storage_disk_gb \
         rp_name compute_name storage_name \
@@ -362,15 +367,80 @@ main() {
         aws_wait_ssh "$storage_public" "ubuntu" "$key_path" "$SSH_WAIT_TIMEOUT" "Storage" || exit 1
     fi
 
+    # ── 15b. Optional: provision the backup node ────────────────────────
+    local backup_id="" backup_public="" backup_private=""
+    if cfg_bool "backup_node.enabled"; then
+        log_step "5b" "Provisioning backup node (backup_node.enabled=true)"
+        provision_backup_node "$project" "$ami" "$subnet_id" "$key_name" "$key_path" \
+                              "$vpc_id" "$vpc_cidr" "$admin_cidr"
+        # provision_backup_node sets the locals via globals (bash subshell limit).
+        backup_id="${BACKUP_INSTANCE_ID:-}"
+        backup_public="${BACKUP_PUBLIC_IP:-}"
+        backup_private="${BACKUP_PRIVATE_IP:-}"
+    else
+        log_info "Backup node not requested (backup_node.enabled=false)."
+    fi
+
     # ── 16. Write provision-output.yaml ─────────────────────────────────
     write_provision_output \
         "$rp_public" "$rp_private" \
         "$compute_public" "$compute_private" \
         "$storage_public" "$storage_private" \
-        "$vpc_cidr" "$admin_cidr" "$key_path"
+        "$vpc_cidr" "$admin_cidr" "$key_path" \
+        "$backup_public" "$backup_private"
 
     show_summary "$rp_public" "$compute_public" "$storage_public" \
-                 "$key_path" "$rp_id" "$compute_id" "$storage_id"
+                 "$key_path" "$rp_id" "$compute_id" "$storage_id" \
+                 "$backup_public" "$backup_id"
+}
+
+# ---------------------------------------------------------------------------
+# provision_backup_node — gated on backup_node.enabled. Creates SG + instance
+# with a separate data volume. Sets globals BACKUP_INSTANCE_ID,
+# BACKUP_PUBLIC_IP, BACKUP_PRIVATE_IP for the caller (avoids subshell loss).
+# ---------------------------------------------------------------------------
+provision_backup_node() {
+    local project="$1" ami="$2" subnet_id="$3" key_name="$4" key_path="$5"
+    local vpc_id="$6" vpc_cidr="$7" admin_cidr="$8"
+
+    local sg_name=$(cfg backup_node.sg_name "${project}-backup")
+    local name=$(cfg backup_node.name "${project}-backup")
+    local type=$(cfg backup_node.instance_type "t3a.xlarge")
+    local root_gb=$(cfg backup_node.root_disk_gb 64)
+    local data_gb=$(cfg backup_node.data_disk_gb 1024)
+    local data_iops=$(cfg backup_node.data_disk_iops 3000)
+    local data_throughput=$(cfg backup_node.data_disk_throughput 125)
+
+    local backup_sg
+    backup_sg=$(aws_ensure_security_group \
+        "$sg_name" "OpenG2P backup node - SSH" \
+        "$vpc_id" "$project" "backup")
+    aws_require_nonempty "Backup security group" "$backup_sg"
+    aws_apply_sg_rules_backup "$backup_sg" "$admin_cidr" "$vpc_cidr"
+    log_success "  Backup SG: ${sg_name} (${backup_sg})"
+
+    BACKUP_INSTANCE_ID=$(aws_find_instance "$name" "$project")
+    if [[ -z "$BACKUP_INSTANCE_ID" || "$BACKUP_INSTANCE_ID" == "None" ]]; then
+        BACKUP_INSTANCE_ID=$(aws_run_backup_instance \
+            "$name" "$project" "$ami" "$type" "$subnet_id" "$backup_sg" "$key_name" \
+            "$root_gb" "$data_gb" "$data_iops" "$data_throughput")
+        aws_require_nonempty "Backup instance ID" "$BACKUP_INSTANCE_ID"
+        log_success "  Backup launched: ${BACKUP_INSTANCE_ID}"
+    else
+        log_info "  Backup already exists: ${BACKUP_INSTANCE_ID}"
+    fi
+
+    aws_wait_running    "$BACKUP_INSTANCE_ID" "Backup"
+    aws_wait_status_ok  "$BACKUP_INSTANCE_ID" "Backup"
+
+    local ips; ips=$(aws_get_instance_ips "$BACKUP_INSTANCE_ID")
+    BACKUP_PUBLIC_IP="${ips%|*}"
+    BACKUP_PRIVATE_IP="${ips#*|}"
+    log_info "  Backup: public=${BACKUP_PUBLIC_IP}  private=${BACKUP_PRIVATE_IP}"
+
+    if [[ "$SKIP_SSH_WAIT" != "true" ]]; then
+        aws_wait_ssh "$BACKUP_PUBLIC_IP" "ubuntu" "$key_path" "$SSH_WAIT_TIMEOUT" "Backup" || exit 1
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -388,6 +458,7 @@ write_provision_output() {
     local storage_pub="$5" storage_priv="$6"
     local vpc_cidr="$7"    admin_cidr="$8"
     local key_path="$9"
+    local backup_pub="${10:-}" backup_priv="${11:-}"
 
     local out=$(cfg provision_output_file "../provision-output.yaml")
     [[ "$out" = /* ]] || out="${SCRIPT_DIR}/${out}"
@@ -458,6 +529,19 @@ wg_port:         "$(cfg wg_port 51820)"
 cluster_name:    "$(cfg project openg2p-prod)"
 EOF
 
+    # ── Optional backup node section ─────────────────────────────────────
+    if [[ -n "$backup_priv" ]]; then
+        cat >> "$out" <<EOF
+
+# ─── Backup node (consumed by ../backups/openg2p-backup.sh) ──────────────
+# Present only when backup_node.enabled=true in aws-config.yaml.
+backup_private_ip:  "${backup_priv}"
+backup_ssh_host:    "${backup_pub}"
+backup_ssh_user:    "ubuntu"
+backup_ssh_key:     "${key_for_prod}"
+EOF
+    fi
+
     log_success "Wrote ${out}"
 }
 
@@ -465,6 +549,7 @@ show_summary() {
     local rp_pub="$1" compute_pub="$2" storage_pub="$3"
     local key_path="$4"
     local rp_id="$5" compute_id="$6" storage_id="$7"
+    local backup_pub="${8:-}" backup_id="${9:-}"
 
     local out=$(cfg provision_output_file "../provision-output.yaml")
     [[ "$out" = /* ]] || out="${SCRIPT_DIR}/${out}"
@@ -480,7 +565,8 @@ show_summary() {
 ║    Reverse Proxy: ${rp_id} → ${rp_pub}
 ║    Compute:       ${compute_id} → ${compute_pub}
 ║    Storage:       ${storage_id} → ${storage_pub}
-║
+${backup_id:+║    Backup:        ${backup_id} → ${backup_pub}
+}║
 ║  SSH key:          ${key_path}
 ║  provision-output: ${out}
 ║
