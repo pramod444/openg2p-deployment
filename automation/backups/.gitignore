@@ -1,0 +1,17 @@
+# Per-install configs (keep .example, ignore real ones)
+backup-config.yaml
+
+# Orchestrator runtime state (laptop-side bookkeeping)
+.state/
+
+# Logs
+logs/
+
+# Pulled artifacts / temporary stage dirs (if any land here)
+artifacts/
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*.swo
+*~

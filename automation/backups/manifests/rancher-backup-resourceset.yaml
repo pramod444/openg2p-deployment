@@ -1,0 +1,69 @@
+# =============================================================================
+# rancher-backup ResourceSet — what to capture beyond Rancher's defaults
+# =============================================================================
+# This ResourceSet drives the operator at github.com/rancher/backup-restore-operator.
+# Despite the "rancher-" prefix, the operator backs up arbitrary GVKs into a
+# single tarball. We use it as the resource-level export that complements
+# pgBackRest (data) and etcd-snapshot (full cluster state).
+#
+# Output target is a PVC on NFS — the resulting tarball is then captured by
+# the nfs restic backup, so we don't need to wire up an S3 backend.
+#
+# Tune via backup-config.yaml resource_set:* — at install time the orchestrator
+# verifies each entry against the live cluster and warns on unknowns.
+# =============================================================================
+apiVersion: resources.cattle.io/v1
+kind: ResourceSet
+metadata:
+  name: openg2p-resource-set
+resourceSelectors:
+  # Core "loseable" Kubernetes objects — Helm releases, runtime-issued certs,
+  # Helm release Secrets (without these, helm sees nothing installed), service
+  # account tokens, namespace labels.
+  - apiVersion: "v1"
+    kindsRegexp: "^(secrets|configmaps|namespaces|serviceaccounts|persistentvolumes|persistentvolumeclaims)$"
+    excludeKinds: []
+
+  # Rancher itself (cluster manager state, users, RBAC, GitOps, providers).
+  - apiVersion: "management.cattle.io/v3"
+    kindsRegexp: "."
+
+  # cert-manager — Issuer/ClusterIssuer/Certificate. Without these the runtime-
+  # issued TLS Secrets (already covered above) can't be re-issued.
+  - apiVersion: "cert-manager.io/v1"
+    kindsRegexp: "."
+
+  # Prometheus operator CRs — user-added rules, ServiceMonitors, Grafana
+  # dashboard ConfigMaps (covered by configmaps above).
+  - apiVersion: "monitoring.coreos.com/v1"
+    kindsRegexp: "."
+
+  # Istio — VirtualService, Gateway, DestinationRule, etc.
+  - apiVersion: "networking.istio.io/v1beta1"
+    kindsRegexp: "."
+  - apiVersion: "networking.istio.io/v1"
+    kindsRegexp: "."
+
+  # Istio security — AuthorizationPolicy, PeerAuthentication, RequestAuthentication.
+  - apiVersion: "security.istio.io/v1beta1"
+    kindsRegexp: "."
+  - apiVersion: "security.istio.io/v1"
+    kindsRegexp: "."
+
+  # Keycloak operator — realms, clients (when using the operator pattern).
+  - apiVersion: "keycloak.org/v1alpha1"
+    kindsRegexp: "."
+  - apiVersion: "k8s.keycloak.org/v2alpha1"
+    kindsRegexp: "."
+
+  # Logging operator (Banzai Cloud's, used by Rancher logging chart) —
+  # output configs, flows.
+  - apiVersion: "logging.banzaicloud.io/v1beta1"
+    kindsRegexp: "."
+
+# Namespaces to skip entirely. Adjust via backup-config.yaml exclude_namespaces.
+# Defaults exclude churning system noise that helmfile recreates anyway.
+namespaceRegexp: "^(?!kube-system|kube-public|kube-node-lease).*"
+
+# Don't include controller-managed boilerplate.
+controllerReferences: false

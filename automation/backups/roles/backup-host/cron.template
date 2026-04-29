@@ -1,0 +1,30 @@
+# =============================================================================
+# /etc/cron.d/openg2p-backup
+# =============================================================================
+# Variables substituted by deploy_cron() in lib/restic.sh based on
+# backup-config.yaml schedules:* values.
+# =============================================================================
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=__MAILTO__
+
+# postgres — full
+__PG_FULL_CRON__ root PGBR_TYPE=full /usr/local/bin/openg2p-backup-run pg >> /var/log/openg2p-backup.log 2>&1
+
+# postgres — diff
+__PG_DIFF_CRON__ root PGBR_TYPE=diff /usr/local/bin/openg2p-backup-run pg >> /var/log/openg2p-backup.log 2>&1
+
+# etcd — pull snapshots
+__ETCD_CRON__ root /usr/local/bin/openg2p-backup-run etcd >> /var/log/openg2p-backup.log 2>&1
+
+# rancher — on-demand backup CR (in addition to in-cluster nightly schedule)
+__RANCHER_CRON__ root /usr/local/bin/openg2p-backup-run rancher >> /var/log/openg2p-backup.log 2>&1
+
+# nfs
+__NFS_CRON__ root /usr/local/bin/openg2p-backup-run nfs >> /var/log/openg2p-backup.log 2>&1
+
+# configs
+__CONFIGS_CRON__ root /usr/local/bin/openg2p-backup-run configs >> /var/log/openg2p-backup.log 2>&1
+
+# weekly drill — verify all + dry-run-restore canary
+__DRILL_CRON__ root /usr/local/bin/openg2p-backup-drill >> /var/log/openg2p-backup.log 2>&1

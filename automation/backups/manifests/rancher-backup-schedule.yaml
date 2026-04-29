@@ -1,0 +1,20 @@
+# =============================================================================
+# rancher-backup Backup CR — nightly recurring schedule
+# =============================================================================
+# Output: encrypted tarball written to a PVC on NFS, named
+# openg2p-rancher-backup-<timestamp>.tar.gz.
+# The PVC is bound to the NFS export already covered by restic — so the
+# tarball lands inside the restic-tracked tree without extra wiring.
+# =============================================================================
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: openg2p-nightly
+spec:
+  resourceSetName: openg2p-resource-set
+  encryptionConfigSecretName: openg2p-backup-encryption
+  schedule: "0 3 * * *"
+  retentionCount: 14
+  storageLocation:
+    persistentVolumeClaim:
+      claimName: openg2p-rancher-backup
