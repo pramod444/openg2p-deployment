@@ -606,6 +606,7 @@ step5_commons_services() {
         --set "openg2p-iam-service.global.keycloakBaseUrl=https://keycloak.${base_domain}" \
         --set "openg2p-audit-manager.global.kafkaBootstrapServers=${base_release}-kafka:9092" \
         --set "global.iamServiceUrl=http://${release_name}-iam-staff-portal-api" \
+        --set "global.keycloakAdminSecret=${base_release}-keycloak" \
         --set "global.postgresqlHost=${base_release}-postgresql" \
         --set "global.postgresqlSecret=${base_release}-postgresql" \
         --set "global.redisInstallationName=${base_release}-redis" \

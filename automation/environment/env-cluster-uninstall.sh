@@ -330,6 +330,7 @@ step_clean_hook_resources() {
 
     # Hook ServiceAccounts, ConfigMaps, Roles, RoleBindings
     # Includes per-subchart postgres-init suffixes (iam-pg-init, audit-pg-init).
+    # Both commons and commons-services run their own keycloak-init + client-secrets-sync.
     for release in commons commons-services; do
         for suffix in postgres-init keycloak-init client-secrets-sync iam-pg-init audit-pg-init master-data-postgres-init; do
             run_cmd "kubectl delete serviceaccount '${release}-${suffix}' -n '${env_name}' --ignore-not-found > /dev/null 2>&1 || true"
