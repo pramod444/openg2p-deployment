@@ -193,7 +193,14 @@ ssh_run() {
     local opts
     mapfile -t opts < <(ssh_options_for "$role")
 
-    ssh -i "$key" "${opts[@]}" "${user}@${host}" "sudo -E bash -lc $(printf '%q' "$*")"
+    # We use a login shell (bash -lc) so PATH/env from the node's profile is
+    # available (helm, kubectl in /usr/local/bin, etc). A login shell sources
+    # the profile AND ~/.bash_logout, which on stock Ubuntu invoke curses tools
+    # (clear/clear_console/tput). Over SSH there is no TTY, so TERM is unset and
+    # those tools fail with "'unknown': I need something more specific.", which
+    # pollutes stderr and can corrupt the command's exit status. Forcing a sane
+    # TERM (dumb is universally present in terminfo) makes them no-op cleanly.
+    ssh -i "$key" "${opts[@]}" "${user}@${host}" "sudo -E env TERM=dumb bash -lc $(printf '%q' "$*")"
 }
 
 # ssh_run_raw <role> <command...>

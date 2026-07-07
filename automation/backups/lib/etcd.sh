@@ -120,13 +120,18 @@ etcd_verify() {
     run_on_backup "set -euo pipefail
         latest=\$(ls -1t ${repo_root}/etcd/etcd-snapshot-* 2>/dev/null | head -1)
         [[ -n \$latest ]] || { echo 'No etcd snapshots present'; exit 1; }
-        # etcdutl ships in RKE2 — install standalone on backup host if needed.
-        if ! command -v etcdutl >/dev/null 2>&1; then
-            echo 'etcdutl missing on backup host. Install via:'
-            echo '  apt install -y etcd-client   # provides etcdctl/etcdutl'
+        # Verify snapshot integrity. Prefer etcdutl (etcd 3.5+), but the distro
+        # 'etcd-client' package often ships only etcdctl (<=3.4) — which performs
+        # the same 'snapshot status' check under the v3 API. Accept either.
+        if command -v etcdutl >/dev/null 2>&1; then
+            etcdutl --write-out=table snapshot status \$latest
+        elif command -v etcdctl >/dev/null 2>&1; then
+            ETCDCTL_API=3 etcdctl --write-out=table snapshot status \$latest
+        else
+            echo 'Neither etcdutl nor etcdctl found on backup host. Install via:'
+            echo '  apt install -y etcd-client'
             exit 1
-        fi
-        etcdutl --write-out=table snapshot status \$latest"
+        fi"
 }
 
 # ---------------------------------------------------------------------------

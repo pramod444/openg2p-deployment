@@ -15,6 +15,7 @@ spec:
   encryptionConfigSecretName: openg2p-backup-encryption
   schedule: "0 3 * * *"
   retentionCount: 14
-  storageLocation:
-    persistentVolumeClaim:
-      claimName: openg2p-rancher-backup
+  # No storageLocation → the operator writes to its own mounted PVC
+  # (/var/lib/backups, provisioned by the chart's persistence.* on nfs-csi).
+  # The operator only supports s3 as an explicit storageLocation; PVC storage is
+  # the operator-level default, so this CR must omit storageLocation.
