@@ -23,17 +23,44 @@
 set -euo pipefail
 
 RANCHER_BACKUP_NS="cattle-resources-system"
-RANCHER_BACKUP_PVC="openg2p-rancher-backup"
+RANCHER_BACKUP_RELEASE="rancher-backup"
 RANCHER_BACKUP_ENC_SECRET="openg2p-backup-encryption"
 RANCHER_CHARTS_REPO_URL="https://charts.rancher.io/"
+# Stable name for BOTH the static NFS PersistentVolume and the operator's PVC.
+RANCHER_BACKUP_PV="openg2p-rancher-backup-store"
+
+# The backup-restore-operator stores tarballs to EITHER an S3 bucket OR a PVC
+# mounted into the operator pod at /var/lib/backups (chart persistence.*). It
+# has NO per-Backup "persistentVolumeClaim" storageLocation — Backup/Restore CRs
+# simply OMIT storageLocation to use the operator's mounted PVC.
+#
+# IMPORTANT: with DYNAMIC persistence the chart names its PVC "<release>-
+# <revision>" (see backupRestore.pvcName in the chart), so EVERY `helm upgrade`
+# provisions a fresh, empty PVC, remounts it, and strands prior backups on the
+# old volume. To keep a single, stable backup location we instead provision a
+# STATIC NFS PV and bind the chart's PVC to it via persistence.volumeName (which
+# also pins the PVC name), with persistence.storageClass="-" to turn OFF dynamic
+# provisioning. The PVC still carries app.kubernetes.io/instance=<release>, so
+# verify/restore resolve it by that label.
 
 # ---------------------------------------------------------------------------
 # rancher_install — runs on orchestrator (laptop). Drives compute via SSH.
 # ---------------------------------------------------------------------------
 rancher_install() {
-    local chart_version="$(cfg versions.rancher_backup_chart 7.0.0)"
+    # rancher-charts publishes rancher-backup with the Rancher chart-version
+    # scheme <chartVersion>+up<appVersion> — there is NO plain "7.0.0" chart, so
+    # helm --version must be given a real chart version (e.g. 107.1.5+up8.1.5),
+    # NOT the operator app version. The pinned default targets Rancher 2.12.x /
+    # k8s 1.31–1.33; override per-cluster via versions.rancher_backup_chart.
+    local chart_version="$(cfg versions.rancher_backup_chart 107.1.5+up8.1.5)"
     local resourceset_file="${BACKUPS_ROOT_DIR}/manifests/rancher-backup-resourceset.yaml"
     local schedule_file="${BACKUPS_ROOT_DIR}/manifests/rancher-backup-schedule.yaml"
+    # Operator-mounted backup PVC: bound to a STATIC NFS PV (stable name, no
+    # per-revision rotation). We read the NFS server/share from the cluster's
+    # existing StorageClass so the backup volume lives on the same restic-tracked
+    # NFS export.
+    local pvc_storage_class="$(cfg rancher.pvc_storage_class nfs-csi)"
+    local pvc_size="$(cfg rancher.pvc_size 50Gi)"
 
     log_info "Pre-flight: validating ResourceSet GVKs against live cluster..."
     rancher_validate_resourceset || log_warn "ResourceSet has unknown GVKs — see warnings above. Proceeding."
@@ -85,19 +112,6 @@ data:
   encryption-provider-config.yaml: ${enc_doc_b64}
 EOF
 
-    cat > "$stage/pvc.yaml" <<EOF
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: ${RANCHER_BACKUP_PVC}
-  namespace: ${RANCHER_BACKUP_NS}
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 50Gi
-EOF
-
     cat > "$stage/namespace.yaml" <<EOF
 apiVersion: v1
 kind: Namespace
@@ -110,6 +124,30 @@ EOF
     # and then chmods it; a root-owned dir would make that chmod fail. kubectl
     # apply (run via sudo below) can still read login-user-owned files.
     ssh_push "compute" "${stage}/" "/tmp/openg2p-rancher-backup/"
+
+    # Determine the NFS server + base share from the cluster StorageClass so the
+    # static backup PV lives on the same export the nfs restic job already tracks.
+    log_info "Reading NFS server/share from StorageClass '${pvc_storage_class}'..."
+    local nfs_info nfs_server nfs_share backup_path
+    nfs_info=$(ssh_run "compute" "set -euo pipefail
+        export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+        s=\$(kubectl get sc ${pvc_storage_class} -o jsonpath='{.parameters.server}' 2>/dev/null || true)
+        p=\$(kubectl get sc ${pvc_storage_class} -o jsonpath='{.parameters.share}' 2>/dev/null || true)
+        echo \"\${s}|\${p}\"" | tail -1)
+    nfs_server="${nfs_info%%|*}"
+    nfs_share="${nfs_info#*|}"
+    if [[ -z "$nfs_server" || -z "$nfs_share" ]]; then
+        log_error "Could not read NFS server/share from StorageClass '${pvc_storage_class}'" \
+                  "The static rancher-backup PV needs a concrete NFS server + path" \
+                  "kubectl get sc ${pvc_storage_class} -o yaml"
+        return 1
+    fi
+    backup_path="${nfs_share%/}/rancher-backup"
+    log_info "rancher-backup will persist to ${nfs_server}:${backup_path}"
+
+    # World-writable so the operator pod can write regardless of its runAsUser.
+    log_info "Ensuring backup directory exists on storage node..."
+    ssh_run "storage" "install -d -m 0777 '${backup_path}'"
 
     log_info "Installing rancher-backup operator (chart ${chart_version}) on compute..."
     ssh_run "compute" "set -euo pipefail
@@ -125,12 +163,43 @@ EOF
 
         kubectl apply -f /tmp/openg2p-rancher-backup/namespace.yaml
         kubectl apply -f /tmp/openg2p-rancher-backup/encryption-secret.yaml
-        kubectl apply -f /tmp/openg2p-rancher-backup/pvc.yaml
+
+        # Static NFS PV with a STABLE name. The chart binds its PVC to this via
+        # persistence.volumeName, so the PVC name — and thus the on-disk backup
+        # location — never rotates across helm upgrades.
+        cat <<EOP | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ${RANCHER_BACKUP_PV}
+  labels:
+    app.kubernetes.io/managed-by: openg2p-backup
+spec:
+  capacity:
+    storage: ${pvc_size}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: \"\"
+  nfs:
+    server: ${nfs_server}
+    path: ${backup_path}
+EOP
 
         helm upgrade --install rancher-backup-crd rancher-charts/rancher-backup-crd \
             --namespace ${RANCHER_BACKUP_NS} --version ${chart_version} --wait
+        # persistence.enabled + volumeName binds the operator PVC to our static
+        # PV (stable name); storageClass='-' disables dynamic provisioning so the
+        # chart does NOT create a per-revision '<release>-<revision>' PVC. Backup
+        # CRs omit storageLocation and thus write to /var/lib/backups → our PV.
+        # (Do NOT also set s3.enabled — the chart fails if both are configured.)
         helm upgrade --install rancher-backup rancher-charts/rancher-backup \
-            --namespace ${RANCHER_BACKUP_NS} --version ${chart_version} --wait
+            --namespace ${RANCHER_BACKUP_NS} --version ${chart_version} \
+            --set persistence.enabled=true \
+            --set persistence.storageClass=- \
+            --set persistence.volumeName=${RANCHER_BACKUP_PV} \
+            --set persistence.size=${pvc_size} \
+            --wait
 
         kubectl apply -f /tmp/openg2p-rancher-backup/resourceset.yaml
         kubectl apply -f /tmp/openg2p-rancher-backup/schedule.yaml"
@@ -188,71 +257,147 @@ metadata:
 spec:
   resourceSetName: openg2p-resource-set
   encryptionConfigSecretName: ${RANCHER_BACKUP_ENC_SECRET}
-  storageLocation:
-    persistentVolumeClaim:
-      claimName: ${RANCHER_BACKUP_PVC}
 EOC
-        # Wait up to 10 min for completion.
+        # Wait up to 10 min. The operator reports success/failure on the Ready
+        # condition (status True/False + message). Break early on False rather
+        # than blocking the full window, and always surface the operator's own
+        # message + pod logs so the real cause isn't swallowed by the caller.
+        ready='' msg=''
         for i in \$(seq 1 60); do
-            phase=\$(kubectl get backup.resources.cattle.io ${backup_name} -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)
-            [[ \$phase == 'True' ]] && exit 0
+            ready=\$(kubectl get backup.resources.cattle.io ${backup_name} \
+                -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null || true)
+            msg=\$(kubectl get backup.resources.cattle.io ${backup_name} \
+                -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].message}' 2>/dev/null || true)
+            [[ \$ready == 'True' ]] && { echo \"rancher-backup Ready: \${msg:-ok}\"; exit 0; }
+            [[ \$ready == 'False' ]] && break
             sleep 10
         done
-        echo 'rancher-backup did not become Ready in 10 minutes' >&2
-        kubectl describe backup.resources.cattle.io ${backup_name} >&2
+        echo \"rancher-backup not Ready (status='\${ready:-<none>}'): \${msg:-<no message>}\" >&2
+        echo '--- backup describe ---' >&2
+        kubectl describe backup.resources.cattle.io ${backup_name} >&2 || true
+        echo '--- operator logs (tail 60) ---' >&2
+        kubectl -n ${RANCHER_BACKUP_NS} logs -l app.kubernetes.io/instance=${RANCHER_BACKUP_RELEASE} --tail=60 >&2 || true
         exit 1" || rc=$?
+
+    # Authoritative success check. The remote login-shell wrapper can, on some
+    # nodes, corrupt the SSH exit status with environmental noise (no-TTY curses
+    # errors in the profile) even after the backup itself succeeded. So when the
+    # transport reports failure, confirm against the operator's own Ready
+    # condition before declaring the run failed. The value on stdout is what we
+    # trust here, not this probe's own exit code.
+    if (( rc != 0 )); then
+        local ready
+        ready="$(ssh_run "compute" "export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+            kubectl get backup.resources.cattle.io ${backup_name} \
+                -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null" \
+            | tail -1)"
+        if [[ "$ready" == "True" ]]; then
+            log_info "Backup ${backup_name} is Ready (recovered from a non-fatal SSH exit code)."
+            rc=0
+        fi
+    fi
 
     local result="ok"; (( rc != 0 )) && result="fail"
     _status_write_component "rancher" "last_run" "$started" "$result" "$backup_name"
     return $rc
 }
 
+# _rancher_resolve_nfs_root — echo the on-server NFS path where the operator
+# writes tarballs. stdout is ONLY the path (lines starting with /) so callers
+# can safely `grep -E '^/'` to drop SSH/profile noise.
+_rancher_resolve_nfs_root() {
+    ssh_run "compute" "set -euo pipefail
+        export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+        export PATH=\$PATH:/var/lib/rancher/rke2/bin:/usr/local/bin
+
+        # 1) Stable static PV (install --component rancher).
+        p=\$(kubectl get pv ${RANCHER_BACKUP_PV} -o jsonpath='{.spec.nfs.path}' 2>/dev/null || true)
+        if [[ -n \$p ]]; then echo \"\${p%/}\"; exit 0; fi
+
+        # 2) Operator PVC — by label, then by stable name.
+        pvc=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} \
+            -l app.kubernetes.io/instance=${RANCHER_BACKUP_RELEASE} \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+        if [[ -z \$pvc ]]; then
+            pvc=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} ${RANCHER_BACKUP_PV} \
+                -o jsonpath='{.metadata.name}' 2>/dev/null || true)
+        fi
+        [[ -z \$pvc ]] && { echo 'no rancher-backup PVC found' >&2; exit 1; }
+
+        vol=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} \$pvc -o jsonpath='{.spec.volumeName}')
+        [[ -z \$vol ]] && { echo 'rancher-backup PVC not bound yet' >&2; exit 1; }
+
+        # Native NFS PV.
+        p=\$(kubectl get pv \$vol -o jsonpath='{.spec.nfs.path}' 2>/dev/null || true)
+        [[ -n \$p ]] && { echo \"\${p%/}\"; exit 0; }
+
+        # CSI PV — share + subdir (reconstruct subdir when driver omits it).
+        share=\$(kubectl get pv \$vol -o jsonpath='{.spec.csi.volumeAttributes.share}' 2>/dev/null || true)
+        subdir=\$(kubectl get pv \$vol -o jsonpath='{.spec.csi.volumeAttributes.subdir}' 2>/dev/null || true)
+        [[ -z \$subdir ]] && subdir=\"${RANCHER_BACKUP_NS}-\${pvc}-\${vol}\"
+        if [[ -n \$share ]]; then echo \"\${share%/}/\${subdir}\"; exit 0; fi
+
+        echo \"could not resolve NFS path for PV \${vol}\" >&2
+        exit 1"
+}
+
 # ---------------------------------------------------------------------------
 # rancher_verify — confirm the latest tarball exists, is non-zero, and is
 # a readable gzip.
 #
-# Approach: read the PVC's NFS path from kubectl (PV.spec.nfs.path), then
-# tar -tzf the latest *.tar.gz over SSH to the storage node. Much simpler
-# than spawning a debug pod with `kubectl run --overrides`.
+# Approach: resolve the PVC's on-server NFS path from kubectl, then gzip -t
+# the latest *.tar.gz over SSH to the storage node. Much simpler than spawning
+# a debug pod with `kubectl run --overrides`.
 # ---------------------------------------------------------------------------
 rancher_verify() {
     log_info "Verifying latest rancher-backup tarball..."
 
-    # Find the PV bound to our PVC and read its NFS path.
-    local nfs_path
-    nfs_path=$(ssh_run "compute" "kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml \
-        get pvc -n ${RANCHER_BACKUP_NS} ${RANCHER_BACKUP_PVC} -o jsonpath='{.spec.volumeName}' \
-        | xargs -I{} kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml get pv {} -o jsonpath='{.spec.nfs.path}'" \
-        | tail -1)
+    # Keep only absolute-path lines — SSH/profile noise (blank lines, ncurses
+    # errors) must not be mistaken for the export root.
+    local root
+    root=$(_rancher_resolve_nfs_root 2>/dev/null | grep -E '^/' | tail -1 || true)
 
-    if [[ -z "$nfs_path" ]]; then
-        log_error "Could not resolve NFS path for PVC '${RANCHER_BACKUP_PVC}'" \
-                  "PVC may not be bound yet, or the PV's StorageClass isn't NFS-based" \
-                  "kubectl -n ${RANCHER_BACKUP_NS} get pvc ${RANCHER_BACKUP_PVC} -o yaml"
+    if [[ -z "$root" ]]; then
+        log_error "Could not resolve the NFS path for rancher-backup storage" \
+                  "Static PV '${RANCHER_BACKUP_PV}' may be missing, or the operator PVC is not bound" \
+                  "Re-run: openg2p-backup.sh install --config <cfg> --component rancher"
         return 1
     fi
-    log_info "PVC bound to NFS path: ${nfs_path}"
+    log_info "rancher-backup NFS path: ${root}"
 
-    # The path is on the NFS export. From storage's local POV it's under
-    # nfs_export_path (typically /srv/nfs/openg2p). The PV's nfs.path is
-    # the EXPORTED path — same on storage's filesystem because the export
-    # is a directory bind in /etc/exports.
+    # Search the resolved path and, for legacy CSI layouts, sibling subdirs
+    # under the export root (per-revision PVCs from older installs).
+    local export_root="${root%/*}"
+    [[ "$export_root" == "$root" ]] && export_root="$root"
+
     ssh_run "storage" "set -euo pipefail
-        latest=\$(ls -1t ${nfs_path}/*.tar.gz 2>/dev/null | head -1)
-        if [[ -z \$latest ]]; then
-            echo 'No rancher-backup tarballs found yet at ${nfs_path}' >&2
+        shopt -s nullglob
+        # encryptionConfigSecretName → operator writes *.tar.gz.enc (not plain .tar.gz).
+        files=(\"${root}\"/*.tar.gz \"${root}\"/*.tar.gz.enc)
+        if (( \${#files[@]} == 0 )); then
+            files=('${export_root}'/${RANCHER_BACKUP_NS}-${RANCHER_BACKUP_RELEASE}-*/*.tar.gz \
+                   '${export_root}'/${RANCHER_BACKUP_NS}-${RANCHER_BACKUP_RELEASE}-*/*.tar.gz.enc)
+        fi
+        if (( \${#files[@]} == 0 )); then
+            echo 'No rancher-backup tarballs found at ${root}' >&2
+            echo '--- ${root} (for debugging) ---' >&2
+            ls -la \"${root}\"/ >&2 2>/dev/null || echo '(path not present on storage node)' >&2
+            echo 'Run: openg2p-backup.sh run --component rancher  (trigger a backup first)' >&2
             exit 1
         fi
-        size=\$(stat -c %s \$latest)
+        latest=\"\${files[0]}\"
+        for f in \"\${files[@]}\"; do [[ \$f -nt \$latest ]] && latest=\$f; done
+        size=\$(stat -c %s \"\$latest\")
         if (( size < 100 )); then
-            echo \"Tarball is suspiciously small: \$size bytes\" >&2
+            echo \"rancher tarball suspiciously small: \$size bytes (\$latest)\" >&2
             exit 1
         fi
         echo \"Latest: \$latest (\$size bytes)\"
-        # Note: rancher-backup tarballs are encrypted when encryptionConfig is
-        # set, so 'tar -tzf' won't list contents. We can at least confirm gzip
-        # integrity with 'gzip -t'.
-        gzip -t \$latest && echo 'gzip integrity OK'"
+        if [[ \$latest == *.enc ]]; then
+            echo 'encrypted tarball present (gzip -t skipped — file is ciphertext)'
+        else
+            gzip -t \"\$latest\" && echo 'gzip integrity OK'
+        fi"
 }
 
 # ---------------------------------------------------------------------------
@@ -296,9 +441,7 @@ metadata:
 spec:
   backupFilename: ${latest}
   encryptionConfigSecretName: ${RANCHER_BACKUP_ENC_SECRET}
-  storageLocation:
-    persistentVolumeClaim:
-      claimName: ${RANCHER_BACKUP_PVC}
+  prune: false
 EOC"
     log_warn "Restore CR created. Watch progress:"
     log_warn "  kubectl get restore.resources.cattle.io -A -w"

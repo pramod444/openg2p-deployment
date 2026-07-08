@@ -294,6 +294,15 @@ probe_required_nodes() {
 # Subcommand dispatchers — module libs sourced on demand via load_group_module
 # (defined in lib/utils.sh so the cron wrappers can use it too).
 # ---------------------------------------------------------------------------
+# _install_wants <group> — true if this install run targets <group> (either
+# --component all, or --component <group>) AND the group is enabled in config.
+# Lets `install --component rancher` re-run just one group's setup without the
+# side effects of others (e.g. etcd_install restarts rke2-server).
+_install_wants() {
+    local g="$1"
+    [[ "$RUN_GROUP" == "all" || "$RUN_GROUP" == "$g" ]] && group_enabled "$g"
+}
+
 do_install() {
     init_runtime
     probe_required_nodes
@@ -313,7 +322,7 @@ do_install() {
     bootstrap_backup_host "$restic_pass" "$pgbr_pass"
 
     # 2. Per-group install — each is gated by group_enabled.
-    if group_enabled pg; then
+    if _install_wants pg; then
         log_step "2a" "PG (pgBackRest) install"
         # shellcheck source=lib/pgbackrest.sh
         source "${SCRIPT_DIR}/lib/pgbackrest.sh"
@@ -322,7 +331,7 @@ do_install() {
         log_warn "Group 'pg' disabled — skipping pgBackRest install."
     fi
 
-    if group_enabled etcd; then
+    if _install_wants etcd; then
         log_step "2b" "etcd snapshot schedule"
         # shellcheck source=lib/etcd.sh
         source "${SCRIPT_DIR}/lib/etcd.sh"
@@ -331,7 +340,7 @@ do_install() {
         log_warn "Group 'etcd' disabled — skipping etcd snapshot setup."
     fi
 
-    if group_enabled rancher; then
+    if _install_wants rancher; then
         log_step "2c" "rancher-backup operator + ResourceSet"
         # shellcheck source=lib/rancher.sh
         source "${SCRIPT_DIR}/lib/rancher.sh"
@@ -340,7 +349,7 @@ do_install() {
         log_warn "Group 'rancher' disabled — skipping rancher-backup install."
     fi
 
-    if group_enabled nfs; then
+    if _install_wants nfs; then
         log_step "2d" "NFS read-only mount + restic repo"
         # shellcheck source=lib/nfs.sh
         source "${SCRIPT_DIR}/lib/nfs.sh"
@@ -349,7 +358,7 @@ do_install() {
         log_warn "Group 'nfs' disabled — skipping NFS backup setup."
     fi
 
-    if group_enabled configs; then
+    if _install_wants configs; then
         log_step "2e" "Config (WG/Nginx/CA/RKE2 FS) restic repo"
         # shellcheck source=lib/configs.sh
         source "${SCRIPT_DIR}/lib/configs.sh"
@@ -415,12 +424,16 @@ do_verify() {
         group_enabled "$RUN_GROUP" || { log_warn "Group disabled — nothing to verify."; exit 0; }
         groups_to_run="$RUN_GROUP"
     fi
-    local g
+    local g failed=0
     for g in $groups_to_run; do
         log_step "VERIFY" "$g"
         load_group_module "$g"
-        "${g}_verify"
+        "${g}_verify" || {
+            log_error "Verify failed for group '${g}'" "See output above" "Investigate"
+            failed=$((failed + 1))
+        }
     done
+    (( failed == 0 )) || return 1
 }
 
 do_drill() {

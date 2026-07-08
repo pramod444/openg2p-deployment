@@ -207,9 +207,9 @@ on_backup_host() {
 # ssh_run "backup".
 run_on_backup() {
     if on_backup_host; then
-        # Local exec — use sudo -E so the cron user's env (incl. our
-        # OPENG2P_ON_BACKUP_HOST marker) reaches the sub-shell.
-        sudo -E bash -lc "$*"
+        # Local exec — TERM=dumb prevents login-shell curses noise (clear_console
+        # etc.) from polluting captured stdout when cron/orchestrator runs verify.
+        sudo -E env TERM=dumb bash -lc "$*"
     else
         ssh_run "backup" "$@"
     fi

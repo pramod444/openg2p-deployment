@@ -104,29 +104,176 @@ etcd_run() {
     local keep="$(cfg retention.etcd_snapshot_count 28)"
     run_on_backup "set -euo pipefail
         cd ${repo_root}/etcd
-        ls -1t etcd-snapshot-* 2>/dev/null | tail -n +$((keep + 1)) | xargs -r rm -f"
+        shopt -s nullglob
+        files=(etcd-snapshot-*)
+        while (( \${#files[@]} > ${keep} )); do
+            oldest=\"\${files[0]}\"
+            for f in \"\${files[@]}\"; do [[ \$f -ot \$oldest ]] && oldest=\$f; done
+            rm -f \"\$oldest\"
+            remain=()
+            for f in \"\${files[@]}\"; do [[ \$f != \$oldest ]] && remain+=(\"\$f\"); done
+            files=(\"\${remain[@]}\")
+        done"
 
     local result="ok"; (( rc != 0 )) && result="fail"
     _status_write_component "etcd" "last_run" "$started" "$result" ""
     return $rc
 }
 
+# RKE2 etcd snapshot paths (on compute).
+ETCD_RKE2_SNAPSHOT_DIR="/var/lib/rancher/rke2/server/db/snapshots"
+ETCD_MIN_SNAPSHOT_BYTES=1000000   # 1 MiB — ignore metadata / junk files
+
+# _etcd_find_latest <repo_root> — echo newest regular etcd-snapshot-* file on the
+# backup host. Exit 2 when none qualify. Filters SSH/login-shell noise from stdout.
+_etcd_find_latest() {
+    local repo_root="$1"
+    local raw path rc=0
+    raw=$(run_on_backup "set -euo pipefail
+        shopt -s nullglob
+        candidates=()
+        for f in ${repo_root}/etcd/etcd-snapshot-*; do
+            [[ -f \$f ]] || continue
+            (( \$(stat -c %s \"\$f\") >= ${ETCD_MIN_SNAPSHOT_BYTES} )) || continue
+            candidates+=(\"\$f\")
+        done
+        (( \${#candidates[@]} > 0 )) || exit 2
+        latest=\"\${candidates[0]}\"
+        for f in \"\${candidates[@]}\"; do [[ \$f -nt \$latest ]] && latest=\$f; done
+        echo \"\$latest\"" 2>/dev/null) || rc=$?
+
+    (( rc == 2 )) && return 2
+    (( rc != 0 )) && return "$rc"
+
+    path=$(printf '%s\n' "$raw" | grep -E '^/' | tail -1)
+    [[ -n "$path" ]] || return 2
+    echo "$path"
+}
+
+# _etcd_snapshot_status_local <path> — snapshot status using backup-host tools.
+# Exit 0 on success, 3 when tools are missing or cannot read the file.
+_etcd_snapshot_status_local() {
+    local path="$1"
+    run_on_backup "set -euo pipefail
+        snap='${path}'
+        if command -v etcdutl >/dev/null 2>&1; then
+            etcdutl --write-out=table snapshot status \"\$snap\" && exit 0
+        elif command -v etcdctl >/dev/null 2>&1; then
+            ETCDCTL_API=3 etcdctl --write-out=table snapshot status \"\$snap\" && exit 0
+        else
+            echo 'Neither etcdutl nor etcdctl on backup host' >&2
+            exit 3
+        fi
+        echo \"backup-host etcd tools could not read: \$snap\" >&2
+        exit 3"
+}
+
+# _etcd_snapshot_status_compute [basename] — snapshot status via RKE2-bundled
+# etcdutl/etcdctl on the compute node (matches the etcd version that wrote it).
+_etcd_snapshot_status_compute() {
+    local snap_name="${1:-}"
+    # Ignore polluted basenames (e.g. terminal escape sequences captured from SSH).
+    [[ "$snap_name" =~ ^etcd-snapshot- ]] || snap_name=""
+    ssh_run "compute" "set -euo pipefail
+        export PATH=\$PATH:/var/lib/rancher/rke2/bin:/usr/local/bin
+        dir=${ETCD_RKE2_SNAPSHOT_DIR}
+        if [[ -n '${snap_name}' && -f \${dir}/${snap_name} ]]; then
+            snap=\${dir}/${snap_name}
+        else
+            shopt -s nullglob
+            candidates=()
+            for f in \${dir}/etcd-snapshot-*; do
+                [[ -f \$f ]] || continue
+                (( \$(stat -c %s \"\$f\") >= ${ETCD_MIN_SNAPSHOT_BYTES} )) || continue
+                candidates+=(\"\$f\")
+            done
+            (( \${#candidates[@]} > 0 )) || { echo 'no etcd snapshots on compute' >&2; exit 1; }
+            snap=\"\${candidates[0]}\"
+            for f in \"\${candidates[@]}\"; do [[ \$f -nt \$snap ]] && snap=\$f; done
+        fi
+        if command -v etcdutl >/dev/null 2>&1; then
+            etcdutl --write-out=table snapshot status \"\$snap\"
+        elif command -v etcdctl >/dev/null 2>&1; then
+            ETCDCTL_API=3 etcdctl --write-out=table snapshot status \"\$snap\"
+        else
+            echo 'RKE2 etcd tools not found under /var/lib/rancher/rke2/bin' >&2
+            exit 1
+        fi"
+}
+
 # ---------------------------------------------------------------------------
-# etcd_verify — run etcdutl snapshot status on the latest pulled file.
+# etcd_verify — verify the latest pulled etcd snapshot.
+# Tries backup-host etcdctl first; on failure (common: distro etcd-client is
+# older than RKE2's etcd) falls back to RKE2-bundled tools on compute and
+# confirms the backup copy is present on the backup host.
 # ---------------------------------------------------------------------------
 etcd_verify() {
     local repo_root="$(cfg backup_repo_root /var/lib/openg2p-backup)"
     log_info "Verifying latest etcd snapshot..."
-    run_on_backup "set -euo pipefail
-        latest=\$(ls -1t ${repo_root}/etcd/etcd-snapshot-* 2>/dev/null | head -1)
-        [[ -n \$latest ]] || { echo 'No etcd snapshots present'; exit 1; }
-        # etcdutl ships in RKE2 — install standalone on backup host if needed.
-        if ! command -v etcdutl >/dev/null 2>&1; then
-            echo 'etcdutl missing on backup host. Install via:'
-            echo '  apt install -y etcd-client   # provides etcdctl/etcdutl'
-            exit 1
+
+    local latest rc=0
+    latest=$(_etcd_find_latest "$repo_root" 2>/dev/null) || rc=$?
+
+    if (( rc == 2 )); then
+        log_info "No local etcd snapshots — pulling from compute..."
+        if ! etcd_run; then
+            log_error "etcd pull from compute failed" \
+                      "rsync could not copy snapshots to ${repo_root}/etcd" \
+                      "On backup host: ls ${repo_root}/etcd; cat /etc/openg2p-backup/etcd-source-ip"
+            return 1
         fi
-        etcdutl --write-out=table snapshot status \$latest"
+        rc=0
+        latest=$(_etcd_find_latest "$repo_root") || rc=$?
+    fi
+
+    if (( rc == 2 )) || [[ -z "$latest" ]]; then
+        run_on_backup "set -euo pipefail
+            echo 'No etcd snapshots under ${repo_root}/etcd after pull' >&2
+            ls -la ${repo_root}/etcd/ >&2 2>/dev/null || true
+            echo 'Compute schedule: every 6h — check ${ETCD_RKE2_SNAPSHOT_DIR}' >&2
+            exit 1" >&2
+        return 1
+    fi
+
+    [[ "$latest" == /* && "$latest" == *etcd-snapshot-* ]] || {
+        log_error "Could not resolve a valid etcd snapshot path on backup host" \
+                  "SSH/login-shell noise may have polluted output — retry verify" \
+                  "On backup host: ls -la ${repo_root}/etcd/"
+        return 1
+    }
+    log_info "Latest backup copy: $(basename "$latest")"
+
+    rc=0
+    _etcd_snapshot_status_local "$latest" || rc=$?
+
+    if (( rc == 0 )); then
+        return 0
+    fi
+
+    # Distro etcd-client often cannot read RKE2 3.5.x snapshots — use compute.
+    log_warn "Backup-host etcd tools could not verify snapshot — using RKE2 tools on compute..."
+    local snap_name local_size remote_size
+    snap_name=$(basename "$latest")
+    local_size=$(run_on_backup "stat -c %s '${latest}'" 2>/dev/null | grep -E '^[0-9]+$' | tail -1)
+
+    if ! _etcd_snapshot_status_compute "$snap_name"; then
+        log_error "etcd snapshot verification failed on both backup host and compute" \
+                  "See etcdutl/etcdctl output above" \
+                  "Re-pull: openg2p-backup.sh run --component etcd"
+        return 1
+    fi
+
+    remote_size=0
+    if [[ "$snap_name" =~ ^etcd-snapshot- ]]; then
+        remote_size=$(ssh_run "compute" "stat -c %s ${ETCD_RKE2_SNAPSHOT_DIR}/${snap_name} 2>/dev/null || echo 0" \
+            2>/dev/null | grep -E '^[0-9]+$' | tail -1)
+    fi
+    if [[ "$remote_size" != "0" && "$remote_size" == "$local_size" ]]; then
+        log_success "Backup copy matches compute source (${local_size} bytes)"
+    else
+        log_success "Compute snapshot OK; backup copy present (${local_size} bytes) — source file rotated on compute"
+    fi
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -152,7 +299,7 @@ etcd_restore() {
 
     local snap
     if [[ "$target" == "latest" ]]; then
-        snap=$(run_on_backup "ls -1t ${repo_root}/etcd/etcd-snapshot-* | head -1" | tail -1)
+        snap=$(_etcd_find_latest "$repo_root") || return 1
     else
         snap="${repo_root}/etcd/${target}"
     fi

@@ -40,7 +40,20 @@ nfs_install() {
         fi
         exportfs -ra
         # Make sure the export path is actually served.
-        exportfs -v | grep -q '${export_root}' || { echo 'export not active'; exit 1; }"
+        exportfs -v | grep -q '${export_root}' || { echo 'export not active'; exit 1; }
+
+        # Open the storage firewall to the backup host. The production storage
+        # ufw (roles/storage/phase1.sh storage_configure_ufw) allows NFS ONLY
+        # from the compute node; the backup host is a 4th node not covered there,
+        # so without these rules its mount is silently dropped and fails with
+        # 'mount.nfs: Connection timed out'. Open NFSv4 (2049) + rpcbind (111,
+        # for NFSv3 negotiation). Only touch ufw if it's active; ufw skips
+        # duplicate rules so this is idempotent.
+        if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
+            ufw allow from ${backup_ip} to any port 2049 proto tcp comment 'NFS from backup host'
+            ufw allow from ${backup_ip} to any port 111  proto tcp comment 'rpcbind from backup host'
+            ufw allow from ${backup_ip} to any port 111  proto udp comment 'rpcbind from backup host'
+        fi"
 
     log_info "Mounting NFS export ${storage_ip}:${export_root} read-only on backup host..."
     ssh_run "backup" "set -euo pipefail
@@ -211,8 +224,11 @@ nfs_generate_pvc_manifest() {
     # data. jq filter:
     #   • $dirs = NFS subdir names (the UUIDs)
     #   • $pvs  = PV items array
-    #   • For each dir D, capture as $d, then find the PV whose
-    #     spec.nfs.path ends with "/$d". Emit the merged record.
+    #   • For each dir D, capture as $d, then find the PV whose native
+    #     spec.nfs.path ends with "/$d" OR whose CSI volumeAttributes.subdir
+    #     equals $d (nfs-csi / nfs.csi.k8s.io PVs have no spec.nfs.path — the
+    #     server-side location lives under .spec.csi.volumeAttributes). Emit
+    #     the merged record.
     run_on_backup "set -euo pipefail
         install -d -m 0750 ${repo_root}/nfs
         nfs_listing=\$(ls -1 ${NFS_MOUNT_POINT} 2>/dev/null | jq -R . | jq -s .)
@@ -222,7 +238,11 @@ nfs_generate_pvc_manifest() {
             \$dirs
             | map(. as \$d | {
                 nfs_path: \$d,
-                pv: ((\$pvs | map(select(.spec.nfs.path // \"\" | tostring | endswith(\"/\" + \$d))))[0] // null)
+                pv: ((\$pvs | map(select(
+                        (.spec.nfs.path // \"\" | tostring | endswith(\"/\" + \$d))
+                        or ((.spec.csi.volumeAttributes.subdir // \"\") == \$d)
+                        or (((.spec.claimRef.namespace // \"\") + \"-\" + (.spec.claimRef.name // \"\") + \"-\" + .metadata.name) == \$d)
+                     )))[0] // null)
               })
             | map(select(.pv != null) | {
                 nfs_path,

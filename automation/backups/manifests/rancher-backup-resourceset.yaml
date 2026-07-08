@@ -61,9 +61,10 @@ resourceSelectors:
   - apiVersion: "logging.banzaicloud.io/v1beta1"
     kindsRegexp: "."
 
-# Namespaces to skip entirely. Adjust via backup-config.yaml exclude_namespaces.
-# Defaults exclude churning system noise that helmfile recreates anyway.
-namespaceRegexp: "^(?!kube-system|kube-public|kube-node-lease).*"
-
-# Don't include controller-managed boilerplate.
-controllerReferences: false
+# NOTE: the backup-restore-operator ResourceSet schema (v8.x CRD, strict
+# decoding) has NO top-level namespace filter and NO boolean controllerReferences
+# field. Namespace scoping is per-resourceSelector (namespaces / namespaceRegexp),
+# and those regexes are Go RE2 — no negative lookahead. We intentionally capture
+# all namespaces for DR completeness; system-namespace objects are small and
+# helmfile-recreatable, so including them is harmless. To scope a specific
+# selector, add `namespaces: [...]` or an RE2 `namespaceRegexp` to that entry.
