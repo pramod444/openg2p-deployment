@@ -302,6 +302,45 @@ EOC
     return $rc
 }
 
+# _rancher_resolve_nfs_root — echo the on-server NFS path where the operator
+# writes tarballs. stdout is ONLY the path (lines starting with /) so callers
+# can safely `grep -E '^/'` to drop SSH/profile noise.
+_rancher_resolve_nfs_root() {
+    ssh_run "compute" "set -euo pipefail
+        export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+        export PATH=\$PATH:/var/lib/rancher/rke2/bin:/usr/local/bin
+
+        # 1) Stable static PV (install --component rancher).
+        p=\$(kubectl get pv ${RANCHER_BACKUP_PV} -o jsonpath='{.spec.nfs.path}' 2>/dev/null || true)
+        if [[ -n \$p ]]; then echo \"\${p%/}\"; exit 0; fi
+
+        # 2) Operator PVC — by label, then by stable name.
+        pvc=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} \
+            -l app.kubernetes.io/instance=${RANCHER_BACKUP_RELEASE} \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+        if [[ -z \$pvc ]]; then
+            pvc=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} ${RANCHER_BACKUP_PV} \
+                -o jsonpath='{.metadata.name}' 2>/dev/null || true)
+        fi
+        [[ -z \$pvc ]] && { echo 'no rancher-backup PVC found' >&2; exit 1; }
+
+        vol=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} \$pvc -o jsonpath='{.spec.volumeName}')
+        [[ -z \$vol ]] && { echo 'rancher-backup PVC not bound yet' >&2; exit 1; }
+
+        # Native NFS PV.
+        p=\$(kubectl get pv \$vol -o jsonpath='{.spec.nfs.path}' 2>/dev/null || true)
+        [[ -n \$p ]] && { echo \"\${p%/}\"; exit 0; }
+
+        # CSI PV — share + subdir (reconstruct subdir when driver omits it).
+        share=\$(kubectl get pv \$vol -o jsonpath='{.spec.csi.volumeAttributes.share}' 2>/dev/null || true)
+        subdir=\$(kubectl get pv \$vol -o jsonpath='{.spec.csi.volumeAttributes.subdir}' 2>/dev/null || true)
+        [[ -z \$subdir ]] && subdir=\"${RANCHER_BACKUP_NS}-\${pvc}-\${vol}\"
+        if [[ -n \$share ]]; then echo \"\${share%/}/\${subdir}\"; exit 0; fi
+
+        echo \"could not resolve NFS path for PV \${vol}\" >&2
+        exit 1"
+}
+
 # ---------------------------------------------------------------------------
 # rancher_verify — confirm the latest tarball exists, is non-zero, and is
 # a readable gzip.
@@ -313,46 +352,37 @@ EOC
 rancher_verify() {
     log_info "Verifying latest rancher-backup tarball..."
 
-    # Resolve the export ROOT (the on-server NFS path holding the tarballs).
-    # Preferred: the stable static PV we provision (deterministic, immune to
-    # leftover per-revision PVCs). Fallback: resolve via the operator's PVC label
-    # for older dynamic/CSI layouts — nfs-csi PVs keep the base share in
-    # .spec.csi.volumeAttributes.share; native NFS PVs use .spec.nfs.path.
+    # Keep only absolute-path lines — SSH/profile noise (blank lines, ncurses
+    # errors) must not be mistaken for the export root.
     local root
-    root=$(ssh_run "compute" "set -euo pipefail
-        export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
-        p=\$(kubectl get pv ${RANCHER_BACKUP_PV} -o jsonpath='{.spec.nfs.path}' 2>/dev/null || true)
-        if [[ -n \$p ]]; then echo \"\${p%/}\"; exit 0; fi
-        pvc=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} \
-            -l app.kubernetes.io/instance=${RANCHER_BACKUP_RELEASE} \
-            -o jsonpath='{.items[0].metadata.name}')
-        [[ -z \$pvc ]] && { echo 'no rancher-backup PVC found' >&2; exit 1; }
-        vol=\$(kubectl get pvc -n ${RANCHER_BACKUP_NS} \$pvc -o jsonpath='{.spec.volumeName}')
-        [[ -z \$vol ]] && { echo 'rancher-backup PVC not bound yet' >&2; exit 1; }
-        share=\$(kubectl get pv \$vol -o jsonpath='{.spec.csi.volumeAttributes.share}')
-        if [[ -n \$share ]]; then echo \"\${share%/}\"; else kubectl get pv \$vol -o jsonpath='{.spec.nfs.path}'; fi" \
-        | tail -1)
+    root=$(_rancher_resolve_nfs_root 2>/dev/null | grep -E '^/' | tail -1 || true)
 
     if [[ -z "$root" ]]; then
-        log_error "Could not resolve the NFS export root for the rancher-backup PVC" \
-                  "PVC may not be bound yet, or the PV's StorageClass isn't NFS-based" \
-                  "kubectl -n ${RANCHER_BACKUP_NS} get pvc -l app.kubernetes.io/instance=${RANCHER_BACKUP_RELEASE} -o yaml"
+        log_error "Could not resolve the NFS path for rancher-backup storage" \
+                  "Static PV '${RANCHER_BACKUP_PV}' may be missing, or the operator PVC is not bound" \
+                  "Re-run: openg2p-backup.sh install --config <cfg> --component rancher"
         return 1
     fi
-    log_info "rancher-backup NFS export root: ${root}"
+    log_info "rancher-backup NFS path: ${root}"
 
-    # The storage node sees the export on its local filesystem at the same path.
-    # Glob both native layout (tarballs directly under the root) and CSI layout
-    # (tarballs under per-PVC subdirs named <ns>-<release>-*). nullglob so empty
-    # patterns vanish; pick newest by mtime without a pipe (avoids pipefail
-    # aborting on a no-match glob and swallowing the diagnostic).
+    # Search the resolved path and, for legacy CSI layouts, sibling subdirs
+    # under the export root (per-revision PVCs from older installs).
+    local export_root="${root%/*}"
+    [[ "$export_root" == "$root" ]] && export_root="$root"
+
     ssh_run "storage" "set -euo pipefail
         shopt -s nullglob
-        files=(${root}/*.tar.gz ${root}/${RANCHER_BACKUP_NS}-${RANCHER_BACKUP_RELEASE}-*/*.tar.gz)
+        # encryptionConfigSecretName → operator writes *.tar.gz.enc (not plain .tar.gz).
+        files=(\"${root}\"/*.tar.gz \"${root}\"/*.tar.gz.enc)
         if (( \${#files[@]} == 0 )); then
-            echo 'No rancher-backup tarballs found under ${root}' >&2
-            echo '--- entries under ${root} (for debugging) ---' >&2
-            ls -la ${root}/ >&2 2>/dev/null || echo '(export path not present on storage node)' >&2
+            files=('${export_root}'/${RANCHER_BACKUP_NS}-${RANCHER_BACKUP_RELEASE}-*/*.tar.gz \
+                   '${export_root}'/${RANCHER_BACKUP_NS}-${RANCHER_BACKUP_RELEASE}-*/*.tar.gz.enc)
+        fi
+        if (( \${#files[@]} == 0 )); then
+            echo 'No rancher-backup tarballs found at ${root}' >&2
+            echo '--- ${root} (for debugging) ---' >&2
+            ls -la \"${root}\"/ >&2 2>/dev/null || echo '(path not present on storage node)' >&2
+            echo 'Run: openg2p-backup.sh run --component rancher  (trigger a backup first)' >&2
             exit 1
         fi
         latest=\"\${files[0]}\"
@@ -363,9 +393,11 @@ rancher_verify() {
             exit 1
         fi
         echo \"Latest: \$latest (\$size bytes)\"
-        # rancher-backup tarballs are encrypted when encryptionConfig is set, so
-        # 'tar -tzf' won't list contents; confirm gzip integrity with 'gzip -t'.
-        gzip -t \"\$latest\" && echo 'gzip integrity OK'"
+        if [[ \$latest == *.enc ]]; then
+            echo 'encrypted tarball present (gzip -t skipped — file is ciphertext)'
+        else
+            gzip -t \"\$latest\" && echo 'gzip integrity OK'
+        fi"
 }
 
 # ---------------------------------------------------------------------------

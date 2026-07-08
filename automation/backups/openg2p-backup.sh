@@ -424,12 +424,16 @@ do_verify() {
         group_enabled "$RUN_GROUP" || { log_warn "Group disabled — nothing to verify."; exit 0; }
         groups_to_run="$RUN_GROUP"
     fi
-    local g
+    local g failed=0
     for g in $groups_to_run; do
         log_step "VERIFY" "$g"
         load_group_module "$g"
-        "${g}_verify"
+        "${g}_verify" || {
+            log_error "Verify failed for group '${g}'" "See output above" "Investigate"
+            failed=$((failed + 1))
+        }
     done
+    (( failed == 0 )) || return 1
 }
 
 do_drill() {
