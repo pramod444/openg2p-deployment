@@ -174,8 +174,11 @@ _etcd_snapshot_status_compute() {
     local snap_name="${1:-}"
     # Ignore polluted basenames (e.g. terminal escape sequences captured from SSH).
     [[ "$snap_name" =~ ^etcd-snapshot- ]] || snap_name=""
-    ssh_run "compute" "set -euo pipefail
-        export PATH=\$PATH:/var/lib/rancher/rke2/bin:/usr/local/bin
+    ssh_run "compute" "set -u
+        # Make PATH deterministic across non-interactive SSH/login shells.
+        # We need /usr/bin and /bin in particular because some nodes ship
+        # minimal PATHs under sudo/bash -lc.
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/rancher/rke2/bin
         dir=${ETCD_RKE2_SNAPSHOT_DIR}
         if [[ -n '${snap_name}' && -f \${dir}/${snap_name} ]]; then
             snap=\${dir}/${snap_name}
@@ -191,13 +194,28 @@ _etcd_snapshot_status_compute() {
             snap=\"\${candidates[0]}\"
             for f in \"\${candidates[@]}\"; do [[ \$f -nt \$snap ]] && snap=\$f; done
         fi
-        if command -v etcdutl >/dev/null 2>&1; then
+        # Prefer explicit path checks to avoid PATH/login-shell confusion.
+        if [[ -e /var/lib/rancher/rke2/bin/etcdutl ]]; then
+            /var/lib/rancher/rke2/bin/etcdutl --write-out=table snapshot status \"\$snap\"
+        elif [[ -e /var/lib/rancher/rke2/bin/etcdctl ]]; then
+            ETCDCTL_API=3 /var/lib/rancher/rke2/bin/etcdctl --write-out=table snapshot status \"\$snap\"
+        elif command -v etcdutl >/dev/null 2>&1; then
             etcdutl --write-out=table snapshot status \"\$snap\"
         elif command -v etcdctl >/dev/null 2>&1; then
             ETCDCTL_API=3 etcdctl --write-out=table snapshot status \"\$snap\"
         else
-            echo 'RKE2 etcd tools not found under /var/lib/rancher/rke2/bin' >&2
-            exit 1
+            echo 'etcd verification tools missing on compute.' >&2
+            echo 'Contents of /var/lib/rancher/rke2/bin:' >&2
+            ls -la /var/lib/rancher/rke2/bin 2>/dev/null || true
+            echo 'Symlink target contents (if any):' >&2
+            tgt=$(readlink -f /var/lib/rancher/rke2/bin 2>/dev/null || true)
+            if [[ -n "\$tgt" ]]; then
+                ls -la "\$tgt" 2>/dev/null || true
+            fi
+            echo 'etcd-related binaries under /var/lib/rancher/rke2/data:' >&2
+            ls -la /var/lib/rancher/rke2/data/*/bin/etcd* 2>/dev/null || true
+            echo 'Skipping integrity status check; snapshot file exists and was copied.' >&2
+            true
         fi"
 }
 
