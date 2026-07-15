@@ -79,6 +79,7 @@ groups:
   rancher:  true     # rancher-backup operator (Secrets, CMs, PV/PVCs, CRs)
   nfs:      true     # NFS data via restic + PVC sidecar manifest
   configs:  true     # WG, Nginx, local CA, RKE2 FS state via restic over SSH
+  objectstore: false # MinIO/S3 via rclone RO mount + restic (opt-in)
 
 # ---------------------------------------------------------------------------
 # Retention defaults — aimed at ~6 months of granular history          [USER]
@@ -95,7 +96,7 @@ retention:
   # rancher-backup operator
   rancher_backup_count: 14      # 14 nightly tarballs
 
-  # restic (NFS, configs)
+  # restic (NFS, configs, objectstore)
   keep_daily:   7
   keep_weekly:  4
   keep_monthly: 6
@@ -110,7 +111,50 @@ schedules:
   rancher:    "0 3 * * *"       # nightly 03:00
   nfs:        "30 3 * * *"      # nightly 03:30
   configs:    "30 3 * * *"      # nightly 03:30 (parallel with nfs)
+  objectstore: "0 4 * * *"      # nightly 04:00 — MinIO/S3
+  wal_health: "*/5 * * * *"     # every 5m — independent of pg run
+  daily_report: "0 7 * * *"     # morning email summary
   drill:      "0 5 * * 0"       # Sunday 05:00 — weekly verify + dry-run
+
+# ---------------------------------------------------------------------------
+# Monitoring (Prometheus textfile + optional Pushgateway)               [USER]
+# ---------------------------------------------------------------------------
+# node_exporter on the backup host should include:
+#   --collector.textfile.directory=/var/lib/openg2p-backup/metrics
+# Apply manifests/prometheusrule-backup.yaml.template (replace __BACKUP_INSTANCE__).
+monitoring:
+  enabled: true
+  instance: ""                  # blank → cluster_name or backup_private_ip
+  namespace: "cattle-monitoring-system"  # Rancher Monitoring
+  apply_prometheusrule: true    # install applies manifests/prometheusrule-backup.yaml.template
+  pushgateway_url: ""           # optional e.g. http://pushgateway.monitoring:9091
+  wal:
+    max_size_bytes: 10737418240          # 10 GiB — email warn threshold
+    max_archive_age_seconds: 3600        # 1h
+    max_failed_count: 1
+
+# ---------------------------------------------------------------------------
+# Alerting — email for operators without SSH                            [USER]
+# ---------------------------------------------------------------------------
+alerting:
+  email_enabled: false
+  smtp_env_file: "~/.openg2p/keystore/smtp.env"   # see roles/backup-host/smtp.env.example
+  cron_mailto: "root"           # /etc/cron.d MAILTO (cron failure mail)
+  mail_to: "ops@example.gov"    # informational; real To: is MAIL_TO in smtp.env
+
+# ---------------------------------------------------------------------------
+# Object store (MinIO / S3) — rclone + restic                           [USER]
+# ---------------------------------------------------------------------------
+# Enable groups.objectstore: true, then fill these and re-run install.
+objectstore:
+  rclone_conf: "~/.openg2p/keystore/rclone.conf"  # see roles/backup-host/rclone.conf.example
+  rclone_remote: "minio"        # [section] name in rclone.conf
+  bucket: "openg2p-bucket"      # bucket / path prefix
+  mount_point: "/mnt/openg2p-rclone"
+  restic_password_file: "~/.openg2p/keystore/objectstore-restic.pass"
+  restic_tag: "openg2p-objectstore"
+  keep_daily: 7
+  keep_weekly: 4
 
 # ---------------------------------------------------------------------------
 # PostgreSQL settings                                                   [USER]

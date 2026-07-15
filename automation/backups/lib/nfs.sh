@@ -59,7 +59,11 @@ nfs_install() {
     ssh_run "backup" "set -euo pipefail
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nfs-common restic jq
 
-        install -d -m 0755 ${NFS_MOUNT_POINT}
+        # Create the mount point only when it is not already an NFS RO mount.
+        # install -d -m on a live RO mount fails with 'Read-only file system'.
+        if ! mountpoint -q ${NFS_MOUNT_POINT}; then
+            install -d -m 0755 ${NFS_MOUNT_POINT}
+        fi
         # Idempotent fstab entry.
         if ! grep -q '${NFS_MOUNT_POINT}' /etc/fstab; then
             echo '${storage_ip}:${export_root} ${NFS_MOUNT_POINT} nfs ro,soft,timeo=30,noauto,x-systemd.automount 0 0' >> /etc/fstab
