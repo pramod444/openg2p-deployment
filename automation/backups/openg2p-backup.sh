@@ -60,6 +60,11 @@ mkdir -p "${SCRIPT_DIR}/logs" "${SCRIPT_DIR}/.state"
 # ssh_push, ssh_probe etc. for free.
 # shellcheck source=lib/utils.sh
 source "${SCRIPT_DIR}/lib/utils.sh"
+# Phase 2: metrics + email hooks used by _status_write_component and run wrappers.
+# shellcheck source=lib/metrics.sh
+source "${SCRIPT_DIR}/lib/metrics.sh"
+# shellcheck source=lib/notify.sh
+source "${SCRIPT_DIR}/lib/notify.sh"
 
 # Module libs are sourced lazily by each subcommand so a missing one only
 # breaks the affected component, not `--help`.
@@ -72,10 +77,10 @@ parse_args() {
 
     case "$SUBCOMMAND" in
         help|--help|-h) show_help; exit 0 ;;
-        install|run|verify|drill|list|restore|status) ;;
+        install|run|verify|drill|list|restore|status|wal-health|daily-report) ;;
         *)
             log_error "Unknown subcommand: '${SUBCOMMAND}'" \
-                      "Expected one of: install, run, verify, drill, list, restore, status, help" \
+                      "Expected one of: install, run, verify, drill, list, restore, status, wal-health, daily-report, help" \
                       "Run with --help for the full reference"
             exit 1
             ;;
@@ -111,10 +116,10 @@ parse_args() {
     [[ "$CONFIG_FILE" = /* ]] || CONFIG_FILE="${SCRIPT_DIR}/${CONFIG_FILE}"
 
     case "$RUN_GROUP" in
-        all|pg|etcd|rancher|nfs|configs) ;;
+        all|pg|etcd|rancher|nfs|configs|objectstore) ;;
         *)
             log_error "Invalid --component '${RUN_GROUP}'" \
-                      "Expected one of: all, pg, etcd, rancher, nfs, configs"
+                      "Expected one of: all, pg, etcd, rancher, nfs, configs, objectstore"
             exit 1
             ;;
     esac
@@ -138,14 +143,19 @@ Subcommands:
 
   run [--component X]        Execute backups now. Default: all enabled groups.
                              Used by cron on the backup host. Components:
-                             pg, etcd, rancher, nfs, configs.
+                             pg, etcd, rancher, nfs, configs, objectstore.
 
   verify [--component X]     Lightweight integrity checks per group. No data
                              restored. Used by `drill` internally.
 
   drill                      Weekly drill: verify + dry-run restore for every
                              enabled group. Updates status file consumed by
-                             `status` and (Phase 2) the alerting layer.
+                             `status` and the alerting layer.
+
+  wal-health                 Independent PostgreSQL WAL / archiver probe
+                             (metrics + threshold emails). Cron every 5m.
+
+  daily-report               Email operators a summary of .status.json.
 
   list [--component X]       Inventory of available backups per group.
 
@@ -367,6 +377,23 @@ do_install() {
         log_warn "Group 'configs' disabled — skipping config backup setup."
     fi
 
+    if _install_wants objectstore; then
+        log_step "2f" "Object store (rclone + restic)"
+        # shellcheck source=lib/objectstore.sh
+        source "${SCRIPT_DIR}/lib/objectstore.sh"
+        objectstore_install
+    else
+        log_info "Group 'objectstore' disabled — skipping MinIO/S3 backup setup."
+    fi
+
+    # SMTP env for daily/failure emails (optional)
+    log_step "2g" "Alerting SMTP (optional)"
+    notify_install_smtp
+
+    # PrometheusRule into Rancher Monitoring (cattle-monitoring-system)
+    log_step "2h" "Backup PrometheusRule (cattle-monitoring-system)"
+    metrics_install_prometheusrule
+
     # 3. Optional: etcd encryption-at-rest (gated, requires apiserver restart)
     if [[ "$ENABLE_SECRET_ENCRYPTION" == "true" ]]; then
         log_step "3" "Etcd encryption-at-rest (apiserver restart!)"
@@ -409,10 +436,23 @@ do_run() {
         load_group_module "$g"
         "${g}_run" || {
             log_error "Run failed for group '${g}'" "See output above" "Investigate"
+            notify_failure "$g" "openg2p-backup run failed" || true
             # Don't exit — we want all groups attempted; final status will reflect.
         }
     done
     log_success "Run complete for: ${groups_to_run}"
+}
+
+do_wal_health() {
+    init_runtime
+    # shellcheck source=lib/wal_health.sh
+    source "${SCRIPT_DIR}/lib/wal_health.sh"
+    wal_health_run
+}
+
+do_daily_report() {
+    init_runtime
+    notify_daily_report
 }
 
 do_verify() {
@@ -487,7 +527,7 @@ do_status() {
     printf "%-10s %-10s %-22s %-10s %-22s %-8s\n" \
         "----------" "----------" "----------------------" "----------" "----------------------" "--------"
     local g
-    for g in pg etcd rancher nfs configs; do
+    for g in pg etcd rancher nfs configs objectstore; do
         local state; state=$(group_state_str "$g")
         if [[ "$state" == "disabled" ]]; then
             printf "%-10s %-10s %-22s %-10s %-22s %-8s\n" "$g" "$state" "-" "-" "-" "-"
@@ -612,7 +652,7 @@ EOC
         chmod 0600 /root/.ssh/config"
 
     # Wrapper scripts cron will call.
-    log_info "Installing /usr/local/bin/openg2p-backup-{run,drill,status} wrappers..."
+    log_info "Installing /usr/local/bin/openg2p-backup-{run,drill,status,wal-health,daily-report} wrappers..."
     ssh_run "backup" "set -euo pipefail
 cat > /usr/local/bin/openg2p-backup-run <<'EOC'
 #!/usr/bin/env bash
@@ -632,13 +672,18 @@ export PROD_SSH_LIB=/opt/openg2p-backup/production-lib/ssh-utils.sh
 group=\"\${1:-}\"
 [[ -z \"\$group\" ]] && { echo 'usage: openg2p-backup-run <group>'; exit 1; }
 source /opt/openg2p-backup/lib/utils.sh
+source /opt/openg2p-backup/lib/metrics.sh
+source /opt/openg2p-backup/lib/notify.sh
 load_config /etc/openg2p-backup/config.yaml
 ssh_init   # create SSH ControlMaster dir so backup-host → rp/compute SSH works
 case \"\$group\" in
     pg)      source /opt/openg2p-backup/lib/pgbackrest.sh ;;
     *)       source /opt/openg2p-backup/lib/\${group}.sh ;;
 esac
-\"\${group}_run\"
+if ! \"\${group}_run\"; then
+    notify_failure \"\$group\" \"cron run failed\" || true
+    exit 1
+fi
 EOC
 chmod +x /usr/local/bin/openg2p-backup-run
 
@@ -651,11 +696,13 @@ export OPENG2P_ON_BACKUP_HOST=1
 export PROD_SHARED_LIB=/opt/openg2p-backup/production-lib/shared/utils.sh
 export PROD_SSH_LIB=/opt/openg2p-backup/production-lib/ssh-utils.sh
 source /opt/openg2p-backup/lib/utils.sh
+source /opt/openg2p-backup/lib/metrics.sh
+source /opt/openg2p-backup/lib/notify.sh
 load_config /etc/openg2p-backup/config.yaml
 ssh_init   # create SSH ControlMaster dir so backup-host → rp/compute SSH works
 # drills_run_all calls load_group_module per group — source each group lib
 # manually here so <group>_drill is in scope.
-for g in pg etcd rancher nfs configs; do
+for g in pg etcd rancher nfs configs objectstore; do
     case \"\$g\" in
         pg) lib_file=pgbackrest.sh ;;
         *)  lib_file=\"\${g}.sh\" ;;
@@ -663,7 +710,10 @@ for g in pg etcd rancher nfs configs; do
     [[ -f /opt/openg2p-backup/lib/\$lib_file ]] && source /opt/openg2p-backup/lib/\$lib_file
 done
 source /opt/openg2p-backup/lib/drills.sh
-drills_run_all
+if ! drills_run_all; then
+    notify_failure \"drill\" \"weekly drill had failures\" || true
+    exit 1
+fi
 EOC
 chmod +x /usr/local/bin/openg2p-backup-drill
 
@@ -672,6 +722,35 @@ cat > /usr/local/bin/openg2p-backup-status <<'EOC'
 jq . /var/lib/openg2p-backup/.status.json
 EOC
 chmod +x /usr/local/bin/openg2p-backup-status
+
+cat > /usr/local/bin/openg2p-backup-wal-health <<'EOC'
+#!/usr/bin/env bash
+set -euo pipefail
+export OPENG2P_ON_BACKUP_HOST=1
+export PROD_SHARED_LIB=/opt/openg2p-backup/production-lib/shared/utils.sh
+export PROD_SSH_LIB=/opt/openg2p-backup/production-lib/ssh-utils.sh
+source /opt/openg2p-backup/lib/utils.sh
+source /opt/openg2p-backup/lib/metrics.sh
+source /opt/openg2p-backup/lib/notify.sh
+source /opt/openg2p-backup/lib/wal_health.sh
+load_config /etc/openg2p-backup/config.yaml
+ssh_init
+wal_health_run
+EOC
+chmod +x /usr/local/bin/openg2p-backup-wal-health
+
+cat > /usr/local/bin/openg2p-backup-daily-report <<'EOC'
+#!/usr/bin/env bash
+set -euo pipefail
+export OPENG2P_ON_BACKUP_HOST=1
+export PROD_SHARED_LIB=/opt/openg2p-backup/production-lib/shared/utils.sh
+export PROD_SSH_LIB=/opt/openg2p-backup/production-lib/ssh-utils.sh
+source /opt/openg2p-backup/lib/utils.sh
+source /opt/openg2p-backup/lib/notify.sh
+load_config /etc/openg2p-backup/config.yaml
+notify_daily_report
+EOC
+chmod +x /usr/local/bin/openg2p-backup-daily-report
 "
 
     log_success "Backup host bootstrapped."
@@ -689,12 +768,17 @@ deploy_cron() {
     # Substitute schedule placeholders + disable lines for disabled groups.
     # NOTE: no __RANCHER_CRON__ — rancher backup cadence is owned by the
     # in-cluster Schedule CR. See lib/rancher.sh and the cron.template header.
-    sed -e "s|__MAILTO__|root|g" \
+    local mailto
+    mailto="$(cfg alerting.cron_mailto "$(cfg alerting.mail_to root)")"
+    sed -e "s|__MAILTO__|${mailto}|g" \
         -e "s|__PG_FULL_CRON__|$(group_enabled pg && cfg schedules.pg_full '0 2 * * 0' || echo '#0 2 * * 0')|g" \
         -e "s|__PG_DIFF_CRON__|$(group_enabled pg && cfg schedules.pg_diff '0 2 * * 1-6' || echo '#0 2 * * 1-6')|g" \
         -e "s|__ETCD_CRON__|$(group_enabled etcd && cfg schedules.etcd_pull '15 */6 * * *' || echo '#15 */6 * * *')|g" \
         -e "s|__NFS_CRON__|$(group_enabled nfs && cfg schedules.nfs '30 3 * * *' || echo '#30 3 * * *')|g" \
         -e "s|__CONFIGS_CRON__|$(group_enabled configs && cfg schedules.configs '30 3 * * *' || echo '#30 3 * * *')|g" \
+        -e "s|__OBJECTSTORE_CRON__|$(group_enabled objectstore && cfg schedules.objectstore '0 4 * * *' || echo '#0 4 * * *')|g" \
+        -e "s|__WAL_HEALTH_CRON__|$(cfg schedules.wal_health '*/5 * * * *')|g" \
+        -e "s|__DAILY_REPORT_CRON__|$(cfg schedules.daily_report '0 7 * * *')|g" \
         -e "s|__DRILL_CRON__|$(cfg schedules.drill '0 5 * * 0')|g" \
         "$cron_src" > "$stage"
 
@@ -711,13 +795,15 @@ main() {
     parse_args "$@"
 
     case "$SUBCOMMAND" in
-        install) do_install ;;
-        run)     do_run ;;
-        verify)  do_verify ;;
-        drill)   do_drill ;;
-        list)    do_list ;;
-        restore) do_restore ;;
-        status)  do_status ;;
+        install)      do_install ;;
+        run)          do_run ;;
+        verify)       do_verify ;;
+        drill)        do_drill ;;
+        list)         do_list ;;
+        restore)      do_restore ;;
+        status)       do_status ;;
+        wal-health)   do_wal_health ;;
+        daily-report) do_daily_report ;;
     esac
 }
 

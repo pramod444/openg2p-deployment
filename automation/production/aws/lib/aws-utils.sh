@@ -651,7 +651,8 @@ aws_ensure_eip() {
             --query 'AllocationId' --output text 2>&1); then
         log_warn "Could not allocate Elastic IP: ${result}" >&2
         if echo "$result" | grep -q 'AddressLimitExceeded'; then
-            log_warn "  EIP quota reached. Free unused ones with:" >&2
+            log_warn "  EIP quota reached — provisioner will fall back to the" >&2
+            log_warn "  auto-assigned public IP. To free unused EIPs:" >&2
             log_warn "    aws ec2 describe-addresses --query 'Addresses[?AssociationId==null].[AllocationId,PublicIp]' --output table" >&2
             log_warn "    aws ec2 release-address --allocation-id <alloc-id>" >&2
             log_warn "  Or request a quota increase in the AWS console." >&2

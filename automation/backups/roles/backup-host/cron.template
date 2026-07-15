@@ -29,5 +29,14 @@ __NFS_CRON__ root /usr/local/bin/openg2p-backup-run nfs >> /var/log/openg2p-back
 # configs
 __CONFIGS_CRON__ root /usr/local/bin/openg2p-backup-run configs >> /var/log/openg2p-backup.log 2>&1
 
+# objectstore (MinIO/S3 via rclone + restic) — disabled when groups.objectstore=false
+__OBJECTSTORE_CRON__ root /usr/local/bin/openg2p-backup-run objectstore >> /var/log/openg2p-backup.log 2>&1
+
+# WAL growth / archiver health — independent of pg backup runs (every 5m)
+__WAL_HEALTH_CRON__ root /usr/local/bin/openg2p-backup-wal-health >> /var/log/openg2p-backup-wal.log 2>&1
+
+# Daily email summary for operators without SSH
+__DAILY_REPORT_CRON__ root /usr/local/bin/openg2p-backup-daily-report >> /var/log/openg2p-backup.log 2>&1
+
 # weekly drill — verify all + dry-run-restore canary
 __DRILL_CRON__ root /usr/local/bin/openg2p-backup-drill >> /var/log/openg2p-backup.log 2>&1

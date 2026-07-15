@@ -95,7 +95,7 @@ Options:
 What gets created (all tagged with Project=<project>):
   • 1 key pair       (or referenced existing)
   • 3 security groups (one per role)
-  • 1 Elastic IP     (attached to the RP node)
+  • 1 Elastic IP     (attached to the RP when quota allows; else ephemeral public IP)
   • 3 EC2 instances  (RP, compute, storage)
 
 When values like vpc_id, subnet_id, or key_mode are blank in your config,
@@ -231,26 +231,27 @@ main() {
     aws_apply_sg_rules_storage "$storage_sg" "$admin_cidr" "$vpc_cidr"
     log_success "  Storage SG: ${storage_sg_name} (${storage_sg})"
 
-    # ── 8. Elastic IP for RP ───────────────────────────────────────────
-    # Single-NIC launch DOES support AWS auto-assigning a public IP, so the
-    # EIP is no longer architecturally mandatory. We still allocate one by
-    # default because the Wireguard endpoint must survive instance stop/start
-    # (a dynamic IP would change, breaking every peer config). If your AWS
-    # quota is exhausted, free an EIP or request a quota increase.
+    # ── 8. Elastic IP for RP (preferred, not mandatory) ────────────────
+    # Prefer an EIP so the Wireguard endpoint survives instance stop/start.
+    # Instances already launch with --associate-public-ip-address, so when the
+    # EIP quota is exhausted (AddressLimitExceeded) we fall back to the
+    # auto-assigned ephemeral public IP and continue. Warn the operator: a
+    # dynamic IP changes on stop/start and will require peer-config updates.
     log_step "2" "Allocating Elastic IP for RP (Wireguard endpoint stability)"
-    local rp_eip_alloc rp_eip_addr=""
+    local rp_eip_alloc="" rp_eip_addr=""
     rp_eip_alloc=$(aws_ensure_eip "$project" "reverse-proxy-eip")
     if [[ -z "$rp_eip_alloc" || "$rp_eip_alloc" == "None" ]]; then
-        log_error "EIP allocation failed" \
-                  "Could not allocate an Elastic IP for the RP." \
-                  "Free unused EIPs and re-run, OR request a quota increase in the AWS console." \
-                  "aws ec2 describe-addresses --query 'Addresses[?AssociationId==null].[AllocationId,PublicIp]' --output table" \
-                  ""
-        exit 1
+        rp_eip_alloc=""
+        log_warn "No Elastic IP available — RP will use its auto-assigned public IP."
+        log_warn "That IP can change on instance stop/start (Wireguard peers must be updated)."
+        log_warn "To restore a stable endpoint later: free unused EIPs (or raise the quota),"
+        log_warn "then re-run this provisioner and it will allocate + associate an EIP."
+        log_warn "  aws ec2 describe-addresses --query 'Addresses[?AssociationId==null].[AllocationId,PublicIp]' --output table"
+    else
+        rp_eip_addr=$(aws_get_eip_address "$rp_eip_alloc")
+        aws_require_nonempty "RP Elastic IP address" "$rp_eip_addr"
+        log_success "  RP EIP: ${rp_eip_addr} (alloc: ${rp_eip_alloc})"
     fi
-    rp_eip_addr=$(aws_get_eip_address "$rp_eip_alloc")
-    aws_require_nonempty "RP Elastic IP address" "$rp_eip_addr"
-    log_success "  RP EIP: ${rp_eip_addr} (alloc: ${rp_eip_alloc})"
 
     # ── 9. Launch instances (parallel) ──────────────────────────────────
     log_step "3" "Launching 3 EC2 instances in parallel"
@@ -336,17 +337,22 @@ main() {
     log_success "All 3 instances passed status checks."
 
     # ── 14. Capture IPs ────────────────────────────────────────────────
-    # Single-NIC RP: one private IP from the single ENI; EIP is the public
-    # address. compute/storage already returned by aws_get_instance_ips.
+    # Single-NIC RP: one private IP from the single ENI. Public address is the
+    # EIP when one was allocated/associated; otherwise the auto-assigned public
+    # IP from AssociatePublicIpAddress. compute/storage use aws_get_instance_ips.
     local rp_ips compute_ips storage_ips
     rp_ips=$(aws_get_instance_ips "$rp_id")
     compute_ips=$(aws_get_instance_ips "$compute_id")
     storage_ips=$(aws_get_instance_ips "$storage_id")
 
-    local rp_public="$rp_eip_addr"
+    local rp_public="${rp_eip_addr:-}"
     local rp_private="${rp_ips#*|}"
-    aws_require_nonempty "RP public IP (EIP)" "$rp_public"
-    aws_require_nonempty "RP private IP"      "$rp_private"
+    if [[ -z "$rp_public" || "$rp_public" == "None" ]]; then
+        rp_public="${rp_ips%|*}"
+        log_info "  RP public IP (ephemeral, no EIP): ${rp_public}"
+    fi
+    aws_require_nonempty "RP public IP"  "$rp_public"
+    aws_require_nonempty "RP private IP" "$rp_private"
     local compute_public="${compute_ips%|*}"
     local compute_private="${compute_ips#*|}"
     local storage_public="${storage_ips%|*}"

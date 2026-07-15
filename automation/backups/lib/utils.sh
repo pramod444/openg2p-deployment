@@ -41,16 +41,23 @@ STATE_DIR="${BACKUPS_ROOT_DIR}/.state"
 # Used by every subcommand to skip disabled components cleanly.
 group_enabled() {
     local group="$1"
-    local val="$(cfg "groups.${group}" "true")"
+    # objectstore is opt-in — missing key must not enable new installs by default.
+    local default="true"
+    [[ "$group" == "objectstore" ]] && default="false"
+    local val="$(cfg "groups.${group}" "$default")"
     [[ "$val" == "true" || "$val" == "yes" || "$val" == "1" ]]
 }
 
 # Iterate over enabled groups. Usage: for g in $(enabled_groups); do ... done
+# Always return 0 — otherwise `group_enabled` failing on the last (disabled)
+# group leaves a non-zero status and `set -e` aborts callers like
+# `groups_to_run=$(enabled_groups)` when objectstore is opt-out.
 enabled_groups() {
     local g
-    for g in pg etcd rancher nfs configs; do
+    for g in pg etcd rancher nfs configs objectstore; do
         group_enabled "$g" && echo "$g"
     done
+    return 0
 }
 
 # Pretty-print group state for `status` subcommand.
@@ -505,6 +512,10 @@ _status_write_component() {
            '.components[\$c] = (.components[\$c] // {}) +
             { (\$ev): \$ts, (\$ev + \"_result\"): \$r, (\$ev + \"_details\"): \$d }' \
            \$f > \$tmp && mv \$tmp \$f"
+    # Phase 2 metrics hook — textfile / Pushgateway (lib/metrics.sh).
+    if [[ "$event" == "last_run" ]] && declare -F metrics_emit_component_run >/dev/null 2>&1; then
+        metrics_emit_component_run "$component" "$result" "$ts" || true
+    fi
 }
 
 # ---------------------------------------------------------------------------
