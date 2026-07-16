@@ -1,0 +1,16 @@
+# Example rclone remote for MinIO / S3-compatible storage.
+# Copy to ~/.openg2p/keystore/rclone.conf and set objectstore.rclone_conf.
+# See https://rclone.org/s3/
+#
+# NEVER commit the filled-in file with real keys.
+
+[minio]
+type = s3
+provider = Minio
+env_auth = false
+access_key_id = CHANGE_ME
+secret_access_key = CHANGE_ME
+endpoint = https://minio.example.gov
+acl = private
+# For path-style MinIO:
+# force_path_style = true
