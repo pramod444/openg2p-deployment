@@ -1,0 +1,127 @@
+# Applied automatically by `openg2p-backup.sh install` when monitoring.enabled=true.
+# Namespace defaults to cattle-monitoring-system (Rancher Monitoring).
+# Placeholders: __BACKUP_INSTANCE__ (sanitized), __MONITORING_NS__
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: openg2p-backup-__BACKUP_INSTANCE__
+  namespace: __MONITORING_NS__
+  labels:
+    app.kubernetes.io/name: openg2p-backup
+    app.kubernetes.io/part-of: openg2p-backup
+spec:
+  groups:
+  - name: openg2p-backup-__BACKUP_INSTANCE__
+    rules:
+    # Dead-man's switch — any successful component advances this gauge.
+    - alert: OpenG2PBackupMissed
+      expr: (time() - openg2p_backup_master_last_success_timestamp) > (26 * 3600)
+      for: 15m
+      labels:
+        component: backup
+        severity: critical
+      annotations:
+        summary: "OpenG2P backup has not succeeded in >26h"
+        description: "Last successful backup was {{ $value | humanizeDuration }} ago."
+
+    - alert: OpenG2PBackupRunFailed
+      expr: openg2p_backup_run_status == 0
+      for: 5m
+      labels:
+        component: backup
+        severity: critical
+      annotations:
+        summary: "{{ $labels.component }} backup last run failed"
+        description: "Check /var/log/openg2p-backup.log and ./openg2p-backup.sh status."
+
+    - alert: OpenG2PBackupComponentStale
+      expr: (time() - openg2p_backup_run_timestamp_seconds) > (48 * 3600)
+      for: 30m
+      labels:
+        component: backup
+        severity: warning
+      annotations:
+        summary: "{{ $labels.component }} backup hasn't run in >48h"
+        description: "Cron may be broken or the group disabled unexpectedly."
+
+    - alert: OpenG2PBackupDiskLow
+      expr: openg2p_backup_disk_available_bytes < (25 * 1024 * 1024 * 1024)
+      for: 10m
+      labels:
+        component: backup
+        severity: warning
+      annotations:
+        summary: "Backup host <25GiB free"
+        description: "Available={{ $value | humanize1024 }}B."
+
+    - alert: OpenG2PBackupDiskCritical
+      expr: openg2p_backup_disk_available_bytes < (10 * 1024 * 1024 * 1024)
+      for: 5m
+      labels:
+        component: backup
+        severity: critical
+      annotations:
+        summary: "Backup host <10GiB free — backups will fail"
+        description: "Free space critically low."
+
+    - alert: OpenG2PBackupMetricsAbsent
+      expr: absent(openg2p_backup_master_last_success_timestamp)
+      for: 2h
+      labels:
+        component: backup
+        severity: warning
+      annotations:
+        summary: "No OpenG2P backup success metrics in Prometheus"
+        description: "Textfile collector or Pushgateway path may be broken."
+
+  - name: openg2p-pg-wal-__BACKUP_INSTANCE__
+    rules:
+    - alert: OpenG2PWALArchiveStalled
+      expr: openg2p_pg_archiver_last_archive_age_seconds > 1800
+      for: 10m
+      labels:
+        component: backup
+        severity: critical
+      annotations:
+        summary: "Postgres WAL archiving stalled (>30m)"
+        description: "Last WAL archived {{ $value | humanizeDuration }} ago. If this persists, pg_wal fills the disk and Postgres STOPS."
+
+    - alert: OpenG2PWALArchiveFailing
+      expr: increase(openg2p_pg_archiver_failed_count[15m]) > 0
+      for: 5m
+      labels:
+        component: backup
+        severity: critical
+      annotations:
+        summary: "Postgres WAL archive failures"
+        description: "archive-push failing. WAL will accumulate and risk a disk-full prod outage."
+
+    - alert: OpenG2PWALDirGrowing
+      expr: openg2p_pg_wal_size_bytes > (20 * 1024 * 1024 * 1024)
+      for: 15m
+      labels:
+        component: backup
+        severity: warning
+      annotations:
+        summary: "Postgres pg_wal >20GiB"
+        description: "WAL building up ({{ $value | humanize1024 }}B)."
+
+    - alert: OpenG2PWALDirCritical
+      expr: openg2p_pg_wal_size_bytes > (45 * 1024 * 1024 * 1024)
+      for: 5m
+      labels:
+        component: backup
+        severity: critical
+      annotations:
+        summary: "Postgres pg_wal >45GiB — disk-full prod outage imminent"
+        description: "Fix archiving immediately."
+
+    - alert: OpenG2PWALMetricsAbsent
+      expr: absent(openg2p_pg_wal_size_bytes)
+      for: 30m
+      labels:
+        component: backup
+        severity: warning
+      annotations:
+        summary: "No WAL-health metrics"
+        description: "openg2p-backup-wal-health cron may have stopped."
