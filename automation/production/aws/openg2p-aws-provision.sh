@@ -162,21 +162,21 @@ main() {
     log_success "VPC:    ${vpc_id} (CIDR: ${vpc_cidr})"
     log_success "Subnet: ${subnet_id}"
 
-    # ── 4. admin_cidr default = laptop's public IP /32 ──────────────────
-    local admin_cidr=$(cfg admin_cidr)
+    # ── 4. admin_cidr — SSH/ping ingress for admin laptops ──────────────
+    # Blank defaults to 0.0.0.0/0 so SSH keeps working when the operator's
+    # public IP changes (home ↔ office ↔ mobile). Override in aws-config.yaml
+    # with an office/VPN CIDR when you want a tighter lock.
+    local admin_cidr
+    admin_cidr="$(cfg admin_cidr)"
     if [[ -z "$admin_cidr" ]]; then
-        if admin_cidr=$(aws_detect_my_public_ip); then
-            log_success "Auto-detected admin_cidr: ${admin_cidr} (this laptop's public IP)"
-        else
-            log_error "Could not auto-detect public IP" \
-                      "checkip.amazonaws.com unreachable" \
-                      "Set admin_cidr explicitly in aws-config.yaml"
-            exit 1
-        fi
-    fi
-    if [[ "$admin_cidr" == "0.0.0.0/0" ]]; then
+        admin_cidr="0.0.0.0/0"
+        log_warn "admin_cidr unset — defaulting to 0.0.0.0/0 (SSH from any IP)."
+        log_warn "Set admin_cidr in aws-config.yaml to an office/VPN range for production."
+    elif [[ "$admin_cidr" == "0.0.0.0/0" ]]; then
         log_warn "admin_cidr is OPEN (0.0.0.0/0). SSH/ping reachable from anywhere."
         log_warn "Tighten this in aws-config.yaml after install for production."
+    else
+        log_success "admin_cidr: ${admin_cidr}"
     fi
 
     # ── 5. AMI ──────────────────────────────────────────────────────────
@@ -370,7 +370,7 @@ main() {
     else
         log_step "6" "Waiting for SSH to come up on all 3 instances"
         log_info "Common causes of slow SSH: cloud-init still installing the key,"
-        log_info "your laptop's public IP not in admin_cidr (SG), or key perms."
+        log_info "admin_cidr too narrow for this laptop, or key perms."
         log_info "Pass --skip-ssh-wait to bypass; --ssh-timeout <sec> to extend the wait."
 
         aws_wait_ssh "$rp_public"      "ubuntu" "$key_path" "$SSH_WAIT_TIMEOUT" "RP"      || exit 1

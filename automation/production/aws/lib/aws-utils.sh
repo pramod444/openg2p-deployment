@@ -64,7 +64,8 @@ aws_check_credentials() {
 }
 
 # ---------------------------------------------------------------------------
-# Detect this laptop's public IP (for sensible default admin_cidr)
+# Detect this laptop's public IP (optional helper; not used as the default
+# admin_cidr — blank admin_cidr now means 0.0.0.0/0 so SSH survives IP changes).
 # ---------------------------------------------------------------------------
 aws_detect_my_public_ip() {
     local ip

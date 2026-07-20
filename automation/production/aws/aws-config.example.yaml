@@ -47,9 +47,12 @@ subnet_id: ""
 # CIDR allowed to SSH/ping the instances over the public internet.
 #
 # Special values:
-#   ""            — auto-detect this laptop's current public IP (recommended)
-#   "0.0.0.0/0"   — open to the world (only do this if you know why)
-#   custom CIDR   — your office or VPN egress range, e.g. "203.0.113.0/24"
+#   ""            — default to 0.0.0.0/0 (SSH works across IP changes)
+#   "0.0.0.0/0"   — same as blank; open to the world (lab / early install)
+#   custom CIDR   — office or VPN egress range, e.g. "203.0.113.0/24"
+#
+# Prefer a locked-down CIDR for long-lived production. Blank/open avoids the
+# common failure where the operator's ISP IP changes and SSH is blocked.
 #
 # This is independent of VPC choice. The security group ALSO always allows
 # all traffic from the VPC CIDR for intra-VPC communication between nodes.
