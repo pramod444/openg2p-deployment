@@ -13,6 +13,134 @@
 set -euo pipefail
 
 NFS_MOUNT_POINT="/mnt/openg2p-nfs-ro"
+# Written on backup host when the canonical path is poisoned (post-DR EIO).
+NFS_MOUNT_POINT_MARKER="/var/lib/openg2p-backup/.nfs-mount-point"
+
+# _nfs_resolve_mount_point — effective RO mount path on the backup host.
+_nfs_resolve_mount_point() {
+    local marked
+    marked="$(run_on_backup "cat ${NFS_MOUNT_POINT_MARKER} 2>/dev/null || true" | tr -d '\r\n' || true)"
+    if [[ -n "${marked}" ]]; then
+        printf '%s' "${marked}"
+    else
+        printf '%s' "${NFS_MOUNT_POINT}"
+    fi
+}
+
+# _nfs_ensure_ro_mount — on backup host: drop stale mounts, refresh fstab, mount RO.
+# After DR rebuild the storage private IP changes; a leftover mount to the old
+# server returns EIO. x-systemd.automount makes this worse: any path access
+# re-triggers the dead mount, so mkdir/chmod fail even after a soft umount.
+_nfs_ensure_ro_mount() {
+    local storage_ip="$1"
+    local export_root="$2"
+    run_on_backup "set -euo pipefail
+        CANON='${NFS_MOUNT_POINT}'
+        MARKER='${NFS_MOUNT_POINT_MARKER}'
+        MP=\"\$CANON\"
+        SRC='${storage_ip}:${export_root}'
+        install -d -m 0755 \"\$(dirname \"\$MARKER\")\"
+
+        _nfs_unit() {
+            local path=\"\$1\" suffix=\"\$2\"
+            if command -v systemd-escape >/dev/null 2>&1; then
+                systemd-escape -p --suffix=\"\$suffix\" \"\$path\"
+            fi
+        }
+
+        _nfs_stop_systemd() {
+            local path=\"\$1\" u
+            for u in \"\$(_nfs_unit \"\$path\" automount)\" \"\$(_nfs_unit \"\$path\" mount)\"; do
+                [[ -n \"\$u\" ]] || continue
+                systemctl stop \"\$u\" 2>/dev/null || true
+                systemctl disable \"\$u\" 2>/dev/null || true
+                systemctl reset-failed \"\$u\" 2>/dev/null || true
+            done
+        }
+
+        # /proc/mounts is local — never hangs on a dead NFS server.
+        _nfs_is_mounted() {
+            local path=\"\$1\"
+            awk -v p=\"\$path\" '\$2 == p { found=1 } END { exit !found }' /proc/mounts
+        }
+
+        _nfs_force_unmount() {
+            local path=\"\$1\" i
+            _nfs_stop_systemd \"\$path\"
+            for i in 1 2 3 4 5; do
+                if _nfs_is_mounted \"\$path\"; then
+                    umount -f -l \"\$path\" 2>/dev/null || umount -l \"\$path\" 2>/dev/null || true
+                    sleep 1
+                else
+                    break
+                fi
+            done
+            while read -r tgt; do
+                [[ -n \"\$tgt\" ]] || continue
+                umount -f -l \"\$tgt\" 2>/dev/null || true
+            done < <(awk -v p=\"\$path\" '\$2 == p || index(\$2, p \"/\") == 1 { print \$2 }' /proc/mounts)
+        }
+
+        _nfs_write_fstab() {
+            local path=\"\$1\"
+            if [[ ! -f /etc/fstab ]]; then
+                return 0
+            fi
+            # Drop both canonical and fallback lines, then write the active path.
+            # noauto+_netdev only (no x-systemd.automount) — cron/install mount explicitly.
+            awk -v c=\"\$CANON\" -v f=\"\${CANON}-dr\" '
+                \$2 != c && \$2 != f { print }
+            ' /etc/fstab > /tmp/openg2p-fstab.new
+            echo \"\${SRC} \${path} nfs ro,soft,timeo=30,retrans=2,noauto,_netdev 0 0\" >> /tmp/openg2p-fstab.new
+            mv /tmp/openg2p-fstab.new /etc/fstab
+            systemctl daemon-reload 2>/dev/null || true
+        }
+
+        _nfs_prepare_mountpoint() {
+            local err
+            if _nfs_is_mounted \"\$MP\"; then
+                return 0
+            fi
+            err=\$(mkdir -p \"\$MP\" 2>&1) && chmod 0755 \"\$MP\" && return 0
+            if grep -qi 'input/output error\\|i/o error' <<< \"\$err\"; then
+                echo \"WARN: \${MP} dentry poisoned (EIO); switching to \${CANON}-dr\" >&2
+                MP=\"\${CANON}-dr\"
+                _nfs_write_fstab \"\$MP\"
+                _nfs_force_unmount \"\$MP\"
+                mkdir -p \"\$MP\"
+                chmod 0755 \"\$MP\"
+                return 0
+            fi
+            echo \"\$err\" >&2
+            return 1
+        }
+
+        # Stop old automount before any path access, then rewrite fstab.
+        _nfs_stop_systemd \"\$CANON\"
+        _nfs_stop_systemd \"\${CANON}-dr\"
+        _nfs_write_fstab \"\$MP\"
+        _nfs_force_unmount \"\$CANON\"
+        _nfs_force_unmount \"\${CANON}-dr\"
+
+        _nfs_prepare_mountpoint
+
+        if ! _nfs_is_mounted \"\$MP\"; then
+            mount -t nfs -o ro,soft,timeo=30,retrans=2 \"\$SRC\" \"\$MP\"
+        else
+            if ! awk -v p=\"\$MP\" -v s=\"\$SRC\" '\$2 == p && index(\$1, s) == 1 { found=1 } END { exit !found }' /proc/mounts; then
+                umount -f -l \"\$MP\" 2>/dev/null || true
+                mount -t nfs -o ro,soft,timeo=30,retrans=2 \"\$SRC\" \"\$MP\"
+            fi
+        fi
+        timeout 10 ls \"\$MP\" >/dev/null
+
+        if [[ \"\$MP\" != \"\$CANON\" ]]; then
+            printf '%s\n' \"\$MP\" > \"\$MARKER\"
+        else
+            rm -f \"\$MARKER\"
+        fi
+    "
+}
 
 # ---------------------------------------------------------------------------
 # nfs_install — mount NFS RO on backup host, init restic repo.
@@ -33,6 +161,7 @@ nfs_install() {
     # this the mount below hangs/fails.
     log_info "Ensuring storage node exports ${export_root} to backup host ${backup_ip} (ro)..."
     ssh_run "storage" "set -euo pipefail
+        install -d -m 0755 '${export_root}'
         line='${export_root} ${backup_ip}(ro,sync,no_subtree_check,no_root_squash)'
         touch /etc/exports
         if ! grep -qF '${backup_ip}' /etc/exports; then
@@ -58,18 +187,10 @@ nfs_install() {
     log_info "Mounting NFS export ${storage_ip}:${export_root} read-only on backup host..."
     ssh_run "backup" "set -euo pipefail
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nfs-common restic jq
+    "
+    _nfs_ensure_ro_mount "$storage_ip" "$export_root"
 
-        # Create the mount point only when it is not already an NFS RO mount.
-        # install -d -m on a live RO mount fails with 'Read-only file system'.
-        if ! mountpoint -q ${NFS_MOUNT_POINT}; then
-            install -d -m 0755 ${NFS_MOUNT_POINT}
-        fi
-        # Idempotent fstab entry.
-        if ! grep -q '${NFS_MOUNT_POINT}' /etc/fstab; then
-            echo '${storage_ip}:${export_root} ${NFS_MOUNT_POINT} nfs ro,soft,timeo=30,noauto,x-systemd.automount 0 0' >> /etc/fstab
-        fi
-        mountpoint -q ${NFS_MOUNT_POINT} || mount ${NFS_MOUNT_POINT}
-
+    ssh_run "backup" "set -euo pipefail
         # Restic repo init for NFS. Use cat-config probe so a REAL error
         # (wrong passphrase, permission denied) surfaces, not just the
         # benign 'already initialised'.
@@ -113,13 +234,15 @@ nfs_run() {
     exclude_args=$(_nfs_render_exclude_args)
 
     local rc=0
+    _nfs_ensure_ro_mount "$(cfg storage_private_ip)" "$(cfg nfs.export_root /srv/nfs/openg2p)"
+    local nfs_mp
+    nfs_mp="$(_nfs_resolve_mount_point)"
+
     run_on_backup "set -euo pipefail
         export RESTIC_REPOSITORY=${repo_root}/restic/nfs
         export RESTIC_PASSWORD='$(printf '%q' "$restic_pass")'
-        # The fstab entry is noauto,x-systemd.automount — trigger the mount
-        # before cd, or the first cron run after a reboot fails on 'cd'.
-        mountpoint -q ${NFS_MOUNT_POINT} || mount ${NFS_MOUNT_POINT}
-        cd ${NFS_MOUNT_POINT}
+        mountpoint -q ${nfs_mp} || mount ${nfs_mp}
+        cd ${nfs_mp}
         restic backup ${include_paths} ${exclude_args} \
             --tag openg2p --tag nfs --tag \$(date -u +%Y-%m-%d)
         # Also stash the freshly-generated sidecar manifest as a tagged snapshot.
@@ -235,7 +358,9 @@ nfs_generate_pvc_manifest() {
     #     the merged record.
     run_on_backup "set -euo pipefail
         install -d -m 0750 ${repo_root}/nfs
-        nfs_listing=\$(ls -1 ${NFS_MOUNT_POINT} 2>/dev/null | jq -R . | jq -s .)
+        MP=\$(cat ${NFS_MOUNT_POINT_MARKER} 2>/dev/null || echo ${NFS_MOUNT_POINT})
+        mountpoint -q \"\$MP\" 2>/dev/null || mount \"\$MP\" 2>/dev/null || true
+        nfs_listing=\$(ls -1 \"\$MP\" 2>/dev/null | jq -R . | jq -s .)
         jq -n \
             --argjson pvs \"\$(jq '.items // []' /tmp/openg2p-pv.json)\" \
             --argjson dirs \"\$nfs_listing\" '
@@ -292,12 +417,21 @@ nfs_list() {
 }
 
 # ---------------------------------------------------------------------------
-# nfs_restore — restore one PVC's data into a staging dir on the storage node.
-# Args: <target=namespace/pvc> <pit_unused> <dry_run>
+# nfs_restore — restore one PVC's data into a staging dir on the backup host.
+# Args: <target=namespace/pvc> <snapshot_or_unused> <dry_run>
 # ---------------------------------------------------------------------------
+# Each nfs_run writes TWO restic snapshots:
+#   1) tag=nfs           — real export data (cd mount; backup paths)
+#   2) tag=pvc-manifest  — only .pvc-mapping.yaml (taken AFTER #1)
+# `restic restore latest` therefore often selects the empty sidecar snapshot
+# and restores 0 bytes. Always pin to --tag nfs.
+#
+# After a DR rebuild the live sidecar may list NEW empty UUID dirs. Prefer a
+# pre-disaster snapshot (pass snapshot id as --point-in-time) and/or confirm
+# the nfs_path still exists in that snapshot via `restic ls`.
 nfs_restore() {
     local target="$1"
-    local _pit="$2"
+    local snapshot="${2:-}"
     local dry_run="$3"
     local repo_root="$(cfg backup_repo_root /var/lib/openg2p-backup)"
     local restic_pass_file
@@ -313,6 +447,17 @@ nfs_restore() {
 
     local ns="${target%%/*}"
     local pvc="${target#*/}"
+
+    # Snapshot selector: explicit id/latest from --point-in-time, else latest nfs-tagged.
+    local snap_ref="latest"
+    if [[ -n "$snapshot" ]]; then
+        snap_ref="$snapshot"
+    fi
+    # Always constrain to data snapshots unless the operator named a concrete id.
+    local tag_args="--tag nfs"
+    if [[ -n "$snapshot" && "$snapshot" != latest ]]; then
+        tag_args=""
+    fi
 
     # Look up the NFS path from the sidecar manifest.
     local nfs_path
@@ -331,17 +476,44 @@ nfs_restore() {
     local stage_dir="/tmp/openg2p-nfs-restore/${ns}-${pvc}-$(date -u +%Y%m%dT%H%M%SZ)"
 
     if [[ "$dry_run" == "true" ]]; then
-        log_info "[dry-run] would restore NFS path '${nfs_path}' from latest snapshot"
+        log_info "[dry-run] would restore NFS path '${nfs_path}' from snapshot '${snap_ref}' ${tag_args}"
         log_info "[dry-run] target: backup host ${stage_dir}"
         return 0
     fi
 
-    log_info "Restoring '${nfs_path}' to ${stage_dir} on backup host..."
+    log_info "Restoring '${nfs_path}' to ${stage_dir} on backup host (snapshot=${snap_ref}${tag_args:+ ${tag_args}})..."
     run_on_backup "set -euo pipefail
         export RESTIC_REPOSITORY=${repo_root}/restic/nfs
         export RESTIC_PASSWORD='$(printf '%q' "$restic_pass")'
         install -d -m 0700 '${stage_dir}'
-        restic restore latest --target '${stage_dir}' --include '/${nfs_path}'"
+
+        # Confirm the path exists in the chosen data snapshot before restore.
+        if ! restic ls ${tag_args} '${snap_ref}' 2>/dev/null | grep -F '${nfs_path}' >/dev/null; then
+            echo \"ERROR: path '${nfs_path}' not found in restic snapshot '${snap_ref}' (tag filter: ${tag_args:-none}).\" >&2
+            echo \"Likely causes:\" >&2
+            echo \"  • 'latest' is a post-DR empty NFS backup — pick a pre-disaster snapshot id\" >&2
+            echo \"  • sidecar lists a NEW UUID; old data lived under a different nfs_path\" >&2
+            echo \"Fix: ./openg2p-backup.sh list --component nfs\" >&2
+            echo \"     restic snapshots --tag nfs --compact\" >&2
+            echo \"     restic ls <snapshot-id> | grep ${pvc}\" >&2
+            echo \"Then: restore --point-in-time <snapshot-id> --target ${ns}/${pvc}\" >&2
+            exit 1
+        fi
+
+        # Paths in the repo are absolute under the RO mount (restic backup '.')
+        # e.g. /mnt/openg2p-nfs-ro/<nfs_path>/... — match by directory name.
+        restic restore ${tag_args} '${snap_ref}' --target '${stage_dir}' \
+            --include '*${nfs_path}*'
+
+        # Fail loud on empty restores (previous bug: pvc-manifest snapshot → 0 B 'success').
+        count=\$(find '${stage_dir}' -mindepth 1 | wc -l)
+        if [[ \"\$count\" -eq 0 ]]; then
+            echo \"ERROR: restore completed but staged dir is empty: ${stage_dir}\" >&2
+            exit 1
+        fi
+        echo \"Staged \$count paths under ${stage_dir}\"
+        du -sh '${stage_dir}'/* 2>/dev/null || du -sh '${stage_dir}'
+    "
 
     log_success "Restored to ${stage_dir} on backup host."
     log_warn "Now follow operations/deployment/automation/backups/restoration/single-pvc.md"

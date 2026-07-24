@@ -170,10 +170,37 @@ EOF
         chown ${PGBR_REPO_HOST_USER}:${PGBR_REPO_HOST_USER} /var/lib/${PGBR_REPO_HOST_USER}/.ssh/known_hosts
         chmod 0600 /var/lib/${PGBR_REPO_HOST_USER}/.ssh/known_hosts"
 
-    # 4. Create stanza + first full backup. Idempotent: stanza-create on an
-    #    existing stanza is a no-op.
+    # 4. Create stanza + first full backup.
+    # Idempotent on a matching DB. After a DR rebuild that KEPT the backup
+    # node, the repo still has the OLD cluster's system-id while storage has
+    # a fresh empty Postgres — stanza-create then fails with [028]. In that
+    # case keep the repo intact (needed for restore) and skip the first
+    # backup; the operator restores PG next, then takes a new full later.
     log_info "Creating stanza '${stanza}' and running first full backup..."
-    ssh_run "backup" "sudo -u ${PGBR_REPO_HOST_USER} pgbackrest --stanza=${stanza} stanza-create"
+    local stanza_out="" stanza_rc=0
+    set +e
+    stanza_out=$(ssh_run "backup" "sudo -u ${PGBR_REPO_HOST_USER} pgbackrest --stanza=${stanza} stanza-create 2>&1")
+    stanza_rc=$?
+    set -e
+    printf '%s\n' "$stanza_out"
+
+    if (( stanza_rc != 0 )); then
+        if echo "$stanza_out" | grep -qE '\[028\]|do not match the database'; then
+            log_warn "pgBackRest repo exists but does not match the current Postgres (error 028)."
+            log_warn "Typical after a full rebuild that kept the backup node — old backups are for the previous cluster."
+            log_warn "Leaving the existing repo untouched. Skip first full backup."
+            log_warn "Next: ./openg2p-backup.sh restore --config … --component pg  (then cutover),"
+            log_warn "then: ./openg2p-backup.sh run --config … --component pg   (new full of the restored DB)."
+            log_success "PG install complete (tooling + SSH trust only; stanza deferred for DR restore)."
+            return 0
+        fi
+        log_error "stanza-create failed" \
+                  "See pgBackRest output above" \
+                  "Check repo at ${repo_path} and storage Postgres" \
+                  "pgbackrest --stanza=${stanza} info"
+        return "$stanza_rc"
+    fi
+
     ssh_run "storage" "sudo -u ${PGBR_PG_USER} pgbackrest --stanza=${stanza} check"
     ssh_run "backup" "sudo -u ${PGBR_REPO_HOST_USER} pgbackrest --stanza=${stanza} --type=full backup"
 
@@ -231,12 +258,19 @@ pg_restore() {
     local restore_dir="/var/lib/openg2p-backup-restore/pg-$(date -u +%Y%m%dT%H%M%SZ)"
 
     if [[ -z "$pit" ]]; then
-        log_warn "No --point-in-time supplied — restoring latest full+diff with no PITR."
+        log_warn "No --point-in-time supplied — restoring latest backup (--type=immediate)."
+    fi
+
+    local restore_target_args
+    if [[ -n "$pit" ]]; then
+        restore_target_args="--type=time --target=\"${pit}\" --target-action=promote"
+    else
+        restore_target_args="--type=immediate --target-action=promote"
     fi
 
     if [[ "$dry_run" == "true" ]]; then
         log_info "[dry-run] would restore stanza=${stanza} to ${restore_dir}"
-        log_info "[dry-run] would invoke: pgbackrest --stanza=${stanza} ${pit:+--type=time --target=\"${pit}\"} --target-action=promote restore"
+        log_info "[dry-run] would invoke: pgbackrest --stanza=${stanza} ${restore_target_args} --pg1-path=${restore_dir} restore"
         return 0
     fi
 
@@ -244,8 +278,7 @@ pg_restore() {
     ssh_run "storage" "set -euo pipefail
         install -d -o ${PGBR_PG_USER} -g ${PGBR_PG_USER} -m 0700 ${restore_dir}
         sudo -u ${PGBR_PG_USER} pgbackrest --stanza=${stanza} \
-            ${pit:+--type=time --target=\"${pit}\"} \
-            --target-action=promote \
+            ${restore_target_args} \
             --pg1-path=${restore_dir} \
             restore"
 
