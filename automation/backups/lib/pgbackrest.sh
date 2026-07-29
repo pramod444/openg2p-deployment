@@ -69,12 +69,15 @@ install -d -o ${PGBR_REPO_HOST_USER} -g ${PGBR_REPO_HOST_USER} -m 0700 /var/lib/
 # the backup-host installer / cloud-init). Without o+x on that root, the
 # pgbackrest service user can't traverse it to reach its repo subdir. Make
 # the root traversable (subdirs keep their own restrictive perms), then own
-# the repo subdir.
+# the repo subdir — recursively, so a prior bootstrap that left pg as root
+# cannot block remote restore (Permission denied on backup.info).
 chmod 0755 "$(dirname "${repo_path}")"
 install -d -o ${PGBR_REPO_HOST_USER} -g ${PGBR_REPO_HOST_USER} -m 0750 \
     ${repo_path} \
     /etc/pgbackrest \
     /var/log/pgbackrest
+chown -R ${PGBR_REPO_HOST_USER}:${PGBR_REPO_HOST_USER} ${repo_path}
+chmod 0750 ${repo_path}
 
 cat > /etc/pgbackrest/pgbackrest.conf <<CONF
 [global]
@@ -275,6 +278,16 @@ pg_restore() {
     fi
 
     log_info "Restoring stanza=${stanza} to ${restore_dir} on storage node"
+    # Ensure backup-host repo is readable by pgbackrest before remote restore
+    # (install --force historically left /pg as root:root 0750 → error 075).
+    ssh_run "backup" "set -euo pipefail
+        chmod 0755 '$(cfg backup_repo_root /var/lib/openg2p-backup)'
+        chown -R ${PGBR_REPO_HOST_USER}:${PGBR_REPO_HOST_USER} '$(cfg backup_repo_root /var/lib/openg2p-backup)/pg'
+        chmod 0750 '$(cfg backup_repo_root /var/lib/openg2p-backup)/pg'
+        sudo -u ${PGBR_REPO_HOST_USER} test -r '$(cfg backup_repo_root /var/lib/openg2p-backup)/pg/backup/${stanza}/backup.info' \
+            || sudo -u ${PGBR_REPO_HOST_USER} test -r '$(cfg backup_repo_root /var/lib/openg2p-backup)/pg/backup/${stanza}/backup.info.copy'
+        sudo -u ${PGBR_REPO_HOST_USER} pgbackrest --stanza=${stanza} info | head -40
+    "
     ssh_run "storage" "set -euo pipefail
         install -d -o ${PGBR_PG_USER} -g ${PGBR_PG_USER} -m 0700 ${restore_dir}
         sudo -u ${PGBR_PG_USER} pgbackrest --stanza=${stanza} \

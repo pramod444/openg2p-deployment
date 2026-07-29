@@ -47,6 +47,11 @@ etcd-snapshot-dir: '/var/lib/rancher/rke2/server/db/snapshots'
 EOC
         systemctl restart rke2-server"
 
+    # Schedule is every 6h — take one now so verify/drill work before the first cron tick
+    # (critical after a full rebuild / fresh RKE2 install).
+    log_info "Taking an initial on-demand etcd snapshot on compute..."
+    _etcd_ensure_snapshot_on_compute
+
     log_info "Preparing receive directory on backup host..."
     ssh_run "backup" "install -d -m 0750 ${etcd_repo}"
 
@@ -79,6 +84,9 @@ EOC
     # Save compute IP for the rsync command at run time.
     ssh_run "backup" "echo '$(cfg compute_private_ip)' > /etc/openg2p-backup/etcd-source-ip"
 
+    log_info "Pulling initial etcd snapshot(s) to backup host..."
+    etcd_run || log_warn "Initial etcd pull failed — run: ./openg2p-backup.sh run --config … --component etcd"
+
     log_success "etcd snapshot schedule + pull pipeline configured."
 }
 
@@ -105,7 +113,7 @@ etcd_run() {
     run_on_backup "set -euo pipefail
         cd ${repo_root}/etcd
         shopt -s nullglob
-        files=(etcd-snapshot-*)
+        files=(etcd-snapshot-* on-demand-*)
         while (( \${#files[@]} > ${keep} )); do
             oldest=\"\${files[0]}\"
             for f in \"\${files[@]}\"; do [[ \$f -ot \$oldest ]] && oldest=\$f; done
@@ -124,7 +132,38 @@ etcd_run() {
 ETCD_RKE2_SNAPSHOT_DIR="/var/lib/rancher/rke2/server/db/snapshots"
 ETCD_MIN_SNAPSHOT_BYTES=1000000   # 1 MiB — ignore metadata / junk files
 
-# _etcd_find_latest <repo_root> — echo newest regular etcd-snapshot-* file on the
+# _etcd_ensure_snapshot_on_compute — if compute has no usable snapshot yet
+# (common right after install / full rebuild; schedule is */6h), take one now.
+# Prefer --name etcd-snapshot-openg2p so files match the etcd-snapshot-* filter.
+_etcd_ensure_snapshot_on_compute() {
+    ssh_run "compute" "set -euo pipefail
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/rancher/rke2/bin
+        dir=${ETCD_RKE2_SNAPSHOT_DIR}
+        shopt -s nullglob
+        found=0
+        for f in \"\$dir\"/etcd-snapshot-* \"\$dir\"/on-demand-*; do
+            [[ -f \$f ]] || continue
+            (( \$(stat -c %s \"\$f\") >= ${ETCD_MIN_SNAPSHOT_BYTES} )) || continue
+            found=1
+            break
+        done
+        if (( found == 0 )); then
+            echo 'No usable etcd snapshot on compute — saving on-demand...'
+            # Wait briefly after rke2-server restart so etcd is ready.
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+                systemctl is-active --quiet rke2-server && break
+                sleep 3
+            done
+            sleep 5
+            rke2 etcd-snapshot save --name etcd-snapshot-openg2p
+        else
+            echo 'Compute already has an etcd snapshot; skipping on-demand save.'
+        fi
+        ls -lh \"\$dir\" | head -20 || true
+    "
+}
+
+# _etcd_find_latest <repo_root> — echo newest regular snapshot file on the
 # backup host. Exit 2 when none qualify. Filters SSH/login-shell noise from stdout.
 _etcd_find_latest() {
     local repo_root="$1"
@@ -132,7 +171,7 @@ _etcd_find_latest() {
     raw=$(run_on_backup "set -euo pipefail
         shopt -s nullglob
         candidates=()
-        for f in ${repo_root}/etcd/etcd-snapshot-*; do
+        for f in ${repo_root}/etcd/etcd-snapshot-* ${repo_root}/etcd/on-demand-*; do
             [[ -f \$f ]] || continue
             (( \$(stat -c %s \"\$f\") >= ${ETCD_MIN_SNAPSHOT_BYTES} )) || continue
             candidates+=(\"\$f\")
@@ -185,7 +224,7 @@ _etcd_snapshot_status_compute() {
         else
             shopt -s nullglob
             candidates=()
-            for f in \${dir}/etcd-snapshot-*; do
+            for f in \${dir}/etcd-snapshot-* \${dir}/on-demand-*; do
                 [[ -f \$f ]] || continue
                 (( \$(stat -c %s \"\$f\") >= ${ETCD_MIN_SNAPSHOT_BYTES} )) || continue
                 candidates+=(\"\$f\")
@@ -245,15 +284,29 @@ etcd_verify() {
     fi
 
     if (( rc == 2 )) || [[ -z "$latest" ]]; then
+        log_warn "Still no snapshots after pull — taking on-demand snapshot on compute (schedule is every 6h)..."
+        _etcd_ensure_snapshot_on_compute
+        if ! etcd_run; then
+            log_error "etcd pull from compute failed after on-demand save" \
+                      "rsync could not copy snapshots to ${repo_root}/etcd" \
+                      "On compute: ls ${ETCD_RKE2_SNAPSHOT_DIR}; On backup: cat /etc/openg2p-backup/etcd-source-ip"
+            return 1
+        fi
+        rc=0
+        latest=$(_etcd_find_latest "$repo_root") || rc=$?
+    fi
+
+    if (( rc == 2 )) || [[ -z "$latest" ]]; then
         run_on_backup "set -euo pipefail
             echo 'No etcd snapshots under ${repo_root}/etcd after pull' >&2
             ls -la ${repo_root}/etcd/ >&2 2>/dev/null || true
-            echo 'Compute schedule: every 6h — check ${ETCD_RKE2_SNAPSHOT_DIR}' >&2
+            echo 'On compute check: ls -lh ${ETCD_RKE2_SNAPSHOT_DIR}' >&2
+            echo 'Or: rke2 etcd-snapshot save --name etcd-snapshot-openg2p' >&2
             exit 1" >&2
         return 1
     fi
 
-    [[ "$latest" == /* && "$latest" == *etcd-snapshot-* ]] || {
+    [[ "$latest" == /* && ( "$latest" == *etcd-snapshot-* || "$latest" == *on-demand-* ) ]] || {
         log_error "Could not resolve a valid etcd snapshot path on backup host" \
                   "SSH/login-shell noise may have polluted output — retry verify" \
                   "On backup host: ls -la ${repo_root}/etcd/"
@@ -282,7 +335,7 @@ etcd_verify() {
     fi
 
     remote_size=0
-    if [[ "$snap_name" =~ ^etcd-snapshot- ]]; then
+    if [[ "$snap_name" =~ ^(etcd-snapshot-|on-demand-) ]]; then
         remote_size=$(ssh_run "compute" "stat -c %s ${ETCD_RKE2_SNAPSHOT_DIR}/${snap_name} 2>/dev/null || echo 0" \
             2>/dev/null | grep -E '^[0-9]+$' | tail -1)
     fi
