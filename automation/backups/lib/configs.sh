@@ -43,11 +43,22 @@ configs_install() {
     local restic_pass; restic_pass="$(< "$restic_pass_file")"
 
     log_info "Initialising configs restic repo on backup host..."
-    # Note: we let "init on already-initialised repo" be a soft failure —
-    # restic returns 1 with a clear message in that case. Real errors
-    # (bad passphrase, permission denied) still surface in the log.
+    # restic is usually already present from backup-host bootstrap / nfs_install.
+    # Skip apt when possible — unattended-upgrades often holds the dpkg lock and
+    # would abort DR install --force. Only init if the repo is missing (never
+    # wipe an existing configs repo on a surviving backup node).
     ssh_run "backup" "set -euo pipefail
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq restic
+        if ! command -v restic >/dev/null 2>&1; then
+            for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                if ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 \
+                   && ! fuser /var/lib/dpkg/lock >/dev/null 2>&1; then
+                    break
+                fi
+                echo \"Waiting for dpkg lock (attempt \$i/12)...\"
+                sleep 10
+            done
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq restic
+        fi
         install -d -m 0700 ${repo_root}/restic
         if ! RESTIC_REPOSITORY=${repo_root}/restic/configs \
              RESTIC_PASSWORD='$(printf '%q' "$restic_pass")' \

@@ -29,8 +29,19 @@ echo "[backup-host] creating repo layout under ${BACKUP_REPO_ROOT}"
 # Sensitive content stays protected by the subdirs' own perms (restic dirs are
 # root-only; pg is owned by the pgbackrest user).
 install -d -o root -g root -m 0755 "${BACKUP_REPO_ROOT}"
+
+# Never re-own an existing pgBackRest repo as root — install -d -o root on a
+# surviving DR backup node makes restore fail with Permission denied [13] on
+# backup.info when postgres@storage SSHes in as pgbackrest.
+if id -u pgbackrest >/dev/null 2>&1 && [[ -e "${BACKUP_REPO_ROOT}/pg/backup" ]]; then
+    echo "[backup-host] existing pgBackRest repo detected — keeping pgbackrest ownership"
+    chown -R pgbackrest:pgbackrest "${BACKUP_REPO_ROOT}/pg"
+    chmod 0750 "${BACKUP_REPO_ROOT}/pg"
+else
+    install -d -o root -g root -m 0750 "${BACKUP_REPO_ROOT}/pg"
+fi
+
 install -d -o root -g root -m 0750 \
-    "${BACKUP_REPO_ROOT}/pg" \
     "${BACKUP_REPO_ROOT}/etcd" \
     "${BACKUP_REPO_ROOT}/restic" \
     "${BACKUP_REPO_ROOT}/restic/nfs" \
