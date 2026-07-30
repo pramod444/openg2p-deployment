@@ -182,10 +182,15 @@ configs_list() {
 }
 
 # ---------------------------------------------------------------------------
-# configs_restore — restore one tagged stream (e.g. 'wireguard' or 'rke2-tls')
-# to a staging dir on the backup host.
-# Args: <target=tag> <pit=snapshot-id|'latest'> <dry_run>
+# configs_restore — restic → extract → push onto live node paths.
+# Args: <target=tag> <pit=snapshot-id|'latest'|empty> <dry_run>
 # ---------------------------------------------------------------------------
+# RP tags (wireguard, nginx, openg2p) land on the RP node under /etc/...
+# Compute tags (rke2-*) land on the compute node (needed for etcd reset).
+#
+# Snapshot selection MUST match stdin-filename /${target}.tar.gz — every
+# configs snapshot also carries the global tag "openg2p", so
+# `restic snapshots --tag openg2p` returns ALL streams (wrong for --target openg2p).
 configs_restore() {
     local target="$1"
     local pit="${2:-latest}"
@@ -202,41 +207,126 @@ configs_restore() {
         return 1
     fi
 
+    local dest_role="" dest_paths="" ssh_host_alias="" dest_ip="" dest_user=""
+    case "$target" in
+        wireguard)   dest_role=rp;      dest_paths="/etc/wireguard"; ssh_host_alias=openg2p-rp ;;
+        nginx)       dest_role=rp;      dest_paths="/etc/nginx";     ssh_host_alias=openg2p-rp ;;
+        openg2p)     dest_role=rp;      dest_paths="/etc/openg2p";   ssh_host_alias=openg2p-rp ;;
+        rke2-tls)    dest_role=compute; dest_paths="/var/lib/rancher/rke2/server/tls"; ssh_host_alias=openg2p-compute ;;
+        rke2-cred)   dest_role=compute; dest_paths="/var/lib/rancher/rke2/server/cred"; ssh_host_alias=openg2p-compute ;;
+        rke2-token)  dest_role=compute; dest_paths="/var/lib/rancher/rke2/server/token /var/lib/rancher/rke2/server/node-token"; ssh_host_alias=openg2p-compute ;;
+        rke2-config) dest_role=compute; dest_paths="/etc/rancher/rke2"; ssh_host_alias=openg2p-compute ;;
+        *)
+            log_error "Unknown configs target '${target}'" \
+                      "Tags: wireguard nginx openg2p rke2-tls rke2-cred rke2-token rke2-config" ""
+            return 1
+            ;;
+    esac
+
+    if [[ "$dest_role" == "rp" ]]; then
+        dest_ip="$(cfg rp_private_ip)"
+        dest_user="$(cfg rp_ssh_user ubuntu)"
+    else
+        dest_ip="$(cfg compute_private_ip)"
+        dest_user="$(cfg compute_ssh_user ubuntu)"
+    fi
+
     local stage_dir="/tmp/openg2p-configs-restore/${target}-$(date -u +%Y%m%dT%H%M%SZ)"
+    local snap_ref="$pit"
+    [[ -z "$snap_ref" || "$snap_ref" == "latest" ]] && snap_ref=""
 
     if [[ "$dry_run" == "true" ]]; then
-        log_info "[dry-run] would restore tag=${target} pit=${pit} to ${stage_dir}"
+        log_info "[dry-run] would restic-restore path=/${target}.tar.gz snap=${snap_ref:-latest} → ${stage_dir}"
+        log_info "[dry-run] would push onto ${dest_role} ${dest_user}@${dest_ip} paths: ${dest_paths}"
         return 0
     fi
 
+    log_info "Restoring configs tag=${target} from restic on backup host..."
     run_on_backup "set -euo pipefail
         export RESTIC_REPOSITORY=${repo_root}/restic/configs
         export RESTIC_PASSWORD='$(printf '%q' "$restic_pass")'
-        # Pick the most recent snapshot with this tag.
-        snap=\$(restic snapshots --tag '${target}' --json | jq -r '.[-1].id')
-        [[ \$snap == 'null' || -z \$snap ]] && { echo \"No snapshot tagged '${target}'\"; exit 1; }
-        install -d -m 0700 ${stage_dir}
-        restic restore \$snap --target ${stage_dir}
-        # Find the .tar.gz inside, extract to a sibling dir for inspection.
-        cd ${stage_dir}
-        tarball=\$(ls *.tar.gz 2>/dev/null | head -1)
-        if [[ -n \$tarball ]]; then
-            mkdir -p extracted
-            tar -xzf \$tarball -C extracted
-            echo \"Extracted to: ${stage_dir}/extracted\"
+        if [[ -n '${snap_ref}' ]]; then
+            snap='${snap_ref}'
+        else
+            # Match stdin-filename from configs_run (/wireguard.tar.gz etc.).
+            # Do NOT use --tag openg2p alone — that tag is on every stream.
+            snap=\$(restic snapshots --json \
+                | jq -r --arg f '/${target}.tar.gz' \
+                    '[.[] | select(.paths[]? == \$f)] | .[-1].id // empty')
         fi
-        ls -la ${stage_dir}"
+        [[ -n \$snap && \$snap != null ]] || {
+            echo \"No snapshot with path /${target}.tar.gz\" >&2
+            restic snapshots --compact >&2 || true
+            exit 1
+        }
+        echo \"Using restic snapshot \$snap\"
+        install -d -m 0700 '${stage_dir}'
+        restic restore \"\$snap\" --target '${stage_dir}'
+        cd '${stage_dir}'
+        tarball=\$(find . -name '${target}.tar.gz' | head -1)
+        [[ -n \$tarball ]] || { echo 'No ${target}.tar.gz in restic restore' >&2; ls -laR; exit 1; }
+        mkdir -p extracted
+        tar -xzf \"\$tarball\" -C extracted
+        echo \"Extracted to ${stage_dir}/extracted\"
+        find extracted -maxdepth 4 -type d | head -40
+        first='${dest_paths%% *}'
+        if [[ ! -e \"extracted\${first}\" && ! -e \"extracted/\${first#/}\" ]]; then
+            echo \"ERROR: extracted tree missing expected path \${first}\" >&2
+            find extracted | head -50 >&2
+            exit 1
+        fi
+    "
 
-    log_warn "Restored to ${stage_dir} on backup host. To install on target node:"
+    log_info "Pushing ${target} onto ${dest_role} (${dest_ip}) → ${dest_paths} ..."
+    # Expand paths on the laptop — avoids nested \${p} quoting through
+    # laptop → backup → ssh → remote bash.
+    local aside_cmds="" verify_cmds="" p
+    for p in ${dest_paths}; do
+        aside_cmds+="if [ -e $(printf '%q' "$p") ]; then sudo rm -rf $(printf '%q' "${p}.precrash"); sudo mv $(printf '%q' "$p") $(printf '%q' "${p}.precrash"); echo aside: ${p}; fi; "
+        aside_cmds+="sudo mkdir -p $(printf '%q' "$(dirname "$p")"); "
+        verify_cmds+="sudo ls -ld $(printf '%q' "$p") 2>/dev/null || sudo ls -l $(printf '%q' "$p") 2>/dev/null || true; "
+    done
+    local aside_q verify_q
+    aside_q=$(printf '%q' "set -euo pipefail; ${aside_cmds}")
+    verify_q=$(printf '%q' "set -euo pipefail; ${verify_cmds}")
+
+    run_on_backup "set -euo pipefail
+        EXTRACT='${stage_dir}/extracted'
+        [[ -d \$EXTRACT ]] || { echo \"missing \$EXTRACT\" >&2; exit 1; }
+        SSH_BASE=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+        if grep -q '^Host ${ssh_host_alias}' /root/.ssh/config 2>/dev/null; then
+            SSH_CMD=(\"\${SSH_BASE[@]}\" ${ssh_host_alias})
+        else
+            SSH_CMD=(\"\${SSH_BASE[@]}\" -i /root/.ssh/openg2p-backup-orch ${dest_user}@${dest_ip})
+        fi
+
+        \"\${SSH_CMD[@]}\" ${aside_q}
+        tar -C \"\$EXTRACT\" -czf - . | \"\${SSH_CMD[@]}\" 'sudo tar -C / -xzf -'
+        \"\${SSH_CMD[@]}\" ${verify_q}
+    "
+
     case "$target" in
-        wireguard|nginx|openg2p)
-            log_warn "  scp -r contents to RP node, then restart wireguard/nginx as appropriate"
+        wireguard)
+            log_info "Restarting WireGuard on RP..."
+            ssh_run "rp" "sudo systemctl restart wg-quick@wg0 2>/dev/null || sudo systemctl restart wg-quick@wg0.service 2>/dev/null || true
+                sudo wg show 2>/dev/null | head -20 || true" || true
             ;;
-        rke2-tls|rke2-cred|rke2-token|rke2-config)
-            log_warn "  scp -r contents to compute node, used during cluster reset"
-            log_warn "  See operations/deployment/automation/backups/restoration/etcd-in-place.md"
+        nginx)
+            log_info "Reloading nginx on RP..."
+            ssh_run "rp" "sudo nginx -t && sudo systemctl reload nginx" || \
+                log_warn "nginx reload failed — fix config then: systemctl reload nginx"
+            ;;
+        openg2p)
+            log_info "Restarting dnsmasq (if present) on RP..."
+            ssh_run "rp" "sudo systemctl restart dnsmasq 2>/dev/null || true" || true
+            ;;
+        rke2-*)
+            log_warn "RKE2 FS state written on compute. Do not restart rke2 here — pair with etcd cluster-reset when needed."
             ;;
     esac
+
+    log_success "configs '${target}' restored onto ${dest_role}:${dest_paths}"
+    log_warn "Prior contents (if any) kept as *.precrash on that node."
 }
 
 # ---------------------------------------------------------------------------

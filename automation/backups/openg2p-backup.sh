@@ -162,9 +162,14 @@ Subcommands:
   restore --component X      Restore a component:
           --target <spec>      pg:      target = ignored (use --point-in-time)
           [--point-in-time T]  nfs:     target = <namespace>/<pvc>
+                                (pushes onto Bound PV path on storage)
           [--dry-run]          rancher: target = 'cluster' or '<namespace>'
+                                (--point-in-time = cutoff → restic → new NFS)
                                etcd:    target = 'latest' or snapshot file
-                               configs: target = <subsystem> e.g. wireguard
+                                (copies onto compute; cluster-reset is manual)
+                               configs: target = wireguard|nginx|openg2p
+                                (pushes onto RP) or rke2-* (pushes onto compute)
+                               objectstore: stages on backup host only
 
   status                     Show last-run and last-drill state per group.
                              Reads /var/lib/openg2p-backup/.status.json on
@@ -190,9 +195,13 @@ Examples:
   ./openg2p-backup.sh restore --config backup-config.yaml --component pg \
       --point-in-time '2026-04-26 14:00:00'
 
-  # Restore one PVC's data
+  # Restore one PVC from restic onto the Bound PV path on the (new) storage node
   ./openg2p-backup.sh restore --config backup-config.yaml --component nfs \
-      --target keycloak/keycloak-data
+      --target observability/loki-minio
+
+  # Full-DR rancher: pick pre-disaster tarball from restic, place on new NFS, Restore CR
+  ./openg2p-backup.sh restore --config backup-config.yaml --component rancher \
+      --target cluster --point-in-time '2026-07-22T00:00:00'
 
   # Status report
   ./openg2p-backup.sh status --config backup-config.yaml

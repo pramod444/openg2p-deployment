@@ -417,23 +417,26 @@ nfs_list() {
 }
 
 # ---------------------------------------------------------------------------
-# nfs_restore — restore one PVC's data into a staging dir on the backup host.
+# nfs_restore — restic → stage on backup host → push onto live NFS on storage.
 # Args: <target=namespace/pvc> <snapshot_or_unused> <dry_run>
 # ---------------------------------------------------------------------------
-# Each nfs_run writes TWO restic snapshots:
-#   1) tag=nfs           — real export data (cd mount; backup paths)
-#   2) tag=pvc-manifest  — only .pvc-mapping.yaml (taken AFTER #1)
-# `restic restore latest` therefore often selects the empty sidecar snapshot
-# and restores 0 bytes. Always pin to --tag nfs.
+# Like pg_restore (data lands on storage), this pushes restored PVC bytes to
+# the Bound PV path on the NEW storage node — not only a /tmp stage.
 #
-# After a DR rebuild the live sidecar may list NEW empty UUID dirs. Prefer a
-# pre-disaster snapshot (pass snapshot id as --point-in-time) and/or confirm
-# the nfs_path still exists in that snapshot via `restic ls`.
+# Each nfs_run writes TWO restic snapshots:
+#   1) tag=nfs           — real export data
+#   2) tag=pvc-manifest  — only .pvc-mapping.yaml (taken AFTER #1)
+# Always prefer --tag nfs for data restores.
+#
+# Destination = Bound PV CSI subDir (or native NFS basename) when present, so
+# post-DR pods (new UUID) receive the restored (old UUID) contents.
 nfs_restore() {
     local target="$1"
     local snapshot="${2:-}"
     local dry_run="$3"
     local repo_root="$(cfg backup_repo_root /var/lib/openg2p-backup)"
+    local export_root="$(cfg nfs.export_root /srv/nfs/openg2p)"
+    local storage_ip="$(cfg storage_private_ip)"
     local restic_pass_file
     restic_pass_file="$(ensure_passphrase_file restic_passphrase_file restic false)"
     local restic_pass; restic_pass="$(< "$restic_pass_file")"
@@ -448,76 +451,134 @@ nfs_restore() {
     local ns="${target%%/*}"
     local pvc="${target#*/}"
 
-    # Snapshot selector: explicit id/latest from --point-in-time, else latest nfs-tagged.
     local snap_ref="latest"
+    local tag_args="--tag nfs"
     if [[ -n "$snapshot" ]]; then
         snap_ref="$snapshot"
-    fi
-    # Always constrain to data snapshots unless the operator named a concrete id.
-    local tag_args="--tag nfs"
-    if [[ -n "$snapshot" && "$snapshot" != latest ]]; then
-        tag_args=""
+        # Hex snapshot ids are exact; keep --tag nfs for "latest" only.
+        if [[ "$snapshot" =~ ^[0-9a-fA-F]{8,}$ ]]; then
+            tag_args=""
+        fi
     fi
 
-    # Look up the NFS path from the sidecar manifest.
-    local nfs_path
-    nfs_path=$(run_on_backup "jq -r --arg ns '${ns}' --arg pvc '${pvc}' \
+    # Source path inside restic (often pre-disaster UUID).
+    local src_path
+    src_path=$(run_on_backup "jq -r --arg ns '${ns}' --arg pvc '${pvc}' \
         '.[] | select(.pvc_namespace==\$ns and .pvc_name==\$pvc) | .nfs_path' \
-        ${repo_root}/nfs/.pvc-mapping.yaml" | tail -1)
+        ${repo_root}/nfs/.pvc-mapping.yaml 2>/dev/null" | tail -1)
+    [[ "$src_path" == "null" ]] && src_path=""
 
-    if [[ -z "$nfs_path" || "$nfs_path" == "null" ]]; then
-        log_error "PVC '${target}' not found in sidecar manifest" \
-                  "Either the PVC didn't exist at last backup, or the manifest is stale" \
-                  "Inspect: cat ${repo_root}/nfs/.pvc-mapping.yaml"
-        return 1
+    # Live Bound destination on the NEW storage (post-DR UUID).
+    local dest_path=""
+    dest_path=$(ssh_run "compute" "set -euo pipefail
+        export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+        kubectl get pv -o json 2>/dev/null | jq -r --arg ns '${ns}' --arg pvc '${pvc}' '
+          .items[]
+          | select(.status.phase==\"Bound\")
+          | select(.spec.claimRef.namespace==\$ns and .spec.claimRef.name==\$pvc)
+          | (.spec.csi.volumeAttributes.subDir
+             // (.spec.nfs.path // \"\" | split(\"/\") | last)
+             // empty)
+        ' | head -1" | grep -v '^$' | tail -1 || true)
+
+    if [[ -z "$dest_path" ]]; then
+        dest_path="$src_path"
+        log_warn "No Bound PV for ${ns}/${pvc} — will push to sidecar path '${dest_path:-<unset>}'"
+    else
+        log_info "Bound PV destination on storage: ${export_root}/${dest_path}"
     fi
-    log_info "PVC '${target}' maps to NFS path: ${nfs_path}"
 
     local stage_dir="/tmp/openg2p-nfs-restore/${ns}-${pvc}-$(date -u +%Y%m%dT%H%M%SZ)"
 
     if [[ "$dry_run" == "true" ]]; then
-        log_info "[dry-run] would restore NFS path '${nfs_path}' from snapshot '${snap_ref}' ${tag_args}"
-        log_info "[dry-run] target: backup host ${stage_dir}"
+        log_info "[dry-run] would restore from restic (src='${src_path:-auto}', snap=${snap_ref}) to ${stage_dir}"
+        log_info "[dry-run] would push onto storage ${storage_ip}:${export_root}/${dest_path:-?}"
         return 0
     fi
 
-    log_info "Restoring '${nfs_path}' to ${stage_dir} on backup host (snapshot=${snap_ref}${tag_args:+ ${tag_args}})..."
+    log_info "Restoring PVC ${ns}/${pvc} from restic on backup host..."
     run_on_backup "set -euo pipefail
         export RESTIC_REPOSITORY=${repo_root}/restic/nfs
         export RESTIC_PASSWORD='$(printf '%q' "$restic_pass")'
         install -d -m 0700 '${stage_dir}'
 
-        # Confirm the path exists in the chosen data snapshot before restore.
-        if ! restic ls ${tag_args} '${snap_ref}' 2>/dev/null | grep -F '${nfs_path}' >/dev/null; then
-            echo \"ERROR: path '${nfs_path}' not found in restic snapshot '${snap_ref}' (tag filter: ${tag_args:-none}).\" >&2
-            echo \"Likely causes:\" >&2
-            echo \"  • 'latest' is a post-DR empty NFS backup — pick a pre-disaster snapshot id\" >&2
-            echo \"  • sidecar lists a NEW UUID; old data lived under a different nfs_path\" >&2
-            echo \"Fix: ./openg2p-backup.sh list --component nfs\" >&2
-            echo \"     restic snapshots --tag nfs --compact\" >&2
-            echo \"     restic ls <snapshot-id> | grep ${pvc}\" >&2
-            echo \"Then: restore --point-in-time <snapshot-id> --target ${ns}/${pvc}\" >&2
-            exit 1
+        SRC='${src_path}'
+        # If sidecar path missing from snapshot (post-DR empty UUID), find old path by PVC name.
+        if [[ -z \"\$SRC\" ]] || ! restic ls ${tag_args} '${snap_ref}' 2>/dev/null | grep -Fq \"\$SRC\"; then
+            echo \"Looking up restic path containing '${pvc}'...\"
+            SRC=\$(restic ls ${tag_args} '${snap_ref}' 2>/dev/null \
+                | grep -F '${pvc}' \
+                | sed -E 's|.*/([^/]*${pvc}[^/]*)/.*|\\1|;t;d' \
+                | head -1 || true)
+            # Prefer full directory basenames matching namespace-pvc- or *-pvc-*
+            if [[ -z \"\$SRC\" ]]; then
+                SRC=\$(restic ls ${tag_args} '${snap_ref}' 2>/dev/null \
+                    | grep -E '/[^/]*${pvc}[^/]*/?\$' \
+                    | sed -E 's|.*/||;s|/||g' \
+                    | grep -F '${pvc}' \
+                    | head -1 || true)
+            fi
         fi
-
-        # Paths in the repo are absolute under the RO mount (restic backup '.')
-        # e.g. /mnt/openg2p-nfs-ro/<nfs_path>/... — match by directory name.
-        restic restore ${tag_args} '${snap_ref}' --target '${stage_dir}' \
-            --include '*${nfs_path}*'
-
-        # Fail loud on empty restores (previous bug: pvc-manifest snapshot → 0 B 'success').
-        count=\$(find '${stage_dir}' -mindepth 1 | wc -l)
-        if [[ \"\$count\" -eq 0 ]]; then
-            echo \"ERROR: restore completed but staged dir is empty: ${stage_dir}\" >&2
-            exit 1
+        if [[ -z \"\$SRC\" ]]; then
+            # Broader: any path component with the pvc name
+            SRC=\$(restic ls ${tag_args} '${snap_ref}' 2>/dev/null \
+                | grep -F '${pvc}' | head -1 \
+                | sed -E 's|^/+||;s|/mnt/openg2p-nfs-ro(-dr)?/||;s|/.*||' || true)
         fi
+        [[ -n \"\$SRC\" ]] || {
+            echo \"ERROR: could not find '${ns}/${pvc}' data in restic snapshot '${snap_ref}'\" >&2
+            echo \"Try: restic snapshots --tag nfs --compact && restic ls <id> | grep ${pvc}\" >&2
+            exit 1
+        }
+        echo \"Restic source path component: \$SRC\"
+        printf '%s\\n' \"\$SRC\" > '${stage_dir}/.openg2p-src-path'
+
+        restic restore ${tag_args} '${snap_ref}' --target '${stage_dir}' --include \"*\$SRC*\"
+
+        count=\$(find '${stage_dir}' -mindepth 1 ! -name '.openg2p-src-path' | wc -l)
+        (( count > 0 )) || { echo \"ERROR: empty restore at ${stage_dir}\" >&2; exit 1; }
         echo \"Staged \$count paths under ${stage_dir}\"
         du -sh '${stage_dir}'/* 2>/dev/null || du -sh '${stage_dir}'
     "
 
-    log_success "Restored to ${stage_dir} on backup host."
-    log_warn "Now follow operations/deployment/automation/backups/restoration/single-pvc.md"
-    log_warn "to copy the data into the live NFS export and rebind the PVC."
+    # Locate the restored tree (inner UUID dir).
+    local src_component data_dir
+    src_component=$(run_on_backup "cat '${stage_dir}/.openg2p-src-path' 2>/dev/null" | tr -d '\r\n' | tail -1)
+    data_dir=$(run_on_backup "set -euo pipefail
+        if [[ -d '${stage_dir}/${src_component}' ]]; then echo '${stage_dir}/${src_component}'
+        else find '${stage_dir}' -type d -name '${src_component}' | head -1
+        fi" | grep '^/' | tail -1)
+
+    [[ -n "$data_dir" ]] || {
+        log_error "Could not locate restored data dir under ${stage_dir}" \
+                  "src_component=${src_component}" ""
+        return 1
+    }
+    [[ -n "$dest_path" ]] || dest_path="$src_component"
+
+    log_info "Pushing restored data to storage ${storage_ip}:${export_root}/${dest_path} ..."
+    # Quote paths on the laptop so the backup-host script has safe literals.
+    local dest_q data_q
+    dest_q=$(printf '%q' "${export_root}/${dest_path}")
+    data_q=$(printf '%q' "${data_dir}")
+    run_on_backup "set -euo pipefail
+        DEST=${dest_q}
+        SSH_STOR=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+        if grep -q '^Host openg2p-storage' /root/.ssh/config 2>/dev/null; then
+            SSH_STOR+=(openg2p-storage)
+        else
+            SSH_STOR+=(-i /root/.ssh/openg2p-backup-orch ubuntu@${storage_ip})
+        fi
+        \"\${SSH_STOR[@]}\" \"sudo mkdir -p \$DEST && \
+            if [ -n \\\"\\\$(ls -A \$DEST 2>/dev/null)\\\" ]; then \
+              sudo rm -rf \$DEST.precrash; sudo mv \$DEST \$DEST.precrash; sudo mkdir -p \$DEST; \
+            fi\"
+        tar -C ${data_q} -czf - . | \"\${SSH_STOR[@]}\" \"sudo tar -C \$DEST -xzf -\"
+        \"\${SSH_STOR[@]}\" \"sudo chown -R 1001:1001 \$DEST 2>/dev/null || true; sudo du -sh \$DEST\"
+    "
+
+    log_success "PVC ${ns}/${pvc} restored from restic and pushed to ${export_root}/${dest_path} on storage."
+    log_warn "Bounce the workload so it remounts: kubectl -n ${ns} rollout restart deploy/sts as appropriate."
 }
 
 # ---------------------------------------------------------------------------

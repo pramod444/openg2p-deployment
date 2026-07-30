@@ -193,14 +193,18 @@ ssh_run() {
     local opts
     mapfile -t opts < <(ssh_options_for "$role")
 
-    # We use a login shell (bash -lc) so PATH/env from the node's profile is
-    # available (helm, kubectl in /usr/local/bin, etc). A login shell sources
-    # the profile AND ~/.bash_logout, which on stock Ubuntu invoke curses tools
-    # (clear/clear_console/tput). Over SSH there is no TTY, so TERM is unset and
-    # those tools fail with "'unknown': I need something more specific.", which
-    # pollutes stderr and can corrupt the command's exit status. Forcing a sane
-    # TERM (dumb is universally present in terminfo) makes them no-op cleanly.
-    ssh -i "$key" "${opts[@]}" "${user}@${host}" "sudo -E env TERM=dumb bash -lc $(printf '%q' "$*")"
+    # Non-login bash (--noprofile --norc -c): login shells source ~/.bash_logout,
+    # where Ubuntu's clear_console returns non-zero without a TTY. If the remote
+    # script used 'set -e', that logout failure overrides a successful 'exit 0'
+    # and ssh_run returns 1 after printing good stdout — which then aborts
+    # callers under set -e / pipefail (e.g. rancher_restore nfs_root=...).
+    #
+    # PATH is extended explicitly since we skip profile.
+    # -n + </dev/null: never let ssh steal the caller's stdin (heredocs /
+    # command-substitution pipelines).
+    ssh -n -i "$key" "${opts[@]}" "${user}@${host}" \
+        "sudo -E env TERM=dumb PATH=\"\$PATH:/var/lib/rancher/rke2/bin:/usr/local/bin:/usr/local/sbin\" \
+         bash --noprofile --norc -c $(printf '%q' "$*")" </dev/null
 }
 
 # ssh_run_raw <role> <command...>
