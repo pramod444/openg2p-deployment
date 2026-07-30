@@ -356,17 +356,20 @@ etcd_list() {
 }
 
 # ---------------------------------------------------------------------------
-# etcd_restore — does NOT actually restore in-place. Stages the snapshot to
-# /tmp on the compute node and prints the runbook command for the operator
-# to run manually under a maintenance window. In-place etcd restore wipes
-# the cluster — too dangerous to automate from a generic CLI.
-# ---------------------------------------------------------------------------
+# etcd_restore — deliver snapshot onto the (new) compute node from config.
 # Args: <target='latest'|filename> <pit_unused> <dry_run>
+# ---------------------------------------------------------------------------
+# Copies the chosen snapshot from the backup-host etcd repo to
+# /tmp/openg2p-etcd-restore/ on compute_private_ip (post-DR = new compute).
+# Does NOT run cluster-reset — that wipes the control plane; operator runs
+# the printed commands under a maintenance window (see etcd-in-place.md).
 etcd_restore() {
     local target="${1:-latest}"
     local _pit="$2"
     local dry_run="$3"
     local repo_root="$(cfg backup_repo_root /var/lib/openg2p-backup)"
+    local compute_ip="$(cfg compute_private_ip)"
+    local compute_user="$(cfg compute_ssh_user ubuntu)"
 
     local snap
     if [[ "$target" == "latest" ]]; then
@@ -374,25 +377,49 @@ etcd_restore() {
     else
         snap="${repo_root}/etcd/${target}"
     fi
+    local snap_base
+    snap_base="$(basename "$snap")"
     log_info "Selected snapshot: ${snap}"
 
     if [[ "$dry_run" == "true" ]]; then
-        log_info "[dry-run] would stage ${snap} to compute /tmp/openg2p-etcd-restore/"
-        log_info "[dry-run] would print: rke2 server --cluster-reset --cluster-reset-restore-path=..."
+        log_info "[dry-run] would copy ${snap} → ${compute_user}@${compute_ip}:/tmp/openg2p-etcd-restore/${snap_base}"
+        log_info "[dry-run] would print cluster-reset commands (not auto-run)"
         return 0
     fi
 
-    ssh_run "compute" "install -d -m 0700 /tmp/openg2p-etcd-restore"
-    run_on_backup "scp -i /root/.ssh/openg2p-etcd-pull \
-        -o StrictHostKeyChecking=accept-new \
-        ${snap} root@$(cfg compute_private_ip):/tmp/openg2p-etcd-restore/"
+    log_info "Copying etcd snapshot onto compute ${compute_ip} ..."
+    # Prefer Host alias + orch key (rewired by install --force after DR).
+    # Fall back to etcd-pull → root (legacy), then orch key → ubuntu@IP.
+    run_on_backup "set -euo pipefail
+        SNAP='${snap}'
+        BASE='${snap_base}'
+        DEST_DIR=/tmp/openg2p-etcd-restore
+        [[ -s \$SNAP ]] || { echo \"missing snapshot: \$SNAP\" >&2; exit 1; }
 
-    log_warn "Snapshot staged on compute at /tmp/openg2p-etcd-restore/"
-    log_warn "Etcd in-place restore is a CLUSTER RESET. Read the runbook before continuing:"
-    log_warn "  operations/deployment/automation/backups/restoration/etcd-in-place.md"
-    log_warn "When ready, run on the compute node:"
-    log_warn "  systemctl stop rke2-server"
-    log_warn "  rke2 server --cluster-reset --cluster-reset-restore-path=/tmp/openg2p-etcd-restore/$(basename "$snap")"
+        _push() {
+            local ssh_cmd=( \"\$@\" )
+            \"\${ssh_cmd[@]}\" \"sudo mkdir -p \$DEST_DIR && sudo chmod 0700 \$DEST_DIR\"
+            sudo cat \"\$SNAP\" | \"\${ssh_cmd[@]}\" \"sudo tee \$DEST_DIR/\$BASE >/dev/null\"
+            \"\${ssh_cmd[@]}\" \"sudo chmod 0600 \$DEST_DIR/\$BASE; sudo ls -lh \$DEST_DIR/\$BASE\"
+        }
+
+        SSH_BASE=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+        if grep -q '^Host openg2p-compute' /root/.ssh/config 2>/dev/null; then
+            _push \"\${SSH_BASE[@]}\" openg2p-compute
+        elif [[ -f /root/.ssh/openg2p-etcd-pull ]]; then
+            _push \"\${SSH_BASE[@]}\" -i /root/.ssh/openg2p-etcd-pull root@${compute_ip}
+        else
+            _push \"\${SSH_BASE[@]}\" -i /root/.ssh/openg2p-backup-orch ${compute_user}@${compute_ip}
+        fi
+    "
+
+    log_success "Snapshot on compute: /tmp/openg2p-etcd-restore/${snap_base}"
+    log_warn "Etcd in-place restore is a CLUSTER RESET — not auto-applied. Read:"
+    log_warn "  operations/deployment/backups/restoration/etcd-in-place.md"
+    log_warn "When ready, on the compute node:"
+    log_warn "  sudo systemctl stop rke2-server"
+    log_warn "  sudo rke2 server --cluster-reset --cluster-reset-restore-path=/tmp/openg2p-etcd-restore/${snap_base}"
+    log_warn "  # when reset finishes: Ctrl+C, then: sudo systemctl start rke2-server"
 }
 
 # ---------------------------------------------------------------------------

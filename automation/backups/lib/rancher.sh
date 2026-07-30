@@ -409,22 +409,151 @@ rancher_list() {
 }
 
 # ---------------------------------------------------------------------------
-# rancher_restore — apply a Restore CR pointing at the most recent tarball.
-# Args: <target='cluster'|namespace> <pit_unused> <dry_run>
+# rancher_restore — DR-aware: pull tarball from backup-host NFS restic, place
+# on NEW storage NFS, apply Restore CR.
+# Args: <target='cluster'|namespace> <cutoff_or_empty> <dry_run>
 # ---------------------------------------------------------------------------
+# --point-in-time / second arg = cutoff timestamp (ISO), e.g. '2026-07-22T00:00:00Z'
+# or '2026-07-22'. Picks the newest rancher-backup *.tar.gz.enc in restic whose
+# filename timestamp is strictly before the cutoff, copies it to the live
+# rancher-backup NFS path, then applies a Restore CR (ignoreErrors=true).
+#
+# Without a cutoff, falls back to newest Backup CR filename already on the
+# cluster (non-DR / same-cluster restore).
 rancher_restore() {
     local target="${1:-cluster}"
-    local _pit="$2"
+    local cutoff="${2:-}"
     local dry_run="$3"
+    local repo_root="$(cfg backup_repo_root /var/lib/openg2p-backup)"
+    local restic_pass_file
+    restic_pass_file="$(ensure_passphrase_file restic_passphrase_file restic false)"
+    local restic_pass; restic_pass="$(< "$restic_pass_file")"
+    local storage_ip="$(cfg storage_private_ip)"
 
-    log_info "Discovering most recent Backup tarball..."
-    local latest
-    latest=$(ssh_run "compute" "kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml \
-        get backup.resources.cattle.io -A -o jsonpath='{range .items[*]}{.status.filename}{\"\\n\"}{end}' \
-        | sort | tail -1") || { log_error "Could not list backups" "" ""; return 1; }
-    latest=$(echo "$latest" | tail -1)
-    [[ -z "$latest" ]] && { log_error "No backup tarballs found" "" ""; return 1; }
-    log_info "Latest tarball: ${latest}"
+    local nfs_root
+    # Tolerate ssh/logout noise: resolve may print the path then return non-zero
+    # under pipefail if clear_console runs with set -e on the remote login shell.
+    nfs_root="$(_rancher_resolve_nfs_root 2>/dev/null | grep -E '^/' | tail -1 || true)"
+    [[ -n "$nfs_root" ]] || {
+        log_error "Could not resolve rancher-backup NFS path" \
+                  "Is the static PV openg2p-rancher-backup-store present?" \
+                  "Try: kubectl get pv openg2p-rancher-backup-store -o yaml"
+        return 1
+    }
+    log_info "rancher-backup NFS path on storage: ${nfs_root}"
+
+    local latest=""
+    if [[ -n "$cutoff" ]]; then
+        log_info "DR mode: selecting rancher tarball from NFS restic before cutoff '${cutoff}'..."
+        local cutoff_norm
+        cutoff_norm=$(CUTOFF_RAW="$cutoff" python3 - <<'PY'
+from datetime import datetime, timezone
+import os, re, sys
+raw = os.environ["CUTOFF_RAW"].strip().replace(" ", "T")
+if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+    raw += "T00:00:00Z"
+raw = raw.replace("Z", "+00:00")
+try:
+    dt = datetime.fromisoformat(raw)
+except Exception:
+    digits = re.sub(r"\D", "", os.environ["CUTOFF_RAW"])
+    print(digits[:14] if digits else "")
+    sys.exit(0)
+if dt.tzinfo is None:
+    dt = dt.replace(tzinfo=timezone.utc)
+print(dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ"))
+PY
+)
+        [[ -n "$cutoff_norm" ]] || {
+            log_error "Could not parse cutoff '${cutoff}'" \
+                      "Use e.g. 2026-07-22 or 2026-07-22T00:00:00Z" ""
+            return 1
+        }
+        log_info "Normalized cutoff: ${cutoff_norm}"
+
+        latest=$(run_on_backup "set -euo pipefail
+            export RESTIC_REPOSITORY=${repo_root}/restic/nfs
+            export RESTIC_PASSWORD='$(printf '%q' "$restic_pass")'
+            CUTOFF='${cutoff_norm}'
+            mapfile -t snaps < <(restic snapshots --tag nfs --json 2>/dev/null \
+                | jq -r '.[].short_id' || true)
+            (( \${#snaps[@]} > 0 )) || { echo 'No --tag nfs snapshots in restic' >&2; exit 1; }
+            best=''
+            best_ts=''
+            best_sid=''
+            for sid in \"\${snaps[@]}\"; do
+                while IFS= read -r p; do
+                    base=\$(basename \"\$p\")
+                    [[ \$base == *.tar.gz.enc || \$base == *.tar.gz ]] || continue
+                    ts=\$(echo \"\$base\" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z' | tail -1 || true)
+                    [[ -n \$ts ]] || continue
+                    if [[ \$ts < \$CUTOFF ]]; then
+                        if [[ -z \$best_ts || \$ts > \$best_ts ]]; then
+                            best=\$base
+                            best_ts=\$ts
+                            best_sid=\$sid
+                        fi
+                    fi
+                done < <(restic ls \"\$sid\" 2>/dev/null | grep -E 'rancher-backup/[^/]+\\.tar\\.gz(\\.enc)?\$' || true)
+            done
+            [[ -n \$best ]] || { echo \"No rancher tarball in restic before cutoff \$CUTOFF\" >&2; exit 1; }
+            echo \"\$best|\$best_sid|\$best_ts\"
+        " | grep -E '\|' | tail -1) || {
+            log_error "Failed to find a pre-cutoff rancher tarball in restic" \
+                      "Check: restic snapshots --tag nfs; restic ls <id> | grep rancher-backup" \
+                      "Cutoff was: ${cutoff_norm}"
+            return 1
+        }
+
+        local tarball_base snap_id tarball_ts rest
+        tarball_base="${latest%%|*}"
+        rest="${latest#*|}"
+        snap_id="${rest%%|*}"
+        tarball_ts="${rest#*|}"
+        log_info "Selected ${tarball_base} (ts=${tarball_ts}) from restic snapshot ${snap_id}"
+
+        if [[ "$dry_run" == "true" ]]; then
+            log_info "[dry-run] would restic-restore ${tarball_base} → ${nfs_root}/ on storage ${storage_ip}"
+            log_info "[dry-run] would apply Restore CR backupFilename=${tarball_base} ignoreErrors=true"
+            return 0
+        fi
+
+        log_info "Extracting tarball from restic on backup host and copying to new storage NFS..."
+        local nfs_root_q dest_file_q tarball_q
+        nfs_root_q=$(printf '%q' "$nfs_root")
+        dest_file_q=$(printf '%q' "${nfs_root}/${tarball_base}")
+        tarball_q=$(printf '%q' "$tarball_base")
+        run_on_backup "set -euo pipefail
+            export RESTIC_REPOSITORY=${repo_root}/restic/nfs
+            export RESTIC_PASSWORD='$(printf '%q' "$restic_pass")'
+            STAGE=\$(mktemp -d /tmp/openg2p-rancher-restore.XXXXXX)
+            restic restore '${snap_id}' --target \"\$STAGE\" --include '*${tarball_base}*'
+            FILE=\$(find \"\$STAGE\" -name ${tarball_q} -type f | head -1)
+            [[ -n \$FILE && -s \$FILE ]] || { echo 'restic restore did not yield tarball' >&2; exit 1; }
+            SSH_STOR=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+            if grep -q '^Host openg2p-storage' /root/.ssh/config 2>/dev/null; then
+                SSH_STOR+=(openg2p-storage)
+            else
+                SSH_STOR+=(-i /root/.ssh/openg2p-backup-orch ubuntu@${storage_ip})
+            fi
+            DEST_DIR=${nfs_root_q}
+            DEST_FILE=${dest_file_q}
+            \"\${SSH_STOR[@]}\" \"sudo mkdir -p \$DEST_DIR\"
+            sudo cat \"\$FILE\" | \"\${SSH_STOR[@]}\" \"sudo tee \$DEST_FILE >/dev/null\"
+            \"\${SSH_STOR[@]}\" \"sudo chmod 0644 \$DEST_FILE; sudo ls -lh \$DEST_FILE\"
+            rm -rf \"\$STAGE\"
+        "
+        latest="$tarball_base"
+    else
+        log_info "No cutoff supplied — using newest Backup CR filename on the cluster..."
+        latest=$(ssh_run "compute" "kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml \
+            get backup.resources.cattle.io -A -o jsonpath='{range .items[*]}{.status.filename}{\"\\n\"}{end}' \
+            | sort | tail -1") || { log_error "Could not list backups" "" ""; return 1; }
+        latest=$(echo "$latest" | tail -1)
+        [[ -z "$latest" ]] && { log_error "No backup tarballs found" "" ""; return 1; }
+        log_info "Latest tarball: ${latest}"
+        log_warn "For full DR after storage rebuild, re-run with --point-in-time <cutoff> so the tarball is taken from backup-host restic onto the new NFS."
+    fi
 
     if [[ "$dry_run" == "true" ]]; then
         log_info "[dry-run] would create Restore CR consuming ${latest}"
@@ -437,14 +566,16 @@ rancher_restore() {
 apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
-  name: openg2p-restore-$(date -u +%Y%m%d%H%M%S)
+  name: openg2p-restore-\$(date -u +%Y%m%d%H%M%S)
 spec:
   backupFilename: ${latest}
   encryptionConfigSecretName: ${RANCHER_BACKUP_ENC_SECRET}
   prune: false
+  ignoreErrors: true
 EOC"
-    log_warn "Restore CR created. Watch progress:"
+    log_warn "Restore CR created (ignoreErrors=true). Watch progress:"
     log_warn "  kubectl get restore.resources.cattle.io -A -w"
+    log_warn "After Done: patch native NFS PV server IPs if needed; CSI volumes — use nfs restore to push PVC data under Bound subDir."
 }
 
 # ---------------------------------------------------------------------------
