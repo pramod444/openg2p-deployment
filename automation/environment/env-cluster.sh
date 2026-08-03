@@ -68,21 +68,31 @@ Usage:
 
 Options:
   --config <file>    Path to environment config file (required)
-  --step <N>         Run only a specific step (1-5)
+  --step <spec>      Run only the given step(s) — see below. Omit to run all.
   --force            Re-run all steps (helm will uninstall and reinstall)
   --help             Show this help message
 
-Steps:
+Steps (these are THIS SCRIPT's internal steps — not the numbered steps
+in the setup guide, where steps 1-3 are the manual Nginx-node work):
   1  Create K8s namespace
   2  Create Rancher Project
   3  Create Istio Gateway
   4  Install openg2p-commons-base
   5  Install openg2p-commons-services
 
+--step accepts a single step, a range, or a comma list:
+  --step 3        run step 3 only
+  --step 1-3      run steps 1, 2, 3
+  --step 1,4      run steps 1 and 4
+
+Steps 2-5 require the namespace created in step 1. Running a later step
+on its own before step 1 fails fast with a clear message.
+
 Prerequisites:
   - kubectl access to the cluster (KUBECONFIG set or ~/.kube/config)
   - helm installed
-  - Nginx node configured (DNS, TLS cert, server block — see README)
+  - Nginx node configured (DNS, TLS cert, server block)
+    https://docs.openg2p.org/operations/deployment/environment-setup-multi-node
 EOF
 }
 
@@ -213,10 +223,18 @@ helm_install_chart() {
 
     # Use `upgrade --install` so re-runs pick up a republished chart version
     # (e.g. a rebuilt `2.0.0-develop`) without the user having to --force.
+    #
+    # NOTE: deliberately NO `--wait`.
+    # `helm --wait` watches the API server, and if that watch connection dies
+    # silently it blocks for the full --timeout even though every resource is
+    # already Ready — leaving the release wedged in `pending-install`, which
+    # then blocks every later helm operation on it. We instead let helm return
+    # as soon as the manifest is applied and do our own readiness check in
+    # wait_for_all_ready(), which re-polls kubectl each round and therefore
+    # cannot go stale. `--timeout` is still honoured for hook execution.
     local -a helm_args=(
         upgrade --install "$release_name" "$chart_ref"
         -n "$env_name"
-        --wait
         --timeout 20m
     )
 
@@ -227,7 +245,7 @@ helm_install_chart() {
     helm_args+=("$@")
 
     log_info "Running: helm upgrade --install ${release_name} ..."
-    log_info "(this may take 15-20 minutes)"
+    log_info "(readiness is polled separately after the manifest is applied)"
     echo ""
 
     if ! helm "${helm_args[@]}"; then
@@ -246,6 +264,16 @@ helm_install_chart() {
     log_success "${display_name} installed successfully."
 }
 
+# Polls until every Deployment, StatefulSet and Job in the namespace is ready.
+#
+# Because we no longer pass `helm --wait` (see helm_install_chart), this is the
+# authoritative readiness gate. It must cover Jobs as well as workloads: the
+# commons charts ship keycloak-init / client-secrets-sync / postgres-init as
+# ORDINARY manifest resources (not hooks), so helm returns before they finish,
+# and downstream charts depend on the schemas and secrets they create.
+#
+# Each round re-queries kubectl, so a dropped connection self-heals on the next
+# poll instead of wedging the whole install the way a stale watch does.
 wait_for_all_ready() {
     local env_name="$1"
     local description="$2"
@@ -256,16 +284,45 @@ wait_for_all_ready() {
     log_info "Waiting for ${description} to be fully ready..."
 
     while [[ $elapsed -lt $timeout ]]; do
-        local not_ready
-        not_ready=$(kubectl get deployments,statefulsets -n "$env_name" -o json 2>/dev/null | \
-            jq -r '.items[] | select((.status.readyReplicas // 0) != (.status.replicas // 1)) | "\(.kind)/\(.metadata.name)"' 2>/dev/null || true)
+        # Fail fast on a Job that has exhausted its backoffLimit — waiting out
+        # the full timeout for something that can never succeed helps nobody.
+        local failed_jobs
+        failed_jobs=$(kubectl get jobs -n "$env_name" -o json 2>/dev/null | \
+            jq -r '.items[]
+                   | select(((.status.conditions // [])
+                             | map(select(.type == "Failed" and .status == "True"))
+                             | length) > 0)
+                   | .metadata.name' 2>/dev/null || true)
 
-        if [[ -z "$not_ready" ]]; then
+        if [[ -n "$failed_jobs" ]]; then
+            echo ""
+            local first_job
+            first_job=$(echo "$failed_jobs" | head -1)
+            log_error "Job failed in '${env_name}': $(echo "$failed_jobs" | tr '\n' ' ')" \
+                      "An init/sync Job exhausted its backoffLimit and will not succeed" \
+                      "Inspect the Job's logs to see why it failed" \
+                      "kubectl logs -n ${env_name} job/${first_job}"
+            return 1
+        fi
+
+        local pending
+        pending=$(kubectl get deployments,statefulsets,jobs -n "$env_name" -o json 2>/dev/null | \
+            jq -r '.items[]
+                   | if .kind == "Job" then
+                       select((.status.succeeded // 0) < (.spec.completions // 1))
+                     else
+                       select((.status.readyReplicas // 0) != (.status.replicas // 1))
+                     end
+                   | "\(.kind)/\(.metadata.name)"' 2>/dev/null || true)
+
+        if [[ -z "$pending" ]]; then
+            echo ""
             log_success "All ${description} resources in '${env_name}' are ready."
             return 0
         fi
 
-        echo -ne "\r  Waiting for: $(echo "$not_ready" | tr '\n' ', ')... ${elapsed}s/${timeout}s"
+        # Trailing spaces clear any longer text left over from a previous line.
+        echo -ne "\r  Waiting for: $(echo "$pending" | tr '\n' ' ')... ${elapsed}s/${timeout}s        "
         sleep "$interval"
         elapsed=$((elapsed + interval))
     done
@@ -273,8 +330,27 @@ wait_for_all_ready() {
     echo ""
     log_error "${description} not ready after ${timeout}s" \
               "Some resources did not become ready in time" \
-              "Check pod status" \
-              "kubectl get pods -n ${env_name} --field-selector=status.phase!=Running"
+              "Check pod and job status" \
+              "kubectl get pods,jobs -n ${env_name}"
+    return 1
+}
+
+# ---------------------------------------------------------------------------
+# Guard: steps 2-5 all operate inside the environment namespace
+# ---------------------------------------------------------------------------
+# Step 1 creates the namespace. If someone runs a later step on its own with
+# --step, fail with an actionable message instead of a raw kubectl "NotFound".
+require_namespace() {
+    local env_name=$(cfg "environment")
+
+    if kubectl get namespace "$env_name" &>/dev/null; then
+        return 0
+    fi
+
+    log_error "Namespace '${env_name}' does not exist" \
+              "Step 1 creates the namespace, and it has not run yet" \
+              "Run step 1 first, or omit --step to run the full sequence" \
+              "$0 --config ${CONFIG_FILE##*/} --step 1"
     return 1
 }
 
@@ -307,6 +383,8 @@ step2_rancher_project() {
     local env_name=$(cfg "environment")
 
     log_step "2" "Creating Rancher Project for '${env_name}'"
+
+    require_namespace || return 1
 
     # Check if the Rancher Project CRD exists on this cluster.
     # It will only exist if Rancher management server runs here (same cluster).
@@ -378,6 +456,8 @@ step3_istio_gateway() {
 
     log_step "3" "Creating Istio Gateway for '${env_name}'"
 
+    require_namespace || return 1
+
     if kubectl -n "$env_name" get gateway internal &>/dev/null; then
         log_info "Istio Gateway 'internal' already exists in namespace '${env_name}'."
     else
@@ -426,6 +506,8 @@ step4_commons_base() {
     fi
 
     log_step "4" "Installing openg2p-commons-base in '${env_name}'"
+
+    require_namespace || return 1
 
     local base_domain=$(cfg "base_domain")
     local admin_email=$(cfg "admin_email" "")
@@ -535,6 +617,8 @@ step5_commons_services() {
     fi
 
     log_step "5" "Installing openg2p-commons-services in '${env_name}'"
+
+    require_namespace || return 1
 
     local base_domain=$(cfg "base_domain")
     local chart_name=$(cfg "commons_services.chart_name" "openg2p-commons-services")
@@ -660,6 +744,52 @@ show_summary() {
 }
 
 # ---------------------------------------------------------------------------
+# Step selection
+# ---------------------------------------------------------------------------
+# Expands a --step spec into one step number per line.
+# Accepts: "3" (single), "1-3" (range), "1,3,5" (list), or a mix ("1-2,4").
+# Returns non-zero if the spec is malformed or out of range.
+expand_step_spec() {
+    local spec="$1"
+    local -a out=()
+    local -a parts=()
+    local part
+
+    IFS=',' read -ra parts <<< "$spec"
+    for part in "${parts[@]}"; do
+        part="${part// /}"
+        [[ -z "$part" ]] && continue
+
+        if [[ "$part" =~ ^([1-5])-([1-5])$ ]]; then
+            local lo="${BASH_REMATCH[1]}"
+            local hi="${BASH_REMATCH[2]}"
+            (( lo > hi )) && return 1
+            local n
+            for (( n = lo; n <= hi; n++ )); do
+                out+=("$n")
+            done
+        elif [[ "$part" =~ ^[1-5]$ ]]; then
+            out+=("$part")
+        else
+            return 1
+        fi
+    done
+
+    (( ${#out[@]} == 0 )) && return 1
+    printf '%s\n' "${out[@]}"
+}
+
+run_step_by_number() {
+    case "$1" in
+        1) step1_namespace ;;
+        2) step2_rancher_project ;;
+        3) step3_istio_gateway ;;
+        4) step4_commons_base ;;
+        5) step5_commons_services ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -704,30 +834,29 @@ main() {
     log_info "Config file:  ${CONFIG_FILE}"
     echo ""
 
-    case "${RUN_STEP:-all}" in
-        1)  step1_namespace ;;
-        2)  step2_rancher_project ;;
-        3)  step3_istio_gateway ;;
-        4)  step4_commons_base ;;
-        5)  step5_commons_services ;;
-        all)
-            step1_namespace
-            step2_rancher_project
-            step3_istio_gateway
-            step4_commons_base
-            step5_commons_services
-            show_summary
-            ;;
-        *)
-            log_error "Invalid step: ${RUN_STEP}" \
-                      "Valid steps are: 1-5, or omit for all" \
-                      "Use --step 1 through --step 5"
-            exit 1
-            ;;
-    esac
-
     if [[ "${RUN_STEP:-all}" == "all" ]]; then
+        step1_namespace
+        step2_rancher_project
+        step3_istio_gateway
+        step4_commons_base
+        step5_commons_services
+        show_summary
         log_success "Environment '${env_name}' setup completed successfully!"
+    else
+        local step_list
+        if ! step_list=$(expand_step_spec "$RUN_STEP"); then
+            log_error "Invalid --step value: '${RUN_STEP}'" \
+                      "Expected a step number (3), a range (1-3), or a list (1,3,5)" \
+                      "Steps: 1 namespace · 2 Rancher project · 3 Istio gateway · 4 commons-base · 5 commons-services" \
+                      "$0 --config ${CONFIG_FILE##*/} --step 1-3"
+            exit 1
+        fi
+
+        local n
+        while IFS= read -r n; do
+            [[ -z "$n" ]] && continue
+            run_step_by_number "$n"
+        done <<< "$step_list"
     fi
 }
 
