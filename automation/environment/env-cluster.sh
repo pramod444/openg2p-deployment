@@ -99,6 +99,21 @@ EOF
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+# Helm repo alias for the commons charts.
+#
+# Deliberately NOT plain `openg2p`: helm repo aliases live in the user's global
+# helm config, and the infra automation (single-node, production) points
+# `openg2p` at the GitHub chart repo. Re-pointing that alias here would silently
+# break those installs, so the commons charts get their own alias.
+commons_repo_alias() {
+    cfg "commons_base.chart_repo_alias" "openg2p-gitlab"
+}
+
+commons_repo_url() {
+    cfg "commons_base.chart_repo" \
+        "https://gitlab.com/api/v4/projects/84460547/packages/helm/stable"
+}
+
 get_chart_ref() {
     local path_key="$1"
     local remote_name="$2"
@@ -111,7 +126,7 @@ get_chart_ref() {
         fi
         log_warn "Chart path '${chart_path}' not found. Falling back to remote chart."
     fi
-    echo "openg2p/${remote_name}"
+    echo "$(commons_repo_alias)/${remote_name}"
 }
 
 ensure_helm_repo() {
@@ -121,36 +136,43 @@ ensure_helm_repo() {
         return 0
     fi
 
-    local repo_url=$(cfg "commons_base.chart_repo" "https://openg2p.github.io/openg2p-helm/rancher")
-    log_info "Ensuring Helm repo 'openg2p' is configured..."
+    local repo_alias repo_url
+    repo_alias=$(commons_repo_alias)
+    repo_url=$(commons_repo_url)
 
-    if helm repo list 2>/dev/null | grep -q "^openg2p"; then
-        log_info "Refreshing Helm repo 'openg2p' index..."
-        if ! helm repo update openg2p; then
-            log_error "helm repo update openg2p failed" \
-                      "Could not refresh the openg2p Helm repo index" \
-                      "Check network connectivity and repo URL" \
-                      "helm repo update openg2p"
-            return 1
-        fi
-        log_success "Helm repo 'openg2p' index refreshed."
-    else
-        if ! helm repo add openg2p "$repo_url"; then
-            log_error "Failed to add Helm repo" \
-                      "Could not add repo at ${repo_url}" \
-                      "Check internet connectivity" \
-                      "helm repo add openg2p ${repo_url}"
-            return 1
-        fi
-        if ! helm repo update openg2p; then
-            log_error "helm repo update openg2p failed after adding repo" \
-                      "Could not fetch the openg2p index" \
-                      "Check network connectivity to ${repo_url}" \
-                      "helm repo update openg2p"
-            return 1
-        fi
-        log_success "Helm repo 'openg2p' added and index fetched."
+    log_info "Ensuring Helm repo '${repo_alias}' points at ${repo_url}..."
+
+    # If the alias already exists but points somewhere else, say so loudly —
+    # silently installing from the wrong repo is the failure mode we're
+    # guarding against here.
+    local existing_url
+    existing_url=$(helm repo list -o json 2>/dev/null \
+        | jq -r --arg a "$repo_alias" '.[] | select(.name == $a) | .url' 2>/dev/null || true)
+
+    if [[ -n "$existing_url" && "$existing_url" != "$repo_url" ]]; then
+        log_warn "Repo '${repo_alias}' currently points at ${existing_url}"
+        log_warn "Re-pointing it to ${repo_url} (from chart_repo in the config)."
     fi
+
+    # --force-update is both idempotent and reconciles a stale URL, so the
+    # chart_repo in the config is always what actually gets used.
+    if ! helm repo add "$repo_alias" "$repo_url" --force-update; then
+        log_error "Failed to configure Helm repo '${repo_alias}'" \
+                  "Could not add/update the repo at ${repo_url}" \
+                  "Check connectivity and the chart_repo value in your config" \
+                  "helm repo add ${repo_alias} ${repo_url} --force-update"
+        return 1
+    fi
+
+    if ! helm repo update "$repo_alias"; then
+        log_error "helm repo update ${repo_alias} failed" \
+                  "Could not fetch the chart index" \
+                  "Check network connectivity to ${repo_url}" \
+                  "helm repo update ${repo_alias}"
+        return 1
+    fi
+
+    log_success "Helm repo '${repo_alias}' → ${repo_url} (index refreshed)."
 }
 
 # Builds/updates chart dependencies for local chart paths.
@@ -158,7 +180,7 @@ ensure_helm_repo() {
 ensure_chart_deps() {
     local chart_ref="$1"
     # Local path if it starts with / (absolute) — get_chart_ref returns either
-    # an absolute path or "openg2p/<name>".
+    # an absolute path or "<repo-alias>/<name>".
     if [[ "$chart_ref" == /* ]]; then
         log_info "Updating chart dependencies for local chart: ${chart_ref}"
         if ! helm dependency update "$chart_ref"; then
@@ -238,7 +260,11 @@ helm_install_chart() {
         --timeout 20m
     )
 
-    if [[ -n "$chart_version" && "$chart_ref" == openg2p/* ]]; then
+    # Pin the version for any remote chart. Matched by "not a local path"
+    # rather than a repo-name glob, so it keeps working whatever the repo
+    # alias is called — a name-based check silently drops --version (and
+    # installs whatever is newest) the moment the alias changes.
+    if [[ -n "$chart_version" && "$chart_ref" != /* ]]; then
         helm_args+=(--version "$chart_version")
     fi
 
