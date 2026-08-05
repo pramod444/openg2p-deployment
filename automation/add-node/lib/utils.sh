@@ -144,6 +144,67 @@ cfg() {
 }
 
 # ---------------------------------------------------------------------------
+# Parse RKE2 server_url (https://host:port) into host + port.
+# Usage: parse_rke2_server_url "$url" host_var port_var
+# Sets the named variables in the caller via nameref; returns 1 on failure.
+# ---------------------------------------------------------------------------
+parse_rke2_server_url() {
+    local url="$1"
+    local -n _out_host="$2"
+    local -n _out_port="$3"
+
+    # Trim whitespace / stray quotes
+    url="${url#"${url%%[![:space:]]*}"}"
+    url="${url%"${url##*[![:space:]]}"}"
+    url="${url%\"}"; url="${url#\"}"
+    url="${url%\'}"; url="${url#\'}"
+
+    case "$url" in
+        https://*) url="${url#https://}" ;;
+        http://*)  url="${url#http://}"  ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    # Drop accidental extra leading slashes (https:////ip → //ip)
+    while [[ "$url" == /* ]]; do
+        url="${url#/}"
+    done
+
+    if [[ "$url" != *:* ]]; then
+        _out_host="$url"
+        _out_port="9345"
+    else
+        _out_host="${url%:*}"
+        _out_port="${url##*:}"
+    fi
+
+    # Host must be a bare hostname/IPv4 — no slashes left
+    if [[ -z "$_out_host" || "$_out_host" == */* ]]; then
+        return 1
+    fi
+    if ! [[ "$_out_port" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# TCP reachability check. Prefers nc(1); falls back to bash /dev/tcp.
+check_tcp_port() {
+    local host="$1"
+    local port="$2"
+    local secs="${3:-5}"
+
+    if command -v nc >/dev/null 2>&1; then
+        # OpenBSD/netcat-traditional both accept -z; -w is connect timeout.
+        timeout "$secs" nc -z -w "$secs" "$host" "$port" >/dev/null 2>&1
+        return $?
+    fi
+    timeout "$secs" bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
 # Prerequisite / environment checks
 # ---------------------------------------------------------------------------
 check_root() {

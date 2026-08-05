@@ -35,13 +35,13 @@
 #     Public IP only needed if the new node is outside that network.
 #
 # The port is always 9345 (RKE2 supervisor), NOT 6443 (which is the K8s API).
-server_url: "https://172.29.2.4:9345"
+server_url: "https://172.29.0.198:9345"
 
 # Cluster-wide RKE2 join token.
 # On an existing control-plane node, get it with:
 #   sudo cat /var/lib/rancher/rke2/server/node-token
 # (Full value, including the "K10..." prefix.)
-rke2_token: "K10dca2514a52835cbb9b6bcfc5bc3dc2064bad70d0e52011da65f50814d014a900"
+rke2_token: "openg2p-30e72b16f72e548cb3fb8e0a22141c2d"
 
 # RKE2 version — MUST match the version running on the existing cluster.
 # Check on primary: rke2 --version
@@ -51,11 +51,11 @@ rke2_version: "v1.33.6+rke2r1"
 # This new node
 # ---------------------------------------------------------------------------
 # Private IP of this node (used by RKE2, firewall rules, kubelet).
-node_ip: "172.29.1.98"
+node_ip: "172.29.11.168"
 
 # Unique name for this node in the cluster (visible in 'kubectl get nodes').
 # Must not collide with an existing node.
-node_name: "node7"
+node_name: "node2"
 
 # Role: "server" (control-plane) or "worker" (agent / data-plane only).
 # Leave empty to be prompted interactively, or override with --role on CLI.
@@ -88,4 +88,4 @@ vpc_subnet: "172.29.0.0/16"
 #
 # Default if the primary was installed without customising this: 10.15.0.0/16
 # (which is what the example keeps). Most users can leave this as-is.
-wireguard_subnet: "10.11.0.1/32"
+wireguard_subnet: "10.15.0.0/16"
