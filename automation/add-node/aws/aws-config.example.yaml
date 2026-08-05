@@ -1,0 +1,99 @@
+# =============================================================================
+# OpenG2P AWS Add-Node Configuration
+# =============================================================================
+# Copy to aws-config.yaml and edit:
+#   cp aws-config.example.yaml aws-config.yaml
+#
+# Then run from this directory:
+#   ./openg2p-aws-add-node.sh --config aws-config.yaml
+#
+# Provisions a single Ubuntu 24.04 LTS EC2 instance into an EXISTING VPC /
+# security group. Interactive prompts fill any blank values below and write
+# the selection back to this file so re-runs are stable.
+#
+# After the instance is up, join it to the cluster with:
+#   cd .. && sudo ./openg2p-add-node.sh --config add-node-config.yaml
+#
+# Tear down ONLY this instance (never SGs / VPC / production nodes):
+#   ./openg2p-aws-add-node-destroy.sh --config aws-config.yaml
+#
+# Re-run after a failed launch (replace the partial instance):
+#   ./openg2p-aws-add-node.sh --config aws-config.yaml --force
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Project / region
+# ---------------------------------------------------------------------------
+# Used as the Project tag on the new instance (and as a name prefix default).
+# Keep it short, lowercase, hyphenated. Prefer matching the value used by
+# production/aws so resources stay grouped together.
+project: "openg2p-prod"
+
+# AWS region. Can also be set via AWS_REGION env var; this takes precedence.
+region: "ap-south-1"
+
+# ---------------------------------------------------------------------------
+# Instance sizing
+# ---------------------------------------------------------------------------
+# Leave blank to be prompted interactively (TTY). Prompt defaults:
+#   instance_type → t3a.2xlarge   (8 vCPU, 32 GB — common worker size)
+#   disk_gb       → 128           (root EBS gp3 size in GiB)
+# Fill these in to skip the prompts on subsequent runs.
+instance_type: ""
+disk_gb: ""
+disk_iops: 3000
+disk_throughput: 125
+
+# ---------------------------------------------------------------------------
+# Placement — VPC / AZ / subnet / security group
+# ---------------------------------------------------------------------------
+# All blank? The script queries AWS and presents numbered menus (TTY only).
+# Selections are written back here so the next run can skip the prompt.
+#
+# Flow: pick VPC → pick AZ → pick subnet in that AZ → pick SG in that VPC.
+vpc_id:    ""
+az:        ""
+subnet_id: ""
+sg_id:     ""
+
+# ---------------------------------------------------------------------------
+# SSH key pair
+# ---------------------------------------------------------------------------
+# Modes:
+#   "existing"   — use a named key pair already in AWS (typical for add-node)
+#   "create"     — create a new key pair and save the .pem locally
+#   ""  (blank)  — interactive: lists existing keys + offers "create new"
+key_mode: ""
+
+# Name of the key pair in AWS. Leave blank to pick interactively.
+key_name: ""
+
+# Local path for the .pem file.
+# Default: ./keys/<key_name>.pem
+# A leading ~ is expanded. Relative paths resolve against this aws/ directory.
+key_path: ""
+
+# ---------------------------------------------------------------------------
+# AMI
+# ---------------------------------------------------------------------------
+# Leave blank to auto-resolve the latest Ubuntu Server 24.04 LTS amd64 AMI
+# in the configured region (Canonical owner ID 099720109477).
+ubuntu_ami: ""
+
+# ---------------------------------------------------------------------------
+# Instance Name tag
+# ---------------------------------------------------------------------------
+# Appears as the Name column in the AWS Console / `aws ec2 describe-instances`.
+# Leave blank to be prompted. Suggested default: <project>-k8s-node-N
+instance_name: ""
+
+# Role tag applied to the instance (informational; used by destroy filters).
+# Typical values: k8s-node, worker, control-plane.
+role: "k8s-node"
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+# Path to the provision-output.yaml this script writes after a successful launch.
+# Contains instance ID, public/private IPs, SSH details, etc.
+provision_output_file: "./provision-output.yaml"

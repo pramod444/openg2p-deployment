@@ -44,7 +44,9 @@ step1_validate() {
 
     # ── server_url format ────────────────────────────────────────────────
     local server_url; server_url=$(cfg "server_url")
-    if [[ -n "$server_url" ]] && ! [[ "$server_url" =~ ^https://[^:]+:[0-9]+$ ]]; then
+    # Reject accidental extra slashes (https:////ip:port) which previously
+    # passed a loose regex and produced host="//ip" for /dev/tcp.
+    if [[ -n "$server_url" ]] && ! [[ "$server_url" =~ ^https://[A-Za-z0-9._-]+(:[0-9]+)?$ ]]; then
         log_warn "server_url must look like 'https://<ip-or-host>:9345' (got: '${server_url}')"
         ((errors++))
     fi
@@ -57,15 +59,20 @@ step1_validate() {
     fi
 
     # ── Connectivity check to existing cluster's RKE2 supervisor port ────
-    local host_port="${server_url#https://}"
-    local host="${host_port%:*}"
-    local port="${host_port##*:}"
+    local host port
+    if ! parse_rke2_server_url "$server_url" host port; then
+        log_error "Could not parse server_url: '${server_url}'" \
+                  "Expected https://<ip-or-host>:9345" \
+                  "Fix server_url in add-node-config.yaml"
+        exit 1
+    fi
+    log_info "server_url: ${server_url}"
     log_info "Checking TCP connectivity to ${host}:${port} (RKE2 supervisor)..."
-    if ! timeout 5 bash -c "</dev/tcp/${host}/${port}" 2>/dev/null; then
+    if ! check_tcp_port "$host" "$port" 5; then
         log_error "Cannot reach ${host}:${port}" \
-                  "The RKE2 supervisor port on the primary node is not reachable" \
-                  "Check firewall rules on the primary (port 9345 must allow this node's IP) and server_url in config" \
-                  "nc -zv ${host} ${port}"
+                  "The RKE2 supervisor port on the primary node is not reachable from this node" \
+                  "From THIS node run: nc -zv ${host} ${port} ; ping -c2 ${host}" \
+                  "On the primary: systemctl is-active rke2-server ; sudo ufw status ; check SG allows TCP/9345 from ${node_ip}/32 or the VPC CIDR"
         exit 1
     fi
     log_success "Supervisor port reachable: ${host}:${port}."
@@ -363,7 +370,8 @@ print_post_install_guide() {
     local node_name;      node_name=$(cfg "node_name")
     local node_ip;        node_ip=$(cfg "node_ip")
     local server_url;     server_url=$(cfg "server_url")
-    local primary_host="${server_url#https://}"; primary_host="${primary_host%:*}"
+    local primary_host primary_port
+    parse_rke2_server_url "$server_url" primary_host primary_port || primary_host="${server_url}"
     local guide_file="/root/openg2p-add-node-postinstall.txt"
 
     local rke2_svc="rke2-agent"
