@@ -2,7 +2,8 @@
 # =============================================================================
 # OpenG2P AWS Add-Node Teardown — runs on your laptop
 # =============================================================================
-# Deletes ONLY the EC2 instance created by openg2p-aws-add-node.sh.
+# Deletes ONLY the EC2 instance created by openg2p-aws-provision.sh
+# (ManagedBy=openg2p-aws-add-node).
 #
 # Safety boundaries (never touched by this script):
 #   • VPC, subnets, security groups (pre-existing / shared)
@@ -16,9 +17,10 @@
 #   4. Interactive menu of ManagedBy=openg2p-aws-add-node instances
 #
 # Usage:
-#   ./openg2p-aws-add-node-destroy.sh --config aws-config.yaml
-#   ./openg2p-aws-add-node-destroy.sh --config aws-config.yaml --yes
-#   ./openg2p-aws-add-node-destroy.sh --config aws-config.yaml --instance-id i-0abc...
+#   ./openg2p-aws-destroy.sh --config aws-config.yaml
+#   ./openg2p-aws-destroy.sh --config aws-config.yaml --yes
+#   ./openg2p-aws-destroy.sh --config aws-config.yaml --dry-run
+#   ./openg2p-aws-destroy.sh --config aws-config.yaml --instance-id i-0abc...
 # =============================================================================
 
 set -euo pipefail
@@ -40,6 +42,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
 ASSUME_YES=false
+DRY_RUN=false
 INSTANCE_ID_OVERRIDE=""
 LOG_FILE="${SCRIPT_DIR}/logs/aws-add-node-destroy-$(date '+%Y%m%d-%H%M%S').log"
 
@@ -54,6 +57,7 @@ parse_args() {
             --config)       CONFIG_FILE="$2";          shift 2 ;;
             --instance-id)  INSTANCE_ID_OVERRIDE="$2"; shift 2 ;;
             --yes|-y)       ASSUME_YES=true;           shift ;;
+            --dry-run)      DRY_RUN=true;              shift ;;
             --help|-h)      show_help; exit 0 ;;
             *)
                 log_error "Unknown option: $1" "" "Run with --help for usage"
@@ -72,6 +76,7 @@ parse_args() {
     [[ "$CONFIG_FILE" = /* ]] || CONFIG_FILE="${SCRIPT_DIR}/${CONFIG_FILE}"
     export CONFIG_FILE
     export NON_INTERACTIVE="$ASSUME_YES"
+    export DRY_RUN
 }
 
 show_help() {
@@ -80,16 +85,18 @@ OpenG2P AWS Add-Node Teardown
 =============================
 
 Usage:
-  ./openg2p-aws-add-node-destroy.sh --config aws-config.yaml [options]
+  ./openg2p-aws-destroy.sh --config aws-config.yaml [options]
 
 Options:
   --config <file>         AWS add-node config (required)
   --instance-id <id>      Explicit instance to terminate (skips auto-detect)
   --yes / -y              Skip confirmation prompt
-  --help                  Show this help
+  --dry-run               Resolve the target and print what would be deleted;
+                          do not terminate or remove provision-output.yaml
+  --help, -h              Show this help
 
 What gets deleted:
-  • The single EC2 instance created by openg2p-aws-add-node.sh
+  • The single EC2 instance created by openg2p-aws-provision.sh
   • Stale provision-output.yaml
 
 What is NEVER deleted:
@@ -108,6 +115,9 @@ main() {
     log_banner "OpenG2P AWS Add-Node Teardown" "Deletes only the add-node EC2 instance"
     log_info "Config: ${CONFIG_FILE}"
     log_info "Log:    ${LOG_FILE}"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Mode:   dry-run (no resources will be destroyed)"
+    fi
     echo ""
 
     load_config "$CONFIG_FILE"
@@ -161,6 +171,13 @@ main() {
 
 EOF
 
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[dry-run] would terminate ${instance_id} (${instance_name})"
+        log_info "[dry-run] would remove provision-output.yaml if it points at this instance"
+        log_success "Dry-run complete — nothing changed."
+        return 0
+    fi
+
     # ── Confirm ─────────────────────────────────────────────────────────
     if [[ "$ASSUME_YES" != "true" ]]; then
         log_warn "This permanently destroys the instance above. SGs/VPC/keys are kept."
@@ -213,7 +230,7 @@ EOF
 ║    • Production cluster instances                                  ║
 ║                                                                    ║
 ║  Re-provision:                                                     ║
-║    ./openg2p-aws-add-node.sh --config aws-config.yaml              ║
+║    ./openg2p-aws-provision.sh --config aws-config.yaml             ║
 ║                                                                    ║
 ║  Log: ${LOG_FILE}
 ╚════════════════════════════════════════════════════════════════════╝
