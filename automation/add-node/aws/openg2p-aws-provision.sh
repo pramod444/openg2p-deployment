@@ -12,7 +12,8 @@
 # Usage:
 #   cp aws-config.example.yaml aws-config.yaml
 #   # edit aws-config.yaml (region / project at minimum)
-#   ./openg2p-aws-add-node.sh --config aws-config.yaml
+#   ./openg2p-aws-provision.sh --config aws-config.yaml
+#   ./openg2p-aws-provision.sh --config aws-config.yaml --dry-run
 # =============================================================================
 
 set -euo pipefail
@@ -37,6 +38,7 @@ CONFIG_FILE=""
 NON_INTERACTIVE=false
 SKIP_SSH_WAIT=false
 FORCE_MODE=false
+DRY_RUN=false
 SSH_WAIT_TIMEOUT=600
 LOG_FILE="${SCRIPT_DIR}/logs/aws-add-node-$(date '+%Y%m%d-%H%M%S').log"
 
@@ -55,6 +57,7 @@ parse_args() {
             --skip-ssh-wait)   SKIP_SSH_WAIT=true;      shift ;;
             --ssh-timeout)     SSH_WAIT_TIMEOUT="$2";   shift 2 ;;
             --force)           FORCE_MODE=true;         shift ;;
+            --dry-run)         DRY_RUN=true;            shift ;;
             --help|-h)         show_help; exit 0 ;;
             *)
                 log_error "Unknown option: $1" "" "Run with --help for usage"
@@ -73,6 +76,7 @@ parse_args() {
     [[ "$CONFIG_FILE" = /* ]] || CONFIG_FILE="${SCRIPT_DIR}/${CONFIG_FILE}"
     export NON_INTERACTIVE
     export CONFIG_FILE
+    export DRY_RUN
 }
 
 show_help() {
@@ -81,7 +85,7 @@ OpenG2P AWS Add-Node Provisioning
 =================================
 
 Usage:
-  ./openg2p-aws-add-node.sh --config aws-config.yaml [options]
+  ./openg2p-aws-provision.sh --config aws-config.yaml [options]
 
 Options:
   --config <file>      Path to AWS add-node config (required)
@@ -92,7 +96,9 @@ Options:
   --force              If an add-node instance with the same Name already exists
                        (e.g. a previous run failed mid-way), terminate it first
                        and launch a fresh one. Refuses to touch production nodes.
-  --help               Show this help
+  --dry-run            Resolve selection (VPC/SG/AMI/…) and print what would be
+                       launched; do not create, terminate, or write output.
+  --help, -h           Show this help
 
 What gets created (tagged ManagedBy=openg2p-aws-add-node):
   • 1 EC2 instance  (Ubuntu 24.04 LTS) in an existing VPC / SG / subnet
@@ -110,7 +116,7 @@ Interactive prompts (when the matching config key is blank):
 Selections are written back to aws-config.yaml so subsequent runs are stable.
 
 Teardown (this instance only — never SGs / VPC / production nodes):
-  ./openg2p-aws-add-node-destroy.sh --config aws-config.yaml
+  ./openg2p-aws-destroy.sh --config aws-config.yaml
 
 After provisioning, provision-output.yaml is written next to this script.
 Then join the node to the cluster:
@@ -137,6 +143,9 @@ main() {
     log_banner "OpenG2P AWS Add-Node" "Provision a single Ubuntu EC2 instance"
     log_info "Config: ${CONFIG_FILE}"
     log_info "Log:    ${LOG_FILE}"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Mode:   dry-run (no resources will be created)"
+    fi
     echo ""
 
     load_config "$CONFIG_FILE"
@@ -224,10 +233,6 @@ main() {
 
     # ── 11. Confirm + launch ────────────────────────────────────────────
     log_step "10" "Launch EC2 instance"
-    aws_confirm_launch \
-        "$instance_name" "$instance_type" "$disk_gb" "$ami" \
-        "$vpc_id" "$az" "$subnet_id" "$sg_id" "$key_name" "$project" \
-        || exit 1
 
     local out_path
     out_path=$(aws_provision_output_path "$SCRIPT_DIR")
@@ -235,6 +240,39 @@ main() {
     # Idempotent reuse — or --force replace of a prior add-node instance.
     local instance_id
     instance_id=$(aws_find_add_node_instance "$instance_name" "$project" "$out_path")
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[dry-run] resolved selection — no AWS resources will be created or terminated"
+        log_info "[dry-run]   Name:           ${instance_name}"
+        log_info "[dry-run]   Type:           ${instance_type}"
+        log_info "[dry-run]   Root disk:      ${disk_gb} GiB gp3 (IOPS=${disk_iops}, throughput=${disk_throughput})"
+        log_info "[dry-run]   AMI:            ${ami}"
+        log_info "[dry-run]   Region / AZ:    ${AWS_REGION} / ${az}"
+        log_info "[dry-run]   VPC:            ${vpc_id}"
+        log_info "[dry-run]   Subnet:         ${subnet_id}"
+        log_info "[dry-run]   Security Group: ${sg_id}"
+        log_info "[dry-run]   Key pair:       ${key_name}"
+        log_info "[dry-run]   Role tag:       ${role}"
+        log_info "[dry-run]   Project tag:    ${project}"
+        if [[ -n "$instance_id" && "$instance_id" != "None" ]]; then
+            if [[ "$FORCE_MODE" == "true" ]]; then
+                log_info "[dry-run] would terminate existing ${instance_id} (--force), then launch a fresh instance"
+            else
+                log_info "[dry-run] would reuse existing instance ${instance_id} (pass --force to replace)"
+            fi
+        else
+            log_info "[dry-run] would call ec2 run-instances for a new instance"
+        fi
+        log_info "[dry-run] would wait for status checks${SKIP_SSH_WAIT:+ (SSH wait skipped)}, write provision-output.yaml"
+        log_success "Dry-run complete — nothing changed."
+        return 0
+    fi
+
+    aws_confirm_launch \
+        "$instance_name" "$instance_type" "$disk_gb" "$ami" \
+        "$vpc_id" "$az" "$subnet_id" "$sg_id" "$key_name" "$project" \
+        || exit 1
+
     if [[ -n "$instance_id" && "$instance_id" != "None" ]]; then
         if [[ "$FORCE_MODE" == "true" ]]; then
             log_warn "--force: terminating existing add-node instance ${instance_id} (${instance_name})"
@@ -318,7 +356,7 @@ write_add_node_output() {
 # =============================================================================
 # OpenG2P add-node provision-output — AWS-derived configuration
 # =============================================================================
-# AUTO-GENERATED by aws/openg2p-aws-add-node.sh — overwritten on every run.
+# AUTO-GENERATED by aws/openg2p-aws-provision.sh — overwritten on every run.
 #
 # Use these values when filling ../add-node-config.yaml:
 #   node_ip:   ${private_ip}
@@ -393,7 +431,7 @@ show_add_node_summary() {
 ║  Log: ${LOG_FILE}
 ║                                                                    ║
 ║  Destroy this node later:                                          ║
-║    ./openg2p-aws-add-node-destroy.sh --config aws-config.yaml      ║
+║    ./openg2p-aws-destroy.sh --config aws-config.yaml               ║
 ║                                                                    ║
 ╚════════════════════════════════════════════════════════════════════╝
 

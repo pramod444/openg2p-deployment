@@ -26,6 +26,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
 FORCE_MODE=false
+DRY_RUN=false
 ROLE_OVERRIDE=""
 LOG_FILE="/var/log/openg2p-add-node-$(date '+%Y%m%d-%H%M%S').log"
 
@@ -49,8 +50,9 @@ Options:
                       control-plane node (rke2-server); 'worker' joins as
                       a data-plane node (rke2-agent).
   --force             Ignore completion markers, re-run all steps
+  --dry-run           Print the steps that would run; do not change the node
   --reset             Clear add-node state markers and exit
-  --help              Show this help message
+  --help, -h          Show this help message
 
 What this script does:
   1. Validates config and reachability to the primary node
@@ -73,6 +75,7 @@ parse_args() {
             --config) CONFIG_FILE="$2"; shift 2 ;;
             --role)   ROLE_OVERRIDE="$2"; shift 2 ;;
             --force)  FORCE_MODE=true; shift ;;
+            --dry-run) DRY_RUN=true; shift ;;
             --reset)  init_state_dir; reset_state "add-node."; exit 0 ;;
             --help|-h) show_help; exit 0 ;;
             *)
@@ -94,6 +97,7 @@ parse_args() {
     fi
 
     [[ "$CONFIG_FILE" = /* ]] || CONFIG_FILE="${SCRIPT_DIR}/${CONFIG_FILE}"
+    export DRY_RUN
 }
 
 # Prompt for role if not set in config and not overridden on CLI.
@@ -139,13 +143,18 @@ main() {
 
     log_banner "OpenG2P Add Node" "Join an existing RKE2 cluster"
     log_info "Log file: $LOG_FILE"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Mode: dry-run (no changes will be made on this node)"
+    fi
 
     check_root
     check_ubuntu_24
 
     init_state_dir
-    if [[ "$FORCE_MODE" == "true" ]]; then
+    if [[ "$FORCE_MODE" == "true" && "$DRY_RUN" != "true" ]]; then
         reset_state "add-node."
+    elif [[ "$FORCE_MODE" == "true" && "$DRY_RUN" == "true" ]]; then
+        log_info "[dry-run] would clear add-node.* state markers (--force)"
     fi
 
     log_info "Loading config: $CONFIG_FILE"
@@ -154,6 +163,18 @@ main() {
     resolve_role_interactive
 
     # Run the steps in order. Any failure aborts (set -e).
+    if [[ "$DRY_RUN" == "true" ]]; then
+        local role; role=$(cfg node_role)
+        log_info "[dry-run] would run step1_validate (config + TCP 9345 reachability)"
+        log_info "[dry-run] would run step2_tools (apt packages${role:+; kubectl if role=server})"
+        log_info "[dry-run] would run step3_firewall (ufw rules for VPC + Wireguard subnet)"
+        log_info "[dry-run] would run step4_rke2 (install rke2 as '${role}' and join cluster)"
+        log_info "[dry-run] would run step5_verify (confirm node Ready / agent active)"
+        log_info "[dry-run] would write /root/openg2p-add-node-postinstall.txt"
+        log_success "Dry-run complete — nothing changed on this node."
+        return 0
+    fi
+
     step1_validate
     step2_tools
     step3_firewall

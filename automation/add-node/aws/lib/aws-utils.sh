@@ -2,7 +2,7 @@
 # =============================================================================
 # OpenG2P AWS Add-Node — helpers
 # =============================================================================
-# Sourced by openg2p-aws-add-node.sh.
+# Sourced by openg2p-aws-provision.sh and openg2p-aws-destroy.sh.
 # Reuses production/aws/lib/aws-utils.sh for credentials, VPC/subnet/key
 # pickers, AMI resolution, run-instances, waits, and YAML writers.
 # Adds add-node-specific interactive pickers (instance type, disk, AZ, SG,
@@ -758,7 +758,7 @@ aws_resolve_destroy_target() {
             if [[ "$out_id" != "$cli_instance_id" ]]; then
                 log_error "Instance '${cli_instance_id}' is not managed by ${ADD_NODE_MANAGED_BY}" \
                           "ManagedBy=${managed:-<none>} — refusing to delete (safety)" \
-                          "Only instances created by openg2p-aws-add-node.sh can be destroyed here"
+                          "Only instances created by openg2p-aws-provision.sh can be destroyed here"
                 return 1
             fi
             log_warn "Instance has ManagedBy=${managed:-<none>} but matches provision-output — allowing (legacy)." >&2

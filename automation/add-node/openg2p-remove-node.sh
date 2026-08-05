@@ -22,6 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE_NAME=""
 DRAIN_TIMEOUT=300
 SKIP_DRAIN=false
+DRY_RUN=false
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
@@ -40,7 +41,8 @@ Options:
   --node <name>       Node to remove (as shown in 'kubectl get nodes')  [required]
   --timeout <sec>     Drain timeout in seconds (default: 300)
   --skip-drain        Skip cordon+drain (use only if the node is already gone)
-  --help              Show this help message
+  --dry-run           Print what would run; do not cordon, drain, or delete
+  --help, -h          Show this help message
 
 What this does (on the primary):
   1. kubectl cordon  <node>    — stop scheduling new pods on the node
@@ -58,6 +60,7 @@ parse_args() {
             --node)       NODE_NAME="$2"; shift 2 ;;
             --timeout)    DRAIN_TIMEOUT="$2"; shift 2 ;;
             --skip-drain) SKIP_DRAIN=true; shift ;;
+            --dry-run)    DRY_RUN=true; shift ;;
             --help|-h)    show_help; exit 0 ;;
             *)
                 log_error "Unknown option: $1" \
@@ -75,6 +78,7 @@ parse_args() {
                   "$0 --node <node-name>"
         exit 1
     fi
+    export DRY_RUN
 }
 
 ensure_kubeconfig_or_die() {
@@ -173,6 +177,19 @@ main() {
     fi
 
     # ── Cordon + drain ──────────────────────────────────────────────────
+    if [[ "$DRY_RUN" == "true" ]]; then
+        if [[ "$SKIP_DRAIN" == "true" ]]; then
+            log_info "[dry-run] would skip cordon+drain (--skip-drain)"
+        else
+            log_info "[dry-run] would: kubectl cordon ${NODE_NAME}"
+            log_info "[dry-run] would: kubectl drain ${NODE_NAME} --ignore-daemonsets --delete-emptydir-data --force --timeout=${DRAIN_TIMEOUT}s"
+        fi
+        log_info "[dry-run] would: kubectl delete node ${NODE_NAME}"
+        log_info "[dry-run] would print on-node cleanup commands"
+        log_success "Dry-run complete — nothing changed."
+        return 0
+    fi
+
     if [[ "$SKIP_DRAIN" == "true" ]]; then
         log_warn "Skipping cordon+drain (--skip-drain was set)."
     else
