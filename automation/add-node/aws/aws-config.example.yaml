@@ -9,7 +9,7 @@
 #
 # Provisions a single Ubuntu 24.04 LTS EC2 instance into an EXISTING VPC /
 # security group. Interactive prompts fill any blank values below and write
-# the selection back to this file so re-runs are stable.
+# the selection back to this file so re-runs are stable..
 #
 # After the instance is up, join it to the cluster with:
 #   cd .. && sudo ./openg2p-add-node.sh --config add-node-config.yaml
