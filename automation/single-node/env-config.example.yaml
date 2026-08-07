@@ -4,11 +4,17 @@
 # Copy this file to env-config.yaml and fill in your values:
 #   cp env-config.example.yaml env-config.yaml
 #
-# Then run:
+# Preferred — from your laptop (SSHes into the VM):
+#   ./openg2p-environment.sh --config env-config.yaml
+#
+# Or via the full orchestrator:
+#   ./openg2p-single-node.sh --config single-node-config.yaml --stage environment
+#
+# Advanced — on the VM after infra is installed:
 #   sudo ./openg2p-environment.sh --config env-config.yaml
 #
 # Prerequisites:
-#   Base infrastructure must be set up first (run openg2p-infra.sh)
+#   Base infrastructure must be set up first (roles/infra/run.sh / orchestrator)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -31,9 +37,9 @@ base_domain: ""
 # ---------------------------------------------------------------------------
 # Infrastructure reference
 # ---------------------------------------------------------------------------
-# Path to the infra config file (used to inherit node_ip, local_domain, etc.)
+# Path to the single-node config file (used to inherit node_ip, local_domain, etc.)
 # Relative paths are resolved from the automation/single-node/ directory.
-infra_config: "infra-config.yaml"
+single_node_config: "single-node-config.yaml"
 
 # ---------------------------------------------------------------------------
 # openg2p-commons-base (infrastructure: PostgreSQL, Kafka, MinIO, etc.)

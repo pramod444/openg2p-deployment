@@ -8,17 +8,18 @@
 # WARNING: This is DESTRUCTIVE and IRREVERSIBLE. All data in the environment
 # (databases, files, secrets) will be permanently deleted.
 #
-# Usage:
-#   sudo ./openg2p-environment-uninstall.sh --config env-config.yaml
+# Preferred — from your laptop (SSHes into the VM):
+#   ./openg2p-environment-uninstall.sh --config env-config.yaml
 #
-# Or specify the environment directly:
-#   sudo ./openg2p-environment-uninstall.sh --environment qa
+# Advanced — run ON the Ubuntu VM as root:
+#   sudo ./openg2p-environment-uninstall.sh --config env-config.yaml
 # =============================================================================
 
-set -euo pipefail
+set -uo pipefail   # NOT -e — uninstall should continue when bits are missing
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE=""
+ASSUME_YES=false
 
 source "${SCRIPT_DIR}/lib/utils.sh"
 source "${SCRIPT_DIR}/lib/env-phase1.sh"
@@ -28,6 +29,7 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             --config)  CONFIG_FILE="$2"; shift 2 ;;
+            --yes|-y)  ASSUME_YES=true; shift ;;
             --help|-h) show_help; exit 0 ;;
             *)
                 log_error "Unknown option: $1" \
@@ -55,11 +57,15 @@ show_help() {
 OpenG2P Environment Uninstall
 ================================
 
-Usage:
+Preferred (from your laptop — SSHes into the VM):
+  ./openg2p-environment-uninstall.sh --config env-config.yaml
+
+Advanced (ON the Ubuntu VM, as root):
   sudo ./openg2p-environment-uninstall.sh --config env-config.yaml
 
 Options:
   --config <file>    Path to environment config file (required)
+  --yes / -y         Skip the typed confirmation prompt
   --help             Show this help message
 
 WARNING: This permanently deletes ALL data in the environment including
@@ -67,24 +73,173 @@ databases, files, secrets, and Kubernetes resources. This is IRREVERSIBLE.
 EOF
 }
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-main() {
-    parse_args "$@"
+is_onbox_node() {
+    [[ -f /etc/rancher/rke2/rke2.yaml ]] || [[ "${OPENG2P_ORCHESTRATED:-}" == "1" ]]
+}
 
+resolve_sn_config_path() {
+    local sn_config_path
+    sn_config_path=$(cfg "single_node_config" "")
+    if [[ -z "$sn_config_path" ]]; then
+        sn_config_path=$(cfg "infra_config" "single-node-config.yaml")
+    fi
+    [[ "$sn_config_path" = /* ]] || sn_config_path="${SCRIPT_DIR}/${sn_config_path}"
+    echo "$sn_config_path"
+}
+
+load_sn_and_provision_overlays() {
+    PROVISION_OUTPUT_RESOLVED=""
+    local sn_config_path
+    sn_config_path=$(resolve_sn_config_path)
+    if [[ -f "$sn_config_path" ]]; then
+        log_info "Loading single-node config from: ${sn_config_path}"
+        load_config "$sn_config_path"
+        load_config "$CONFIG_FILE"
+    fi
+
+    local provision_output
+    provision_output="$(dirname "$sn_config_path")/provision-output.yaml"
+    if [[ ! -f "$provision_output" ]]; then
+        provision_output="$(dirname "$CONFIG_FILE")/provision-output.yaml"
+    fi
+    if [[ -f "$provision_output" ]]; then
+        log_info "Loading provision-output overlay: ${provision_output}"
+        load_config "$provision_output"
+        load_config "$CONFIG_FILE"
+        PROVISION_OUTPUT_RESOLVED="$provision_output"
+    fi
+}
+
+ssh_endpoint_available() {
+    local host key
+    host=$(cfg "ssh_host" "")
+    if [[ -z "$host" ]]; then host=$(cfg "public_ip" ""); fi
+    if [[ -z "$host" ]]; then host=$(cfg "wireguard.endpoint" ""); fi
+    key=$(cfg "ssh_key" "")
+    [[ -n "$host" && -n "$key" ]]
+}
+
+confirm_env_delete() {
+    local env_name="$1"
+
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║  WARNING: DESTRUCTIVE OPERATION                             ║${NC}"
+    echo -e "${RED}║                                                              ║${NC}"
+    echo -e "${RED}║${NC}  This will ${BOLD}PERMANENTLY DELETE${NC} environment '${BOLD}${env_name}${NC}':      "
+    echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • All Helm releases (commons, commons-services)           ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • ALL databases (PostgreSQL data)                         ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • ALL secrets (Keycloak clients, credentials)             ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • ALL persistent volumes (MinIO files, PVC data)          ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • ALL Jobs, ServiceAccounts, ConfigMaps                   ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • Istio Gateway, Nginx config, TLS certificates           ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • Rancher Project                                         ${RED}║${NC}"
+    echo -e "${RED}║${NC}    • The Kubernetes namespace itself                         ${RED}║${NC}"
+    echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
+    echo -e "${RED}║  This action is IRREVERSIBLE.                                ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    if [[ "$ASSUME_YES" == "true" ]]; then
+        log_info "--yes set; skipping confirmation prompt."
+        return 0
+    fi
+
+    local confirm
+    read -rp "Type 'yes' to confirm deletion of environment '${env_name}': " confirm
+    if [[ "$confirm" != "yes" ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Laptop path — confirm locally, then SSH and run on-box uninstall.
+# ---------------------------------------------------------------------------
+run_from_laptop() {
+    log_banner "OpenG2P Environment Uninstall" "Laptop · SSH → on-box teardown"
+
+    if [[ $EUID -eq 0 ]]; then
+        log_warn "You are running this with sudo on the laptop — that is not needed."
+        log_warn "Prefer: ./openg2p-environment-uninstall.sh --config env-config.yaml"
+        echo ""
+    fi
+
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/lib/ssh-utils.sh"
+
+    load_config "$CONFIG_FILE"
+    local env_name
+    env_name=$(cfg "environment")
+
+    local sn_config_path
+    sn_config_path=$(resolve_sn_config_path)
+    load_sn_and_provision_overlays
+    local provision_output="${PROVISION_OUTPUT_RESOLVED:-}"
+
+    if [[ -z "$env_name" ]]; then
+        log_error "Could not determine environment name" \
+                  "The 'environment' key is missing or empty in your config"
+        exit 1
+    fi
+
+    if ! ssh_endpoint_available; then
+        log_error "Cannot reach the single-node VM from this laptop" \
+                  "Kubeconfig is not local (this is not the RKE2 node) and ssh_host/ssh_key are blank" \
+                  "Set ssh_* in provision-output.yaml or single-node-config.yaml, or run on the VM" \
+                  "./openg2p-environment-uninstall.sh --config env-config.yaml"
+        exit 1
+    fi
+
+    if [[ ! -f "$sn_config_path" ]]; then
+        log_error "single-node-config.yaml not found: ${sn_config_path}" \
+                  "Environment uninstall from the laptop needs the single-node config for SSH" \
+                  "Set single_node_config in env-config.yaml"
+        exit 1
+    fi
+
+    confirm_env_delete "$env_name"
+
+    ssh_init
+    trap 'ssh_cleanup 2>/dev/null || true' EXIT
+    ssh_probe "node" || exit 1
+
+    ssh_stage_single_node "$SCRIPT_DIR" "$sn_config_path" "$provision_output" "$CONFIG_FILE"
+
+    local remote_cmd="cd ${REMOTE_WORK_DIR} && OPENG2P_ORCHESTRATED=1 bash openg2p-environment-uninstall.sh --config env-config.yaml --yes"
+    log_info "Remote: ${remote_cmd}"
+    if ssh_run "node" "$remote_cmd"; then
+        log_success "Environment '${env_name}' removed on the remote node."
+    else
+        log_warn "Remote uninstall reported errors — check the remote log / kubectl."
+        exit 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# On-box path — tear down the environment on the RKE2 VM.
+# ---------------------------------------------------------------------------
+run_onbox() {
     check_root "$@"
     ensure_kubeconfig || exit 1
 
-    # Load config
     load_config "$CONFIG_FILE"
-    local ENV_NAME=$(cfg "environment")
+    local ENV_NAME
+    ENV_NAME=$(cfg "environment")
 
-    # Load infra config for local_domain, node_ip
-    local infra_config_path=$(cfg "infra_config" "infra-config.yaml")
-    [[ "$infra_config_path" = /* ]] || infra_config_path="${SCRIPT_DIR}/${infra_config_path}"
-    if [[ -f "$infra_config_path" ]]; then
-        load_config "$infra_config_path"
+    local sn_config_path
+    sn_config_path=$(resolve_sn_config_path)
+    if [[ -f "$sn_config_path" ]]; then
+        load_config "$sn_config_path"
+        load_config "$CONFIG_FILE"
+    fi
+
+    local provision_output
+    provision_output="$(dirname "$CONFIG_FILE")/provision-output.yaml"
+    if [[ -f "$provision_output" ]]; then
+        load_config "$provision_output"
         load_config "$CONFIG_FILE"
     fi
 
@@ -97,43 +252,17 @@ main() {
     # Check namespace exists
     if ! kubectl get namespace "$ENV_NAME" &>/dev/null; then
         log_warn "Namespace '${ENV_NAME}' does not exist. Nothing to uninstall."
-        # Clean state markers anyway
         rm -f "${STATE_DIR}/env-${ENV_NAME}."*.done 2>/dev/null || true
         exit 0
     fi
 
-    # Show warning
-    echo ""
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║  WARNING: DESTRUCTIVE OPERATION                             ║${NC}"
-    echo -e "${RED}║                                                              ║${NC}"
-    echo -e "${RED}║${NC}  This will ${BOLD}PERMANENTLY DELETE${NC} environment '${BOLD}${ENV_NAME}${NC}':      "
-    echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • All Helm releases (commons, commons-services)           ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • ALL databases (PostgreSQL data)                         ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • ALL secrets (Keycloak clients, credentials)             ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • ALL persistent volumes (MinIO files, OpenSearch data)   ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • ALL Jobs, ServiceAccounts, ConfigMaps                   ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • Istio Gateway, Nginx config, TLS certificates           ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • Rancher Project                                         ${RED}║${NC}"
-    echo -e "${RED}║${NC}    • The Kubernetes namespace itself                         ${RED}║${NC}"
-    echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
-    echo -e "${RED}║  This action is IRREVERSIBLE.                                ║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    read -rp "Type 'yes' to confirm deletion of environment '${ENV_NAME}': " CONFIRM
-    if [[ "$CONFIRM" != "yes" ]]; then
-        echo "Aborted."
-        exit 0
-    fi
-    echo ""
+    confirm_env_delete "$ENV_NAME"
 
     log_info "Uninstalling environment '${ENV_NAME}'..."
 
     # ── Step 1: Uninstall Helm releases ─────────────────────────────────
     log_info "Uninstalling Helm releases..."
 
-    # Services chart first (depends on base)
     if helm status "commons-services" -n "$ENV_NAME" &>/dev/null; then
         log_info "Uninstalling commons-services..."
         helm uninstall "commons-services" -n "$ENV_NAME" --wait --timeout 5m || {
@@ -144,7 +273,6 @@ main() {
         log_info "commons-services not found — skipping."
     fi
 
-    # Base chart
     if helm status "commons" -n "$ENV_NAME" &>/dev/null; then
         log_info "Uninstalling commons..."
         helm uninstall "commons" -n "$ENV_NAME" --wait --timeout 5m || {
@@ -155,7 +283,6 @@ main() {
         log_info "commons not found — skipping."
     fi
 
-    # Any other releases in the namespace
     local other_releases
     other_releases=$(helm list -n "$ENV_NAME" -q 2>/dev/null || true)
     for release in $other_releases; do
@@ -166,26 +293,20 @@ main() {
     # ── Step 2: Clean up orphaned hook resources ────────────────────────
     log_info "Cleaning up orphaned Jobs, ServiceAccounts, ConfigMaps..."
 
-    # Known hook resources from base chart
     for suffix in postgres-init keycloak-init client-secrets-sync; do
         kubectl delete job "commons-${suffix}" -n "$ENV_NAME" --ignore-not-found > /dev/null 2>&1 || true
         kubectl delete serviceaccount "commons-${suffix}" -n "$ENV_NAME" --ignore-not-found > /dev/null 2>&1 || true
         kubectl delete configmap "commons-${suffix}" -n "$ENV_NAME" --ignore-not-found > /dev/null 2>&1 || true
     done
 
-    # Known hook resources from services chart
     for suffix in esignet-postgres-init mock-identity-system-postgres-init keymanager-postgres-init keymanager-keygen master-data-postgres-init superset-init-db; do
         kubectl delete job "commons-services-${suffix}" -n "$ENV_NAME" --ignore-not-found > /dev/null 2>&1 || true
         kubectl delete serviceaccount "commons-services-${suffix}" -n "$ENV_NAME" --ignore-not-found > /dev/null 2>&1 || true
     done
 
-    # keycloak-init jobs with revision numbers
     kubectl delete jobs -n "$ENV_NAME" -l app.kubernetes.io/name=keycloak-init --ignore-not-found > /dev/null 2>&1 || true
-
-    # Catch-all: delete ALL remaining jobs
     kubectl delete jobs -n "$ENV_NAME" --all --ignore-not-found > /dev/null 2>&1 || true
 
-    # Clean up RBAC resources
     kubectl delete rolebinding "commons-client-secrets-sync" -n "$ENV_NAME" --ignore-not-found > /dev/null 2>&1 || true
     kubectl delete role "commons-client-secrets-sync" -n "$ENV_NAME" --ignore-not-found > /dev/null 2>&1 || true
 
@@ -225,7 +346,8 @@ main() {
     log_success "Nginx config removed."
 
     # ── Step 7: Remove TLS certificates ─────────────────────────────────
-    local base_domain=$(get_env_base_domain)
+    local base_domain
+    base_domain=$(get_env_base_domain)
     if [[ -n "$base_domain" ]]; then
         log_info "Removing TLS certificate for *.${base_domain}..."
         rm -rf "/etc/openg2p/certs/${base_domain}" 2>/dev/null || true
@@ -270,6 +392,17 @@ main() {
     echo -e "${GREEN}║                                                              ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
+}
+
+# ---------------------------------------------------------------------------
+main() {
+    parse_args "$@"
+
+    if is_onbox_node; then
+        run_onbox "$@"
+    else
+        run_from_laptop
+    fi
 }
 
 main "$@"

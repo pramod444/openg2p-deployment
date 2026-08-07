@@ -42,9 +42,9 @@ env_phase1_step1_validate() {
     # Check that infra script completed
     if [[ ! -f "${STATE_DIR}/phase3.rancher_config.done" ]]; then
         log_error "Infrastructure setup not complete" \
-                  "The infra script (openg2p-infra.sh) must finish all 3 phases first" \
-                  "Run openg2p-infra.sh before creating environments" \
-                  "sudo ./openg2p-infra.sh --config infra-config.yaml"
+                  "The infra script (roles/infra/run.sh) must finish all 3 phases first" \
+                  "Run roles/infra/run.sh before creating environments" \
+                  "sudo bash roles/infra/run.sh --config single-node-config.yaml"
         return 1
     fi
     log_success "Infrastructure setup confirmed."
@@ -97,7 +97,7 @@ env_phase1_step2_certificates_local() {
     if [[ ! -f "${ca_dir}/ca.key" || ! -f "${ca_dir}/ca.crt" ]]; then
         log_error "Local CA not found at ${ca_dir}" \
                   "The infra script should have created the CA" \
-                  "Re-run openg2p-infra.sh phase 1" \
+                  "Re-run roles/infra/run.sh phase 1" \
                   "ls -la ${ca_dir}"
         return 1
     fi
@@ -381,7 +381,7 @@ env_phase1_step8_ca_configmap() {
     if [[ ! -f "$ca_cert" ]]; then
         log_error "CA certificate not found at ${ca_cert}" \
                   "The infra script should have created the CA" \
-                  "Re-run openg2p-infra.sh phase 1"
+                  "Re-run roles/infra/run.sh phase 1"
         return 1
     fi
 

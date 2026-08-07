@@ -3,7 +3,7 @@
 # OpenG2P Deployment Automation — Phase 2: Platform Components (Helmfile)
 # =============================================================================
 # Installs Istio, Rancher, Monitoring, and Logging on the K8s cluster
-# using Helmfile. Sourced by openg2p-infra.sh — do not run directly.
+# using Helmfile. Sourced by roles/infra/run.sh — do not run directly.
 # =============================================================================
 
 # ─────────────────────────────────────────────────────────────────────────────

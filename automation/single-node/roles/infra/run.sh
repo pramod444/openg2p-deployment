@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# OpenG2P Base Infrastructure Setup
+# OpenG2P Single-Node — Base Infrastructure Setup
 # =============================================================================
 # Sets up the complete base infrastructure on a single Ubuntu 24.04 VM:
 #   Phase 1 (bash):     Tools, firewall, RKE2, Wireguard, NFS, DNS, TLS, Nginx
@@ -10,20 +10,31 @@
 # Local-only sandbox: local DNS (dnsmasq, *.<local_domain>) + a self-signed CA.
 # Private by default — the web UIs (80/443) are reachable only over Wireguard or
 # from inside the VPC, even on a public IP. Set public_access: true to expose
-# them to the Internet (security risk; see infra-config.example.yaml).
+# them to the Internet (security risk; see single-node-config.example.yaml).
 #
 # After this completes, run openg2p-environment.sh to create environments.
 #
-# Usage:
-#   sudo ./openg2p-infra.sh --config infra-config.yaml
+# Preferred — from your laptop:
+#   ./openg2p-single-node.sh --config single-node-config.yaml
+#
+# Advanced — run ON the Ubuntu VM as root:
+#   sudo bash roles/infra/run.sh --config single-node-config.yaml
+#
+# Optional AWS path (laptop):
+#   cd aws && ./openg2p-aws-provision.sh --config aws-config.yaml
+#   # If provision-output.yaml sits next to single-node-config.yaml, it is
+#   # loaded as an overlay (node_ip, wireguard.endpoint, ssh_*).
 #
 # Docs: https://docs.openg2p.org/deployment/deployment-instructions/infrastructure-setup
 # =============================================================================
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Charts, helmfile, and lib/ live at the single-node root (two levels up).
+SCRIPT_DIR="$(cd "${ROLE_DIR}/../.." && pwd)"
 CONFIG_FILE=""
+PROVISION_OUTPUT=""
 RUN_PHASE=""
 FORCE_MODE=false
 DRY_RUN=false
@@ -38,10 +49,11 @@ source "${SCRIPT_DIR}/lib/phase3.sh"
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --config)  CONFIG_FILE="$2"; shift 2 ;;
-            --phase)   RUN_PHASE="$2"; shift 2 ;;
-            --force)   FORCE_MODE=true; shift ;;
-            --dry-run) DRY_RUN=true; shift ;;
+            --config)            CONFIG_FILE="$2";       shift 2 ;;
+            --provision-output)  PROVISION_OUTPUT="$2";  shift 2 ;;
+            --phase)             RUN_PHASE="$2";         shift 2 ;;
+            --force)             FORCE_MODE=true;        shift ;;
+            --dry-run)           DRY_RUN=true;           shift ;;
             --reset)   init_state_dir; reset_state "phase1."; reset_state "phase2."; reset_state "phase3."; exit 0 ;;
             --help|-h) show_help; exit 0 ;;
             *)
@@ -57,8 +69,8 @@ parse_args() {
     if [[ -z "$CONFIG_FILE" ]]; then
         log_error "No config file specified" \
                   "The --config flag is required" \
-                  "Copy infra-config.example.yaml to infra-config.yaml and provide it" \
-                  "$0 --config infra-config.yaml"
+                  "Copy single-node-config.example.yaml to single-node-config.yaml and provide it" \
+                  "$0 --config single-node-config.yaml"
         exit 1
     fi
 
@@ -67,24 +79,28 @@ parse_args() {
 
 show_help() {
     cat <<'EOF'
-OpenG2P Base Infrastructure Setup
-===================================
+OpenG2P Single-Node — Base Infrastructure Setup
+=================================================
 
 Usage:
-  sudo ./openg2p-infra.sh --config infra-config.yaml [options]
+  sudo bash roles/infra/run.sh --config single-node-config.yaml [options]
 
 Options:
-  --config <file>    Path to configuration file (required)
-  --phase <1|2|3>    Run only a specific phase
-  --force            Ignore completion markers, re-run all steps
-  --dry-run          Show what would be done without executing
-  --reset            Clear all infra state markers and exit
-  --help             Show this help message
+  --config <file>            Path to configuration file (required)
+  --provision-output <file>  Path to provision-output.yaml (auto-detected if blank)
+  --phase <1|2|3>            Run only a specific phase
+  --force                    Ignore completion markers, re-run all steps
+  --dry-run                  Show what would be done without executing
+  --reset                    Clear all infra state markers and exit
+  --help                     Show this help message
+
+Prefer the laptop orchestrator (openg2p-single-node.sh). For AWS EC2 creation
+from your laptop, use aws/openg2p-aws-provision.sh first.
 
 This is a local-only sandbox: it sets up local DNS (dnsmasq, *.<local_domain>)
 and a self-signed CA. By default the sandbox is reachable only over Wireguard
 or from inside the VPC — set public_access: true in the config to expose it to
-the public Internet (carries security risk; see infra-config.example.yaml).
+the public Internet (carries security risk; see single-node-config.example.yaml).
 
 Docs: https://docs.openg2p.org/deployment/deployment-instructions/infrastructure-setup
 EOF
@@ -100,6 +116,33 @@ show_summary() {
     # cluster_subnet is an undocumented override; default is split tunnel
     local allowed_ips=$(cfg "wireguard.cluster_subnet" "split-tunnel")
 
+    # When driven by the laptop orchestrator, keep this brief — the
+    # orchestrator prints the laptop next-steps guide.
+    if [[ "${OPENG2P_ORCHESTRATED:-}" == "1" ]]; then
+        echo ""
+        echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║   Base Infrastructure Setup Complete (on-box)                ║${NC}"
+        echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "${GREEN}║${NC}  Cluster:  ${BOLD}${cluster_display_name}${NC}"
+        echo -e "${GREEN}║${NC}  Rancher:  ${BOLD}https://${rancher_host}${NC}"
+        local saved_pw_file="/var/lib/openg2p/deploy-state/rancher-admin-password"
+        if [[ -f "$saved_pw_file" ]]; then
+            echo -e "${GREEN}║${NC}  Admin:    user ${BOLD}admin${NC}  password ${BOLD}$(cat "$saved_pw_file")${NC}"
+        fi
+        echo -e "${GREEN}║${NC}  Next steps will be printed by the laptop orchestrator.    ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}  Log: ${LOG_FILE}"
+        echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        return 0
+    fi
+
+    local ssh_host ssh_user ssh_key
+    ssh_host=$(cfg "ssh_host")
+    if [[ -z "$ssh_host" ]]; then ssh_host=$(cfg "public_ip"); fi
+    if [[ -z "$ssh_host" ]]; then ssh_host=$(cfg "wireguard.endpoint"); fi
+    ssh_user=$(cfg "ssh_user" "ubuntu")
+    ssh_key=$(cfg "ssh_key" "<your-key.pem>")
+
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║                                                              ║${NC}"
@@ -114,14 +157,30 @@ show_summary() {
         echo -e "${GREEN}║${NC}  Access:      ${BOLD}private${NC} — reachable only via Wireguard / VPC"
     fi
     echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
+
+    if [[ -n "$ssh_host" ]]; then
+        echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "${GREEN}║${NC}  ${BOLD}SSH from your laptop:${NC}                                      ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}    ssh -i ${ssh_key} ${ssh_user}@${ssh_host}                 ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
+    fi
+
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║${NC}  ${BOLD}Laptop Setup (do these steps on your machine):${NC}             ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}  ${BOLD}Step 1: Wireguard VPN${NC}                                      ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    Copy peer config from the VM:                            ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}      sudo cp /etc/wireguard/peers/peer1/peer1.conf /tmp/    ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}      sudo chmod 644 /tmp/peer1.conf                         ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    Then SCP to your laptop and import into Wireguard app.   ${GREEN}║${NC}"
+    if [[ -n "$ssh_host" ]]; then
+        echo -e "${GREEN}║${NC}    From your laptop:                                         ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      ssh -i ${ssh_key} ${ssh_user}@${ssh_host} \\              ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}        \"sudo cat /etc/wireguard/peers/peer1/peer1.conf\" \\  ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}        > peer1.conf                                          ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}    Import peer1.conf into the Wireguard app.                 ${GREEN}║${NC}"
+    else
+        echo -e "${GREEN}║${NC}    Copy peer config from the VM:                            ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      sudo cp /etc/wireguard/peers/peer1/peer1.conf /tmp/    ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      sudo chmod 644 /tmp/peer1.conf                         ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}    Then SCP to your laptop and import into Wireguard app.   ${GREEN}║${NC}"
+    fi
     echo -e "${GREEN}║${NC}    If endpoint IP differs from node_ip (e.g. public IP),    ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    set wireguard.endpoint in config or edit peer1.conf.     ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
@@ -145,23 +204,38 @@ show_summary() {
         fi
         echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
         echo -e "${GREEN}║${NC}  ${BOLD}Step 3: Install CA certificate${NC}                             ${GREEN}║${NC}"
+    if [[ -n "$ssh_host" ]]; then
+        echo -e "${GREEN}║${NC}    From your laptop:                                         ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      ssh -i ${ssh_key} ${ssh_user}@${ssh_host} \\              ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}        \"sudo cat /etc/openg2p/ca/ca.crt\" > openg2p-ca.crt   ${GREEN}║${NC}"
+    else
         echo -e "${GREEN}║${NC}    Copy /etc/openg2p/ca/ca.crt from the VM, then:           ${GREEN}║${NC}"
+    fi
         echo -e "${GREEN}║${NC}    macOS:                                                   ${GREEN}║${NC}"
         echo -e "${GREEN}║${NC}      sudo security add-trusted-cert -d -r trustRoot \\      ${GREEN}║${NC}"
-        echo -e "${GREEN}║${NC}        -k /Library/Keychains/System.keychain ca.crt          ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}        -k /Library/Keychains/System.keychain openg2p-ca.crt  ${GREEN}║${NC}"
         echo -e "${GREEN}║${NC}    Windows: Import into Trusted Root CAs                    ${GREEN}║${NC}"
         echo -e "${GREEN}║${NC}    Linux:                                                   ${GREEN}║${NC}"
-        echo -e "${GREEN}║${NC}      sudo cp ca.crt /usr/local/share/ca-certificates/       ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      sudo cp openg2p-ca.crt /usr/local/share/ca-certificates/${GREEN}║${NC}"
         echo -e "${GREEN}║${NC}      sudo update-ca-certificates                            ${GREEN}║${NC}"
         echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
 
     echo -e "${GREEN}║${NC}  ${BOLD}Step 4: kubectl/helm access from laptop${NC}                    ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    Copy remote kubeconfig from the VM:                       ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}      sudo cp /etc/rancher/rke2/rke2-remote.yaml /tmp/        ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}      sudo chmod 644 /tmp/rke2-remote.yaml                     ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    SCP to laptop, then:                                      ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}      export KUBECONFIG=~/rke2-remote.yaml                     ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}      kubectl get nodes                                        ${GREEN}║${NC}"
+    if [[ -n "$ssh_host" ]]; then
+        echo -e "${GREEN}║${NC}    From your laptop:                                         ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      ssh -i ${ssh_key} ${ssh_user}@${ssh_host} \\              ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}        \"sudo cat /etc/rancher/rke2/rke2-remote.yaml\" \\     ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}        > ~/rke2-remote.yaml                                  ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      export KUBECONFIG=~/rke2-remote.yaml                     ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      kubectl get nodes                                        ${GREEN}║${NC}"
+    else
+        echo -e "${GREEN}║${NC}    Copy remote kubeconfig from the VM:                       ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      sudo cp /etc/rancher/rke2/rke2-remote.yaml /tmp/        ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      sudo chmod 644 /tmp/rke2-remote.yaml                     ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}    SCP to laptop, then:                                      ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      export KUBECONFIG=~/rke2-remote.yaml                     ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}      kubectl get nodes                                        ${GREEN}║${NC}"
+    fi
     echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║${NC}  ${BOLD}Login (Rancher uses local authentication):${NC}                  ${GREEN}║${NC}"
@@ -183,16 +257,10 @@ show_summary() {
     echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║${NC}  ${BOLD}What's next:${NC}                                                ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  Run openg2p-environment.sh to create an environment.       ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
-    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}AWS EC2 users:${NC}                                              ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  Create and attach a security group for your instance:      ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    cd automation/single-node/aws                             ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    ./create-security-group.sh --vpc-id <VPC_ID>             ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  Also disable source/dest check on the instance:            ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    aws ec2 modify-instance-attribute \\                      ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}      --instance-id <ID> --no-source-dest-check              ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  From your laptop:                                           ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}    ./openg2p-single-node.sh --config single-node-config.yaml \\${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}      --stage environment                                     ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  Or on-box: sudo ./openg2p-environment.sh --config env-config.yaml${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}  Log: ${LOG_FILE}"
     echo -e "${GREEN}║${NC}                                                              ${GREEN}║${NC}"
@@ -218,6 +286,19 @@ main() {
     fi
 
     load_config "$CONFIG_FILE"
+
+    # Auto-detect provision-output.yaml next to single-node-config.yaml unless
+    # --provision-output was given explicitly.
+    if [[ -z "$PROVISION_OUTPUT" ]]; then
+        PROVISION_OUTPUT="$(dirname "$CONFIG_FILE")/provision-output.yaml"
+    fi
+    if [[ -f "$PROVISION_OUTPUT" ]]; then
+        log_info "Loading provision-output overlay: ${PROVISION_OUTPUT}"
+        load_config "$PROVISION_OUTPUT"
+    else
+        PROVISION_OUTPUT=""
+        log_info "No provision-output.yaml found — using single-node-config.yaml only"
+    fi
 
     validate_config "node_ip" "node_name"
 
