@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# OpenG2P Infrastructure Uninstall
+# OpenG2P Single-Node — Infrastructure Uninstall
 # =============================================================================
 # Completely removes the OpenG2P base infrastructure: RKE2 cluster, all Helm
 # releases, Wireguard VPN, dnsmasq, Nginx, NFS, TLS certificates, and all
@@ -10,13 +10,19 @@
 # and all data will be permanently deleted. All environments on this cluster
 # will be destroyed.
 #
-# Usage:
-#   sudo ./openg2p-infra-uninstall.sh
+# Usage (run ON the Ubuntu VM as root):
+#   sudo bash roles/infra/uninstall.sh
+#   sudo bash roles/infra/uninstall.sh --yes   # skip typed confirmation
+#
+# Prefer the laptop wrapper:
+#   ./openg2p-single-node-uninstall.sh --config single-node-config.yaml
 # =============================================================================
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "${ROLE_DIR}/../.." && pwd)"
+ASSUME_YES=false
 
 source "${SCRIPT_DIR}/lib/utils.sh"
 
@@ -24,10 +30,11 @@ source "${SCRIPT_DIR}/lib/utils.sh"
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
+            --yes|-y)  ASSUME_YES=true; shift ;;
             --help|-h) show_help; exit 0 ;;
             *)
                 log_error "Unknown option: $1" \
-                          "This script takes no arguments" \
+                          "This script takes no arguments besides --yes / --help" \
                           "Run with --help for usage" \
                           "$0 --help"
                 exit 1
@@ -38,13 +45,20 @@ parse_args() {
 
 show_help() {
     cat <<'EOF'
-OpenG2P Infrastructure Uninstall
-===================================
+OpenG2P Single-Node — Infrastructure Uninstall
+================================================
 
 Usage:
-  sudo ./openg2p-infra-uninstall.sh
+  sudo bash roles/infra/uninstall.sh [--yes]
 
-This script completely removes the OpenG2P base infrastructure:
+Options:
+  --yes / -y   Skip the typed confirmation prompt
+  --help       Show this help
+
+Prefer running from your laptop:
+  ./openg2p-single-node-uninstall.sh --config single-node-config.yaml
+
+This script completely removes the OpenG2P single-node base infrastructure:
   - RKE2 Kubernetes cluster (all pods, services, volumes)
   - All Helm releases across all namespaces
   - Wireguard VPN server and peer configs
@@ -85,10 +99,14 @@ main() {
     echo -e "${RED}║  This action is IRREVERSIBLE. ALL DATA WILL BE LOST.         ║${NC}"
     echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    read -rp "Type 'DELETE EVERYTHING' to confirm: " CONFIRM
-    if [[ "$CONFIRM" != "DELETE EVERYTHING" ]]; then
-        echo "Aborted."
-        exit 0
+    if [[ "$ASSUME_YES" == "true" ]]; then
+        log_info "--yes set; skipping confirmation prompt."
+    else
+        read -rp "Type 'DELETE EVERYTHING' to confirm: " CONFIRM
+        if [[ "$CONFIRM" != "DELETE EVERYTHING" ]]; then
+            echo "Aborted."
+            exit 0
+        fi
     fi
     echo ""
 

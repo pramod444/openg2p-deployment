@@ -3,7 +3,7 @@
 # OpenG2P Deployment Automation — Utility Library
 # =============================================================================
 # Shared functions for logging, error handling, state management, and checks.
-# Sourced by openg2p-infra.sh and openg2p-environment.sh — do not run directly.
+# Sourced by roles/infra/run.sh and openg2p-environment.sh — do not run directly.
 # =============================================================================
 
 set -euo pipefail
@@ -498,7 +498,7 @@ ensure_kubeconfig() {
     else
         log_error "Kubeconfig not found at /etc/rancher/rke2/rke2.yaml" \
                   "RKE2 may not be installed or running" \
-                  "Run the infrastructure setup first (openg2p-infra.sh)" \
+                  "Run the infrastructure setup first (roles/infra/run.sh)" \
                   "systemctl status rke2-server"
         return 1
     fi

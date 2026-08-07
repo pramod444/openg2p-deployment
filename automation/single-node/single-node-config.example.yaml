@@ -1,20 +1,30 @@
 # =============================================================================
-# OpenG2P Base Infrastructure Configuration
+# OpenG2P Single-Node Configuration
 # =============================================================================
-# Copy this file to infra-config.yaml and fill in your values:
-#   cp infra-config.example.yaml infra-config.yaml
+# Copy this file to single-node-config.yaml and fill in your values:
+#   cp single-node-config.example.yaml single-node-config.yaml
 #
-# Then run:
-#   sudo ./openg2p-infra.sh --config infra-config.yaml
+# Preferred — run from your laptop (orchestrator SSHes into the VM):
+#   ./openg2p-single-node.sh --config single-node-config.yaml
+#
+# Optional AWS path (laptop):
+#   cd aws && ./openg2p-aws-provision.sh --config aws-config.yaml
+#   # writes ../provision-output.yaml — auto-loaded as an overlay so
+#   # [AWS] fields below (node_ip, wireguard.endpoint, ssh_*) are filled.
+#
+# Advanced — run on-box directly:
+#   sudo bash roles/infra/run.sh --config single-node-config.yaml
 # =============================================================================
 
 # ---------------------------------------------------------------------------
 # Node and cluster configuration
 # ---------------------------------------------------------------------------
-# Internal/private IP address of this VM (used for NFS, Nginx, K8s)
+# Internal/private IP address of this VM (used for NFS, Nginx, K8s).
+# [AWS] — auto-filled from provision-output.yaml when present; leave blank then.
 node_ip: ""
 
-# A short name for this K8s node (used in RKE2 node-name, visible in kubectl get nodes)
+# A short name for this K8s node (used in RKE2 node-name, visible in kubectl get nodes).
+# [AWS] — auto-filled from provision-output.yaml (instance Name tag) when present.
 node_name: "node1"
 
 # Display name for the Rancher cluster (shown in the Rancher UI).
@@ -81,10 +91,21 @@ wireguard:
   # Public IP or hostname that VPN clients use to connect.
   # If your VM has a public IP different from node_ip, set it here.
   # Leave empty to use node_ip (works when clients are on the same network).
+  # [AWS] — auto-filled from provision-output.yaml (EIP / public IP) when present.
   endpoint: ""
   subnet: "10.15.0.0/16"
   port: "51820"
   peers: "254"
+
+# ---------------------------------------------------------------------------
+# SSH — laptop orchestrator (openg2p-single-node.sh)
+# ---------------------------------------------------------------------------
+# Used only by the laptop orchestrator to reach the VM. The on-box
+# roles/infra/run.sh / openg2p-environment.sh scripts ignore these keys.
+# [AWS] — all three auto-filled from provision-output.yaml when present.
+ssh_host: ""                 # Public IP or hostname reachable from your laptop
+ssh_user: "ubuntu"
+ssh_key:  ""                 # Path to .pem (e.g. ./aws/keys/openg2p-sandbox.pem)
 
 # ---------------------------------------------------------------------------
 # Rancher
@@ -95,7 +116,7 @@ rancher:
   # Admin password is auto-managed — do not set here.
   # On fresh install: auto-generated and saved to K8s secret cattle-system/rancher-secret
   # On re-run: read from the K8s secret
-  # Override: RANCHER_ADMIN_PASSWORD=xxx sudo ./openg2p-infra.sh ...
+  # Override: RANCHER_ADMIN_PASSWORD=xxx sudo bash roles/infra/run.sh ...
 
 # Note: Keycloak is NOT installed at the infra level. Rancher uses local
 # authentication. The OpenG2P apps' Keycloak is deployed per-environment by

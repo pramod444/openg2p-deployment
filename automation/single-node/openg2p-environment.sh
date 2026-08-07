@@ -3,21 +3,16 @@
 # OpenG2P Environment Setup
 # =============================================================================
 # Creates an OpenG2P environment (namespace) and deploys modules into it.
-# Run this AFTER openg2p-infra.sh has completed the base infrastructure.
+# Run this AFTER base infrastructure is complete (roles/infra/run.sh).
 #
-# Each environment gets:
-#   - A K8s namespace
-#   - A Rancher Project (for RBAC)
-#   - TLS certificate for *.<env_base_domain>
-#   - Nginx server block → Istio ingress
-#   - Istio Gateway for hostname routing
-#   - openg2p-commons (shared services: PostgreSQL, Kafka, MinIO, etc.)
-#   - (future) OpenG2P modules: Registry, PBMS, SPAR, G2P Bridge
+# Preferred — from your laptop (SSHes into the VM, same pattern as the
+# single-node orchestrator / production environment stage):
+#   ./openg2p-environment.sh --config env-config.yaml
 #
-# Can be run multiple times with different configs to create multiple
-# environments (dev, qa, staging, pilot) on the same cluster.
+# Or via the full orchestrator:
+#   ./openg2p-single-node.sh --config single-node-config.yaml --stage environment
 #
-# Usage:
+# Advanced — run ON the Ubuntu VM as root (after infra is installed):
 #   sudo ./openg2p-environment.sh --config env-config.yaml
 #
 # Docs: https://docs.openg2p.org/deployment/concepts/openg2p-deployment-model#environments
@@ -30,7 +25,8 @@ CONFIG_FILE=""
 RUN_PHASE=""
 FORCE_MODE=false
 DRY_RUN=false
-LOG_FILE="/var/log/openg2p-env-$(date '+%Y%m%d-%H%M%S').log"
+# Set after we know laptop vs on-box.
+LOG_FILE=""
 
 source "${SCRIPT_DIR}/lib/utils.sh"
 source "${SCRIPT_DIR}/lib/env-phase1.sh"
@@ -71,7 +67,13 @@ show_help() {
 OpenG2P Environment Setup
 ===========================
 
-Usage:
+Preferred (from your laptop — SSHes into the VM):
+  ./openg2p-environment.sh --config env-config.yaml [options]
+
+  # equivalent via the full orchestrator:
+  ./openg2p-single-node.sh --config single-node-config.yaml --stage environment
+
+Advanced (ON the Ubuntu VM, as root, after infra is installed):
   sudo ./openg2p-environment.sh --config env-config.yaml [options]
 
 Options:
@@ -86,10 +88,137 @@ Phases:
   2  Module installation (openg2p-commons, and future modules)
 
 Prerequisites:
-  Base infrastructure must be set up first (run openg2p-infra.sh).
+  Base infrastructure must be set up first (roles/infra/run.sh / orchestrator).
+  From the laptop, ssh_* must be set (usually via provision-output.yaml).
 
 Docs: https://docs.openg2p.org/deployment/concepts/openg2p-deployment-model#environments
 EOF
+}
+
+# ---------------------------------------------------------------------------
+# Detect run mode: on-box (RKE2 node) vs laptop (SSH into the node).
+# ---------------------------------------------------------------------------
+is_onbox_node() {
+    [[ -f /etc/rancher/rke2/rke2.yaml ]] || [[ "${OPENG2P_ORCHESTRATED:-}" == "1" ]]
+}
+
+resolve_sn_config_path() {
+    local sn_config_path
+    sn_config_path=$(cfg "single_node_config" "")
+    if [[ -z "$sn_config_path" ]]; then
+        sn_config_path=$(cfg "infra_config" "single-node-config.yaml")
+    fi
+    [[ "$sn_config_path" = /* ]] || sn_config_path="${SCRIPT_DIR}/${sn_config_path}"
+    echo "$sn_config_path"
+}
+
+load_sn_and_provision_overlays() {
+    # Sets PROVISION_OUTPUT_RESOLVED (path or empty). Logs to stderr/console only.
+    PROVISION_OUTPUT_RESOLVED=""
+    local sn_config_path
+    sn_config_path=$(resolve_sn_config_path)
+    if [[ -f "$sn_config_path" ]]; then
+        log_info "Loading single-node config from: ${sn_config_path}"
+        load_config "$sn_config_path"
+        load_config "$CONFIG_FILE"
+    else
+        log_warn "Single-node config not found: ${sn_config_path}"
+        log_warn "node_ip, local_domain, ssh_* must be set somehow."
+    fi
+
+    local provision_output
+    provision_output="$(dirname "$sn_config_path")/provision-output.yaml"
+    if [[ ! -f "$provision_output" ]]; then
+        provision_output="$(dirname "$CONFIG_FILE")/provision-output.yaml"
+    fi
+    if [[ -f "$provision_output" ]]; then
+        log_info "Loading provision-output overlay: ${provision_output}"
+        load_config "$provision_output"
+        load_config "$CONFIG_FILE"
+        PROVISION_OUTPUT_RESOLVED="$provision_output"
+    fi
+}
+
+ssh_endpoint_available() {
+    local host key
+    host=$(cfg "ssh_host" "")
+    if [[ -z "$host" ]]; then host=$(cfg "public_ip" ""); fi
+    if [[ -z "$host" ]]; then host=$(cfg "wireguard.endpoint" ""); fi
+    key=$(cfg "ssh_key" "")
+    [[ -n "$host" && -n "$key" ]]
+}
+
+# ---------------------------------------------------------------------------
+# Laptop path — SSH into the VM and run the on-box install there.
+# ---------------------------------------------------------------------------
+run_from_laptop() {
+    log_banner "OpenG2P Environment Setup" "Laptop · SSH → on-box install"
+
+    if [[ $EUID -eq 0 ]]; then
+        log_warn "You are running this with sudo on the laptop — that is not needed."
+        log_warn "Prefer: ./openg2p-environment.sh --config env-config.yaml"
+        echo ""
+    fi
+
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/lib/ssh-utils.sh"
+
+    load_config "$CONFIG_FILE"
+
+    local env_name
+    env_name=$(cfg "environment")
+    if [[ -z "$env_name" ]]; then
+        log_error "No environment name specified" \
+                  "The 'environment' key is missing or empty in your config" \
+                  "Set environment: dev (or qa, staging, pilot, etc.) in your config"
+        exit 1
+    fi
+
+    local sn_config_path
+    sn_config_path=$(resolve_sn_config_path)
+    load_sn_and_provision_overlays
+    local provision_output="${PROVISION_OUTPUT_RESOLVED:-}"
+
+    if ! ssh_endpoint_available; then
+        log_error "Cannot reach the single-node VM from this laptop" \
+                  "Kubeconfig is not local (this is not the RKE2 node) and ssh_host/ssh_key are blank" \
+                  "Set ssh_* in provision-output.yaml or single-node-config.yaml, or run on the VM after infra" \
+                  "./openg2p-single-node.sh --config single-node-config.yaml --stage environment"
+        exit 1
+    fi
+
+    if [[ ! -f "$sn_config_path" ]]; then
+        log_error "single-node-config.yaml not found: ${sn_config_path}" \
+                  "Environment install from the laptop needs the single-node config for SSH" \
+                  "Set single_node_config in env-config.yaml"
+        exit 1
+    fi
+
+    log_info "Environment: ${BOLD}${env_name}${NC}"
+    log_info "Mode:        laptop → SSH → on-box openg2p-environment.sh"
+    log_info "Log:         ${LOG_FILE}"
+    log_info "Config:      ${CONFIG_FILE}"
+    echo ""
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[dry-run] would stage and run on remote: openg2p-environment.sh --config env-config.yaml${RUN_PHASE:+ --phase $RUN_PHASE}"
+        return 0
+    fi
+
+    ssh_init
+    trap 'ssh_cleanup 2>/dev/null || true' EXIT
+    ssh_probe "node" || exit 1
+
+    ssh_stage_single_node "$SCRIPT_DIR" "$sn_config_path" "$provision_output" "$CONFIG_FILE"
+
+    local remote_cmd="cd ${REMOTE_WORK_DIR} && OPENG2P_ORCHESTRATED=1 bash openg2p-environment.sh --config env-config.yaml"
+    if [[ -n "$RUN_PHASE" ]]; then remote_cmd+=" --phase ${RUN_PHASE}"; fi
+    if [[ "$FORCE_MODE" == "true" ]]; then remote_cmd+=" --force"; fi
+
+    log_info "Remote: ${remote_cmd}"
+    ssh_run "node" "$remote_cmd"
+
+    log_success "Environment '${env_name}' setup completed on the remote node."
 }
 
 # ---------------------------------------------------------------------------
@@ -114,7 +243,6 @@ show_env_summary() {
     echo -e "${GREEN}║${NC}  ${BOLD}Service URLs:${NC}                                              ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    MinIO:       https://minio.${base_domain}               ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    Superset:    https://superset.${base_domain}             ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    OpenSearch:  https://opensearch.${base_domain}           ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    Kafka UI:    https://kafka.${base_domain}                ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    eSignet:     https://esignet.${base_domain}              ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    ODK Central: https://odk.${base_domain}                  ${GREEN}║${NC}"
@@ -131,20 +259,18 @@ show_env_summary() {
 }
 
 # ---------------------------------------------------------------------------
-# Main
+# On-box path — original install (runs on the RKE2 VM as root).
 # ---------------------------------------------------------------------------
-main() {
-    parse_args "$@"
-
-    log_banner "OpenG2P Environment Setup" "Environment · Phase 1 + Phase 2"
+run_onbox() {
+    log_banner "OpenG2P Environment Setup" "On-box · Phase 1 + Phase 2"
 
     check_root "$@"
     init_state_dir
 
-    # Load the environment config
     load_config "$CONFIG_FILE"
 
-    local env_name=$(cfg "environment")
+    local env_name
+    env_name=$(cfg "environment")
     if [[ -z "$env_name" ]]; then
         log_error "No environment name specified" \
                   "The 'environment' key is missing or empty in your config" \
@@ -152,24 +278,32 @@ main() {
         exit 1
     fi
 
-    # Load infra config to inherit node_ip, local_domain, etc.
-    local infra_config_path=$(cfg "infra_config" "infra-config.yaml")
-    [[ "$infra_config_path" = /* ]] || infra_config_path="${SCRIPT_DIR}/${infra_config_path}"
-    if [[ -f "$infra_config_path" ]]; then
-        log_info "Loading infra config from: ${infra_config_path}"
-        load_config "$infra_config_path"
-        # Re-load env config so env values take precedence over infra values
+    local sn_config_path
+    sn_config_path=$(resolve_sn_config_path)
+    if [[ -f "$sn_config_path" ]]; then
+        log_info "Loading single-node config from: ${sn_config_path}"
+        load_config "$sn_config_path"
         load_config "$CONFIG_FILE"
     else
-        log_warn "Infra config not found: ${infra_config_path}"
+        log_warn "Single-node config not found: ${sn_config_path}"
         log_warn "node_ip, local_domain, etc. must be set in env config."
+    fi
+
+    # When staged by the orchestrator, provision-output may sit alongside.
+    local provision_output
+    provision_output="$(dirname "$CONFIG_FILE")/provision-output.yaml"
+    if [[ -f "$provision_output" ]]; then
+        log_info "Loading provision-output overlay: ${provision_output}"
+        load_config "$provision_output"
+        load_config "$CONFIG_FILE"
     fi
 
     if [[ "$FORCE_MODE" == "true" ]]; then
         reset_state "env-${env_name}."
     fi
 
-    local base_domain=$(get_env_base_domain)
+    local base_domain
+    base_domain=$(get_env_base_domain)
 
     log_info "Environment:    ${BOLD}${env_name}${NC}"
     log_info "Base domain:    ${BOLD}${base_domain}${NC}"
@@ -202,7 +336,24 @@ main() {
     fi
 }
 
-# Redirect all output to both console and log file.
-exec > >(tee -a "$LOG_FILE") 2>&1
+# ---------------------------------------------------------------------------
+main() {
+    parse_args "$@"
+
+    if is_onbox_node; then
+        LOG_FILE="/var/log/openg2p-env-$(date '+%Y%m%d-%H%M%S').log"
+        # Ensure we can write the log when root (check_root runs later).
+        if [[ $EUID -eq 0 ]]; then
+            touch "$LOG_FILE" 2>/dev/null || true
+        fi
+        exec > >(tee -a "$LOG_FILE") 2>&1
+        run_onbox "$@"
+    else
+        mkdir -p "${SCRIPT_DIR}/logs"
+        LOG_FILE="${SCRIPT_DIR}/logs/openg2p-env-$(date '+%Y%m%d-%H%M%S').log"
+        exec > >(tee -a "$LOG_FILE") 2>&1
+        run_from_laptop
+    fi
+}
 
 main "$@"

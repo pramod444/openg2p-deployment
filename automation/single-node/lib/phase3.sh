@@ -20,7 +20,7 @@
 #   4. Force reset via kubectl exec (user changed password manually)
 #
 # Ref: https://docs.openg2p.org/deployment/base-infrastructure/rancher
-# Sourced by openg2p-infra.sh — do not run directly.
+# Sourced by roles/infra/run.sh — do not run directly.
 # =============================================================================
 
 # ─────────────────────────────────────────────────────────────────────────────
