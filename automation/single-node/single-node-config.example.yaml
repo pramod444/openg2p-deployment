@@ -108,6 +108,17 @@ ssh_user: "ubuntu"
 ssh_key:  ""                 # Path to .pem (e.g. ./aws/keys/openg2p-sandbox.pem)
 
 # ---------------------------------------------------------------------------
+# Environment stage (laptop orchestrator)
+# ---------------------------------------------------------------------------
+# Master switch for openg2p-single-node.sh when run with default --stage all.
+#   true  — after infra, also run openg2p-environment.sh (needs env-config.yaml)
+#   false — stop after infra; install an environment later with:
+#             ./openg2p-single-node.sh --config single-node-config.yaml --stage environment
+#             # or: ./openg2p-environment.sh --config env-config.yaml
+# CLI --skip-environment also skips the env stage for one run.
+install_environment: true
+
+# ---------------------------------------------------------------------------
 # Rancher
 # ---------------------------------------------------------------------------
 rancher:

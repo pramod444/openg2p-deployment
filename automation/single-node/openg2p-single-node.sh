@@ -13,6 +13,9 @@
 #   cp env-config.example.yaml env-config.yaml
 #   ./openg2p-single-node.sh --config single-node-config.yaml
 #
+# Set install_environment: false in single-node-config.yaml to stop after
+# infra (run --stage environment later when ready).
+#
 # Idempotent — node state at /var/lib/openg2p/deploy-state/; laptop markers
 # under ./.state/. Use --force to re-run completed stages.
 # =============================================================================
@@ -127,14 +130,16 @@ Options:
   --phase <n>                Pass --phase N through to the on-box script
                              (infra: 1|2|3 · environment: 1|2)
   --probe                    SSH-probe the node and exit (no changes)
-  --skip-environment         With --stage all, run infra only
+  --skip-environment         With --stage all, run infra only (same as
+                             install_environment: false in config for this run)
   --force                    Ignore completion markers, re-run stages
   --dry-run                  Print what would run, do nothing
   --reset-laptop             Clear laptop-side .state/ markers and exit
   --help                     Show this help
 
 Config layering:
-  1. single-node-config.yaml — your preferences (cluster_name, local_domain, …)
+  1. single-node-config.yaml — your preferences (cluster_name, local_domain,
+                               install_environment, …)
   2. provision-output.yaml   — AWS-derived state (node_ip, wireguard.endpoint,
                                ssh_host, ssh_user, ssh_key). Auto-detected next
                                to single-node-config.yaml; its keys win on conflict.
@@ -302,6 +307,9 @@ _resolve_ssh_key_display() {
 }
 
 show_completion_summary() {
+    # $1 = env_installed: "true" if environment stage ran this session, else "false"
+    local env_installed="${1:-false}"
+
     local node_ip rancher_host local_domain public_ip ssh_user ssh_key_disp
     local public_access cluster_name rancher_pw wg_subnet wg_server_ip
     node_ip=$(cfg node_ip)
@@ -342,17 +350,110 @@ show_completion_summary() {
     chmod 700 "$summary_dir" 2>/dev/null || true
 
     local art="${LAPTOP_ARTIFACT_DIR}"
-    # Prefer relative artifact path for display
     case "$art" in
         "${SCRIPT_DIR}/"*) art="./${art#${SCRIPT_DIR}/}" ;;
     esac
+
+    local config_disp
+    config_disp=$(basename "$CONFIG_FILE")
+
+    local headline="OpenG2P Single-Node Infrastructure — SETUP COMPLETE"
+    local env_status_line="not installed this run"
+    local env_block=""
+    local whats_next_block=""
+
+    if [[ "$env_installed" == "true" ]]; then
+        headline="OpenG2P Single-Node — Infrastructure + Environment COMPLETE"
+        env_status_line="installed (see ENVIRONMENT section below)"
+
+        local env_name="" base_domain=""
+        if [[ -n "${ENV_CONFIG:-}" && -f "$ENV_CONFIG" ]]; then
+            load_config "$ENV_CONFIG"
+            env_name=$(cfg "environment" "")
+            base_domain=$(cfg "base_domain" "")
+        fi
+        [[ -z "$env_name" ]] && env_name="dev"
+        if [[ -z "$base_domain" ]]; then
+            base_domain="${env_name}.${local_domain}"
+        fi
+
+        env_block=$(cat <<ENVBLOCK
+
+══════════════════════════════════════════════════════════════════════════════
+  ENVIRONMENT — already installed
+══════════════════════════════════════════════════════════════════════════════
+
+  Environment:  ${env_name}
+  Namespace:    ${env_name}
+  Base domain:  ${base_domain}
+  Keycloak:     https://keycloak.${base_domain}
+
+  Service URLs (Wireguard / VPC must be active for private access):
+
+      MinIO:        https://minio.${base_domain}
+      Superset:     https://superset.${base_domain}
+      Kafka UI:     https://kafka.${base_domain}
+      eSignet:      https://esignet.${base_domain}
+      ODK Central:  https://odk.${base_domain}
+
+  Assign users in Rancher:
+      Rancher → Project '${env_name}' → Members → Add Member
+
+ENVBLOCK
+)
+
+        whats_next_block=$(cat <<NEXTBLOCK
+══════════════════════════════════════════════════════════════════════════════
+  WHAT'S NEXT
+══════════════════════════════════════════════════════════════════════════════
+
+  Environment '${env_name}' is already installed — you do NOT need to run the
+  environment stage again for this environment.
+
+  Optional — re-run the same environment (idempotent / force):
+
+      ./openg2p-single-node.sh --config ${config_disp} --stage environment --force
+      # or: ./openg2p-environment.sh --config env-config.yaml --force
+
+  Optional — create an additional environment (edit env-config.yaml first):
+
+      ./openg2p-environment.sh --config env-config.yaml
+NEXTBLOCK
+)
+    else
+        env_block=$(cat <<ENVBLOCK
+
+══════════════════════════════════════════════════════════════════════════════
+  ENVIRONMENT — not installed in this run
+══════════════════════════════════════════════════════════════════════════════
+
+  Infrastructure is ready. The environment stage was skipped
+  (install_environment: false, --skip-environment, or --stage infra only).
+
+ENVBLOCK
+)
+
+        whats_next_block=$(cat <<NEXTBLOCK
+══════════════════════════════════════════════════════════════════════════════
+  WHAT'S NEXT — install an environment
+══════════════════════════════════════════════════════════════════════════════
+
+  Environment was NOT installed. When you are ready, run ONE of:
+
+      ./openg2p-single-node.sh --config ${config_disp} --stage environment
+      ./openg2p-environment.sh --config env-config.yaml
+
+  Or set install_environment: true in ${config_disp} and re-run the full install.
+NEXTBLOCK
+)
+    fi
 
     cat > "$summary_file" <<EOF
 
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║    OpenG2P Single-Node Infrastructure — SETUP COMPLETE                       ║
+║    ${headline}
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -361,6 +462,7 @@ show_completion_summary() {
   Public IP:   ${public_ip}
   Rancher:     https://${rancher_host}
   Access:      ${access_line}
+  Environment: ${env_status_line}
 
   SSH into the VM (from this laptop):
 
@@ -375,7 +477,7 @@ show_completion_summary() {
     │   (also in K8s secret: cattle-system/rancher-secret)                     │
     └──────────────────────────────────────────────────────────────────────────┘
 
-
+${env_block}
 ══════════════════════════════════════════════════════════════════════════════
   WHAT TO DO NEXT — on your laptop
 ══════════════════════════════════════════════════════════════════════════════
@@ -451,17 +553,7 @@ show_completion_summary() {
       kubectl get nodes
 
 
-══════════════════════════════════════════════════════════════════════════════
-  WHAT'S NEXT
-══════════════════════════════════════════════════════════════════════════════
-
-      Create an environment (from this laptop):
-
-        ./openg2p-single-node.sh --config $(basename "$CONFIG_FILE") --stage environment
-
-      Or full re-run / continue:
-
-        ./openg2p-single-node.sh --config $(basename "$CONFIG_FILE")
+${whats_next_block}
 
 
   Log:     ${LOG_FILE}
@@ -473,6 +565,7 @@ EOF
     cat "$summary_file"
     log_success "Setup summary saved to ${summary_file}"
 }
+
 
 # ---------------------------------------------------------------------------
 main() {
@@ -541,20 +634,29 @@ main() {
         infra)
             stage_and_run_infra
             pull_laptop_artifacts
-            show_completion_summary
+            show_completion_summary false
             ;;
         environment)
             stage_and_run_environment
+            show_completion_summary true
             ;;
         all)
             stage_and_run_infra
             pull_laptop_artifacts
+            # Gate env like production's install_environment. Explicit
+            # --stage environment always runs (install later without flipping
+            # the flag). --skip-environment skips for this run only.
             if [[ "$SKIP_ENV" == "true" ]]; then
                 log_info "Skipping environment stage (--skip-environment)."
-                show_completion_summary
+                show_completion_summary false
+            elif ! cfg_bool "install_environment" "true"; then
+                log_info "install_environment=false — environment stage skipped."
+                log_info "Run it later with: $0 --config $(basename "$CONFIG_FILE") --stage environment"
+                log_info "  or: ./openg2p-environment.sh --config env-config.yaml"
+                show_completion_summary false
             else
                 stage_and_run_environment
-                show_completion_summary
+                show_completion_summary true
             fi
             ;;
     esac
