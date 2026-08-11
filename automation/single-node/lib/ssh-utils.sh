@@ -4,17 +4,36 @@
 # =============================================================================
 # Sourced by openg2p-single-node.sh on the admin's laptop.
 #
-# ControlMaster SSH, sudo -E, and rsync staging for a single Ubuntu node.
-# Role name is always "node".
+# ControlMaster SSH (when supported), sudo -E, and rsync staging for a single
+# Ubuntu node. Role name is always "node".
 #
 # SSH endpoint keys (from provision-output.yaml or single-node-config.yaml):
 #   ssh_host / ssh_user / ssh_key
 # Fallbacks: public_ip, wireguard.endpoint for host.
+#
+# SSH multiplexing (ControlMaster) is enabled on Linux/macOS/WSL2. On Git Bash
+# (MINGW/MSYS) it is disabled automatically — Unix-domain control sockets are
+# unreliable there. Force either mode with OPENG2P_SSH_NO_MUX=1|0.
 # =============================================================================
 
 SSH_CTRL_DIR="${SSH_CTRL_DIR:-${HOME}/.ssh/openg2p-single-node-ctrl}"
 REMOTE_WORK_DIR="/tmp/openg2p-deploy"
 LAPTOP_ARTIFACT_DIR="${LAPTOP_ARTIFACT_DIR:-./artifacts}"
+_SSH_MUX_WARNED=false
+
+# ---------------------------------------------------------------------------
+# SSH multiplexing — off on Git Bash / when OPENG2P_SSH_NO_MUX=1
+# ---------------------------------------------------------------------------
+ssh_mux_enabled() {
+    case "${OPENG2P_SSH_NO_MUX:-}" in
+        1|true|TRUE|yes|YES) return 1 ;;
+        0|false|FALSE|no|NO) return 0 ;;
+    esac
+    case "$(uname -s 2>/dev/null)" in
+        MINGW*|MSYS*|CYGWIN*) return 1 ;;
+    esac
+    return 0
+}
 
 # ---------------------------------------------------------------------------
 # Role resolution — single node only
@@ -71,25 +90,39 @@ ssh_resolve_role() {
 ssh_options_for() {
     local _role="${1:-node}"
     local opts=(
-        -o "ControlMaster=auto"
-        -o "ControlPath=${SSH_CTRL_DIR}/%r@%h:%p"
-        -o "ControlPersist=300"
         -o "StrictHostKeyChecking=no"
         -o "UserKnownHostsFile=/dev/null"
         -o "LogLevel=ERROR"
         -o "ServerAliveInterval=30"
         -o "ServerAliveCountMax=3"
     )
+    if ssh_mux_enabled; then
+        opts+=(
+            -o "ControlMaster=auto"
+            -o "ControlPath=${SSH_CTRL_DIR}/%r@%h:%p"
+            -o "ControlPersist=300"
+        )
+    else
+        opts+=(-o "ControlMaster=no")
+    fi
     printf '%s\n' "${opts[@]}"
 }
 
 ssh_init() {
-    mkdir -p "$SSH_CTRL_DIR"
-    chmod 700 "$SSH_CTRL_DIR"
     mkdir -p "$LAPTOP_ARTIFACT_DIR"
+    if ssh_mux_enabled; then
+        mkdir -p "$SSH_CTRL_DIR"
+        chmod 700 "$SSH_CTRL_DIR"
+    else
+        if [[ "$_SSH_MUX_WARNED" != "true" ]]; then
+            log_info "SSH multiplexing disabled (Git Bash / OPENG2P_SSH_NO_MUX) — using direct SSH."
+            _SSH_MUX_WARNED=true
+        fi
+    fi
 }
 
 ssh_cleanup() {
+    ssh_mux_enabled || return 0
     for sock in "${SSH_CTRL_DIR}"/*; do
         [[ -S "$sock" ]] || continue
         local target
