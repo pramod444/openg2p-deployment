@@ -139,6 +139,13 @@ releases:
     values:
       - global:
           cattle:
+            # Required when installing rancher-monitoring via Helm (not Rancher Apps).
+            # Without clusterId=local, Grafana's nginx sidecar sets the wrong
+            # appSubUrl, so Monitoring → Grafana lands on "Page not found" until
+            # you click Home. See rancher/rancher#40687 and #50634.
+            clusterId: local
+            clusterName: local
+            url: {{ printf "https://%s" .Values.rancher_hostname | quote }}
             psp:
               enabled: false
         # Register Loki as a Grafana datasource so the existing Grafana becomes
@@ -158,6 +165,15 @@ releases:
           # datasource — so logs are invisible. Rancher already gates access, so
           # promote the anonymous role to Editor to enable Explore + Loki.
           grafana.ini:
+            # Rancher opens Grafana at .../proxy/ (kube-apiserver already strips
+            # that prefix before it hits Grafana). root_url still must include the
+            # proxy path so Grafana's boot data appSubUrl matches the browser URL;
+            # otherwise Grafana 10 renders the shell and then "Page not found"
+            # until you click Home. Do NOT set serve_from_sub_path — the API
+            # proxy already stripped the prefix.
+            server:
+              domain: {{ .Values.rancher_hostname | quote }}
+              root_url: {{ printf "https://%s/api/v1/namespaces/cattle-monitoring-system/services/http:rancher-monitoring-grafana:80/proxy/" .Values.rancher_hostname | quote }}
             auth:
               # Hide the "Sign in" button — access is via the Rancher proxy
               # (anonymous Editor above), and the login form can't complete its
