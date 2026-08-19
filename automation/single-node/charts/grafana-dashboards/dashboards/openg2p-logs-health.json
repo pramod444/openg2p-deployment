@@ -8,16 +8,30 @@
   "refresh": "30s",
   "title": "OpenG2P — Logs & Health",
   "uid": "openg2p-logs-health",
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "hide": 2,
+        "includeAll": false,
+        "label": "Loki",
+        "name": "loki_ds",
+        "options": [],
+        "query": "loki",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      }
+    ]
+  },
   "panels": [
     {
       "type": "stat",
       "title": "Error lines (last 1h)",
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 100 } ] } }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "area", "textMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(count_over_time({k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b` [1h]))", "queryType": "instant" } ]
+      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "${loki_ds}" }, "expr": "sum(count_over_time({k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b` [1h]))", "queryType": "instant" } ]
     },
     {
       "type": "stat",
@@ -31,11 +45,11 @@
     {
       "type": "stat",
       "title": "Total log rate (lines/s)",
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] }, "unit": "logs" }, "overrides": [] },
       "options": { "colorMode": "value", "graphMode": "area", "textMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(rate({k8s_namespace_name=~\".+\"} [5m]))", "queryType": "range" } ]
+      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "${loki_ds}" }, "expr": "sum(rate({k8s_namespace_name=~\".+\"} [5m]))", "queryType": "range" } ]
     },
     {
       "type": "stat",
@@ -49,29 +63,29 @@
     {
       "type": "timeseries",
       "title": "Log volume by namespace (lines/s)",
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never" } }, "overrides": [] },
       "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum by (k8s_namespace_name) (rate({k8s_namespace_name=~\".+\"} [5m]))", "queryType": "range" } ]
+      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "${loki_ds}" }, "expr": "sum by (k8s_namespace_name) (rate({k8s_namespace_name=~\".+\"} [5m]))", "queryType": "range" } ]
     },
     {
       "type": "timeseries",
       "title": "Error rate by service (lines/s)",
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10, "showPoints": "never" }, "color": { "mode": "palette-classic" } }, "overrides": [] },
       "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum by (service_name) (rate({k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b` [5m]))", "queryType": "range" } ]
+      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "${loki_ds}" }, "expr": "sum by (service_name) (rate({k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b` [5m]))", "queryType": "range" } ]
     },
     {
       "type": "table",
       "title": "Top erroring pods (last 1h)",
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "fieldConfig": { "defaults": { "custom": { "align": "auto", "filterable": true } }, "overrides": [] },
       "options": { "showHeader": true, "sortBy": [ { "displayName": "Value", "desc": true } ] },
-      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "topk(15, sum by (k8s_namespace_name, k8s_pod_name) (count_over_time({k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b` [1h])))", "queryType": "instant", "format": "table" } ],
+      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "${loki_ds}" }, "expr": "topk(15, sum by (k8s_namespace_name, k8s_pod_name) (count_over_time({k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b` [1h])))", "queryType": "instant", "format": "table" } ],
       "transformations": [ { "id": "organize", "options": { "excludeByName": { "Time": true } } } ]
     },
     {
@@ -86,10 +100,10 @@
     {
       "type": "logs",
       "title": "Recent errors (all namespaces)",
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
       "gridPos": { "h": 11, "w": 24, "x": 0, "y": 20 },
       "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending" },
-      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "{k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b`", "queryType": "range" } ]
+      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "${loki_ds}" }, "expr": "{k8s_namespace_name=~\".+\"} |~ `(?i)\\b(error|exception|fatal)\\b`", "queryType": "range" } ]
     }
   ]
 }
