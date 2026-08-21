@@ -5,8 +5,7 @@ OpenG2P production platform (reverse-proxy, compute/RKE2, storage) and scaffold
 an application environment.
 
 **Commons is not installed by these scripts.** After scaffolding, install
-Commons from the Rancher UI (recommended) or optionally via
-`openg2p-deployment/automation/environment`.
+Commons from the **Rancher UI only**.
 
 ## What the install does
 
@@ -131,25 +130,19 @@ During scaffolding the following Rancher CatalogV2 ClusterRepos are registered:
 - `openg2p` — `https://openg2p.github.io/openg2p-helm/rancher` (Apps UI)
 - `openg2p-gitlab` — `https://gitlab.com/api/v4/projects/84460547/packages/helm/stable`
 
-## Commons installation
+## Commons installation (Rancher UI only)
 
-Environment scaffolding does **not** install Commons.
-
-**Recommended — Rancher UI**
+Environment scaffolding does **not** install Commons. Install from the Rancher
+UI after Wireguard is up and you can reach Rancher:
 
 1. Rancher → Apps → Charts → `openg2p-commons-base`
 2. Then install `openg2p-commons-services` (same namespace)
 3. Point PostgreSQL at the storage private IP using secret `commons-postgresql`
-4. To pick the Commons version, check the changelog:  
+4. Pick the Commons version from the changelog:  
    https://openg2p.gitlab.io/versions/commons/CHANGELOG.html
 
-**Optional — install with scripts**
-
-1. Go to: `openg2p-deployment/automation/environment`
-2. Copy `env-config.example.yaml` → `env-config.yaml`
-3. Set `commons_base.chart_version` and `commons_services.chart_version` to the
-   production Commons version (see changelog above)
-4. Run `./env-cluster.sh --config env-config.yaml`
+Do **not** use `automation/environment/` or Helm CLI scripts to install Commons
+in production — those scripts only scaffold the namespace (if used standalone).
 
 ## Changing `public_domain` (or the Rancher hostname)
 
