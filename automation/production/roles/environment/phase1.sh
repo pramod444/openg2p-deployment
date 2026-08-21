@@ -14,7 +14,7 @@
 #   E1.8  Fetch PG superuser password from storage node;
 #         create the K8s Secret the commons chart expects
 #
-# Commons is NOT installed here — use Rancher UI or automation/environment/.
+# Commons is NOT installed here — install from the Rancher UI only.
 # Gated by install_environment in prod-config (default true).
 # =============================================================================
 
@@ -339,21 +339,13 @@ phase1_show_summary() {
     echo -e "${GREEN}║${NC}  Base domain:  ${BOLD}${ENV_BASE_DOMAIN}${NC}"
     echo -e "${GREEN}║${NC}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Next — install Commons (recommended: Rancher UI)${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}Next — install Commons from Rancher UI (required)${NC}"
     echo -e "${GREEN}║${NC}  1. Rancher → Apps → Charts → openg2p-commons-base"
     echo -e "${GREEN}║${NC}  2. Then install openg2p-commons-services (same namespace)"
     echo -e "${GREEN}║${NC}  3. Point PostgreSQL at ${STORAGE_PRIV}"
     echo -e "${GREEN}║${NC}     using secret ${PG_SECRET_NAME}"
-    echo -e "${GREEN}║${NC}  4. To pick the latest Commons version, check the changelog:"
+    echo -e "${GREEN}║${NC}  4. To pick the Commons version, check the changelog:"
     echo -e "${GREEN}║${NC}     https://openg2p.gitlab.io/versions/commons/CHANGELOG.html"
-    echo -e "${GREEN}║${NC}"
-    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Optional — install Commons with scripts:${NC}"
-    echo -e "${GREEN}║${NC}  Go to: openg2p-deployment/automation/environment"
-    echo -e "${GREEN}║${NC}  1. cp env-config.example.yaml env-config.yaml and edit"
-    echo -e "${GREEN}║${NC}  2. Set commons_base/commons_services chart_version to the"
-    echo -e "${GREEN}║${NC}     Commons version you will use in production"
-    echo -e "${GREEN}║${NC}  3. ./env-cluster.sh --config env-config.yaml"
     echo -e "${GREEN}║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""

@@ -274,8 +274,7 @@ nfs_mount_path:  "/mnt/nfs"
 #   • external-PG superuser secret pulled from the storage node
 #
 # Commons (openg2p-commons-base + openg2p-commons-services) is NOT installed
-# by the automation — install those charts via the Rancher UI (recommended)
-# or optionally via openg2p-deployment/automation/environment.
+# by the automation — install those charts from the Rancher UI only.
 # Changelog (pick a version): https://openg2p.gitlab.io/versions/commons/CHANGELOG.html
 #
 # The env stage runs ON YOUR LAPTOP. It reaches the Kubernetes API through an

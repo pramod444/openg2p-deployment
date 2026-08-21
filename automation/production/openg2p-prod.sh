@@ -1107,23 +1107,18 @@ show_summary() {
       admin users directly in Rancher: ☰ → Users & Authentication → Users.
       (There is no external SSO for Rancher — it uses local auth only.)
 
-  STEP 5.  Install Commons (after environment scaffolding)
+  STEP 5.  Install Commons via Rancher UI (required)
 
-      Recommended: install via Rancher UI
+      Commons is installed from the Rancher UI only — not by these scripts.
+
         1. Rancher → Apps → Charts → openg2p-commons-base
         2. Then install openg2p-commons-services (same namespace)
         3. Point PostgreSQL at the storage node using secret commons-postgresql
-        4. To pick the latest Commons version, check the changelog:
+        4. To pick the Commons version, check the changelog:
            https://openg2p.gitlab.io/versions/commons/CHANGELOG.html
 
       If install_environment was false or env was skipped:
         ./openg2p-prod.sh --stage environment --config ${CONFIG_FILE##*/}
-
-      Optional — install Commons with scripts instead of the UI:
-        Go to: openg2p-deployment/automation/environment
-        Match the Commons chart version you plan for production in
-        env-config.yaml (commons_base / commons_services chart_version),
-        then run ./env-cluster.sh --config env-config.yaml.
 
 
 ══════════════════════════════════════════════════════════════════════════════
