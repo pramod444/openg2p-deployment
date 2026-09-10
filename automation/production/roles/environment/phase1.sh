@@ -7,7 +7,7 @@
 #   E1.2  Open SSH tunnel to Kubernetes API on compute + fetch kubeconfig
 #         (no Wireguard required — same SSH path as infra install)
 #   E1.3  Verify connectivity through the tunnel
-#   E1.4  Register OpenG2P Helm repos as Rancher CatalogV2 ClusterRepos
+#   E1.4  Register OpenG2P Helm repo as Rancher CatalogV2 ClusterRepo
 #   E1.5  Create env namespace
 #   E1.6  Create Rancher Project + move namespace into it
 #   E1.7  Create Istio Gateway for *.<base_domain>
@@ -18,11 +18,9 @@
 # Gated by install_environment in prod-config (default true).
 # =============================================================================
 
-# Rancher CatalogV2 ClusterRepos registered during env scaffolding:
-#   • openg2p         — GitHub Rancher-flavoured index (Apps catalog UI)
-#   • openg2p-gitlab  — GitLab Helm package registry (scripted / helm CLI)
+# Rancher CatalogV2 ClusterRepo registered during env scaffolding:
+#   • openg2p — GitHub Rancher-flavoured index (Apps catalog UI)
 OPENG2P_REPO_URL="https://openg2p.github.io/openg2p-helm/rancher"
-OPENG2P_GITLAB_REPO_URL="https://gitlab.com/api/v4/projects/84460547/packages/helm/stable"
 PG_SUPERUSER_FILE="/etc/openg2p/secrets/postgres-superuser.env"
 
 # ---------------------------------------------------------------------------
@@ -159,7 +157,7 @@ YAML
 }
 
 env_register_clusterrepo() {
-    log_step "E1.4" "Registering OpenG2P Helm repos in Rancher"
+    log_step "E1.4" "Registering OpenG2P Helm repo in Rancher"
 
     if ! wait_for_command "Rancher catalog API (catalog.cattle.io) ready" \
             "kubectl get clusterrepos.catalog.cattle.io" \
@@ -172,9 +170,8 @@ env_register_clusterrepo() {
     fi
 
     env_register_one_clusterrepo "openg2p" "$OPENG2P_REPO_URL" || exit 1
-    env_register_one_clusterrepo "openg2p-gitlab" "$OPENG2P_GITLAB_REPO_URL" || exit 1
 
-    log_info "Rancher UI → Apps → Repositories will reflect both within ~30s."
+    log_info "Rancher UI → Apps → Repositories will reflect it within ~30s."
 }
 
 # ---------------------------------------------------------------------------

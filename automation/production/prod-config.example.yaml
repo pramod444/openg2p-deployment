@@ -205,13 +205,13 @@ wg_peer_dns: ""              # [USER on-prem; AWS auto-fills]
 # ---------------------------------------------------------------------------
 # RKE2 / Kubernetes                                                     [USER]
 # ---------------------------------------------------------------------------
-rke2_version: "v1.33.6+rke2r1"
+rke2_version: "v1.35.8+rke2r1"
 rke2_token: ""        # auto-generated if blank
 
 # ---------------------------------------------------------------------------
 # Rancher                                                               [USER]
 # ---------------------------------------------------------------------------
-rancher_version:  "2.12.3"
+rancher_version:  "2.15.1"
 rancher_replicas: "1"
 
 # ---------------------------------------------------------------------------
@@ -268,9 +268,8 @@ nfs_mount_path:  "/mnt/nfs"
 # on the cluster:
 #
 #   • namespace + Rancher Project + Istio Gateway
-#   • OpenG2P Helm repos registered in Rancher (CatalogV2):
-#       openg2p         → https://openg2p.github.io/openg2p-helm/rancher
-#       openg2p-gitlab  → GitLab Helm package registry
+#   • OpenG2P Helm repo registered in Rancher (CatalogV2):
+#       openg2p → https://openg2p.github.io/openg2p-helm/rancher
 #   • external-PG superuser secret pulled from the storage node
 #
 # Commons (openg2p-commons-base + openg2p-commons-services) is NOT installed

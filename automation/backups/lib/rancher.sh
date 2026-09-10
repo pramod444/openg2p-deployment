@@ -50,8 +50,9 @@ rancher_install() {
     # rancher-charts publishes rancher-backup with the Rancher chart-version
     # scheme <chartVersion>+up<appVersion> — there is NO plain "7.0.0" chart, so
     # helm --version must be given a real chart version (e.g. 107.1.5+up8.1.5),
-    # NOT the operator app version. The pinned default targets Rancher 2.12.x /
-    # k8s 1.31–1.33; override per-cluster via versions.rancher_backup_chart.
+    # NOT the operator app version. Re-verify this pin against Rancher 2.15.x /
+    # k8s 1.34–1.36 (OpenG2P default: Rancher 2.15.1 / RKE2 v1.35.8+rke2r1);
+    # override per-cluster via versions.rancher_backup_chart.
     local chart_version="$(cfg versions.rancher_backup_chart 107.1.5+up8.1.5)"
     local resourceset_file="${BACKUPS_ROOT_DIR}/manifests/rancher-backup-resourceset.yaml"
     local schedule_file="${BACKUPS_ROOT_DIR}/manifests/rancher-backup-schedule.yaml"

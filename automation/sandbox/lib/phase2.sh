@@ -82,7 +82,7 @@ rancher_hostname: "${rancher_host}"
 node_ip: "$(cfg 'node_ip')"
 
 rancher:
-  version: "$(cfg 'rancher.version' '2.12.3')"
+  version: "$(cfg 'rancher.version' '2.15.1')"
   replicas: $(cfg 'rancher.replicas' '1')
 
 # Observability — Grafana Loki log store + its dedicated MinIO object store.

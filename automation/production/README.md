@@ -125,10 +125,9 @@ Top-level wrappers:
 
 Gated by `install_environment: true/false` in `prod-config.yaml`.
 
-During scaffolding the following Rancher CatalogV2 ClusterRepos are registered:
+During scaffolding the following Rancher CatalogV2 ClusterRepo is registered:
 
 - `openg2p` — `https://openg2p.github.io/openg2p-helm/rancher` (Apps UI)
-- `openg2p-gitlab` — `https://gitlab.com/api/v4/projects/84460547/packages/helm/stable`
 
 ## Commons installation (Rancher UI only)
 
