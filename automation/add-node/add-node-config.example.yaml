@@ -43,7 +43,7 @@ server_url: ""
 rke2_token: ""
 
 # RKE2 version — MUST match the existing cluster (rke2 --version).
-rke2_version: "v1.33.6+rke2r1"
+rke2_version: "v1.35.8+rke2r1"
 
 # ---------------------------------------------------------------------------
 # This new node

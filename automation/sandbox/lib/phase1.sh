@@ -156,7 +156,7 @@ phase1_step1_tools() {
     }
     log_success "Basic tools installed (wget, curl, jq, openssl, dig)."
 
-    install_kubectl "v1.33.6" || return 1
+    install_kubectl "v1.35.8" || return 1
 
     install_helm "3.17.3" || return 1
 
@@ -311,7 +311,7 @@ phase1_step3_rke2() {
 
     log_step "1.3" "Installing RKE2 Kubernetes cluster"
 
-    local rke2_version=$(cfg "rke2_version" "v1.33.6+rke2r1")
+    local rke2_version=$(cfg "rke2_version" "v1.35.8+rke2r1")
     local node_name=$(cfg "node_name" "node1")
     local node_ip=$(cfg "node_ip")
     local rke2_token=$(cfg "rke2_token" "openg2p-$(openssl rand -hex 16)")
