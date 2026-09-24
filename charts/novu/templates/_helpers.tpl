@@ -108,21 +108,7 @@ Return the proper image name (for the init container volume-permissions image)
 {{- end -}}
 
 {{/*
-Return the proper web image name
-*/}}
-{{- define "novu-web.image" -}}
-{{ include "common.images.image" (dict "imageRoot" .Values.web.image "global" .Values.global) }}
-{{- end -}}
-
-{{/*
-Return the proper image name (for the init container volume-permissions image)
-*/}}
-{{- define "novu-web.volumePermissions.image" -}}
-{{- include "common.images.image" ( dict "imageRoot" "global" .Values.global ) -}}
-{{- end -}}
-
-{{/*
-Return the proper dashboard image name (Novu 3.x; replaces web)
+Return the proper dashboard image name
 */}}
 {{- define "novu-dashboard.image" -}}
 {{ include "common.images.image" (dict "imageRoot" .Values.dashboard.image "global" .Values.global) }}
