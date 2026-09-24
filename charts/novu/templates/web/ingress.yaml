@@ -1,8 +1,9 @@
+{{- if .Values.web.enabled }}
 {{- if .Values.web.ingress.enabled }}
 apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
 kind: Ingress
 metadata:
-  name: {{ printf "%s-%s" .Release.Name "web"  }}
+  name: {{ include "novu.componentName" (dict "context" $ "component" "web")}}
   namespace: {{ include "common.names.namespace" . | quote }}
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     {{- if .Values.commonLabels }}
@@ -31,7 +32,7 @@ spec:
             {{- if eq "true" (include "common.ingress.supportsPathType" .) }}
             pathType: {{ .Values.web.ingress.pathType }}
             {{- end }}
-            backend: {{- include "common.ingress.backend" (dict "serviceName"  (printf "%s-%s" .Release.Name "web")  "servicePort" "http" "context" $)  | nindent 14 }}
+            backend: {{- include "common.ingress.backend" (dict "serviceName"  (include "novu.componentName" (dict "context" $ "component" "web"))  "servicePort" "http" "context" $)  | nindent 14 }}
     {{- end }}
     {{- range .Values.web.ingress.extraHosts }}
     - host: {{ include "common.tplvalues.render" ( dict "value" .name "context" $ ) }}
@@ -41,7 +42,7 @@ spec:
             {{- if eq "true" (include "common.ingress.supportsPathType" $) }}
             pathType: {{ default "ImplementationSpecific" .pathType }}
             {{- end }}
-            backend: {{- include "common.ingress.backend" (dict "serviceName"  (printf "%s-%s" .Release.Name "web")  "servicePort" "http" "context" $) | nindent 14 }}
+            backend: {{- include "common.ingress.backend" (dict "serviceName"  (include "novu.componentName" (dict "context" $ "component" "web"))  "servicePort" "http" "context" $) | nindent 14 }}
     {{- end }}
     {{- if .Values.web.ingress.extraRules }}
     {{- include "common.tplvalues.render" (dict "value" .Values.web.ingress.extraRules "context" $) | nindent 4 }}
@@ -57,4 +58,5 @@ spec:
     {{- include "common.tplvalues.render" (dict "value" .Values.web.ingress.extraTls "context" $) | nindent 4 }}
     {{- end }}
   {{- end }}
+{{- end }}
 {{- end }}

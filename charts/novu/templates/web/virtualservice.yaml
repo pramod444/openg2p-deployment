@@ -1,26 +1,32 @@
+{{- if .Values.web.enabled }}
+{{- if and .Values.web.istio.enabled .Values.web.istio.virtualservice.enabled }}
+{{- $webRoot := include "common.tplvalues.render" (dict "value" .Values.api.env.FRONT_BASE_URL "context" $) }}
+{{- $webHost := $webRoot | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}
+{{- $gateway := include "common.tplvalues.render" (dict "value" .Values.web.istio.virtualservice.gateway "context" $) }}
+{{- $destination := include "common.tplvalues.render" (dict "value" .Values.web.istio.virtualservice.destination "context" $) }}
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
-  name: {{ printf "%s-%s" .Release.Name "web"  }}
+  name: {{ include "novu.componentName" (dict "context" $ "component" "web")}}
   namespace: {{ include "common.names.namespace" . | quote }}
   labels: {{- include "common.labels.standard" . | nindent 4 }}
 spec:
   hosts:
-    - {{ (trimPrefix "https://" (trimPrefix "http://" .Values.api.env.FRONT_BASE_URL)) | trimSuffix "/" }}
+    - {{ $webHost }}
   gateways:
-    - {{ .Values.web.istio.virtualservice.gateway }}
+    - {{ $gateway }}
   http:
     - headers:
         request:
           set:
-            x-forwarded-host: "{{ (trimPrefix "https://" (trimPrefix "http://" .Values.api.env.FRONT_BASE_URL)) | trimSuffix "/" }}"
+            x-forwarded-host: {{ $webHost | quote }}
             x-forwarded-proto: "https"
       match:
         - authority:
-            exact: {{ (trimPrefix "https://" (trimPrefix "http://" .Values.api.env.FRONT_BASE_URL)) | trimSuffix "/" }}
+            exact: {{ $webHost }}
       route:
         - destination:
-            host: {{ .Values.web.istio.virtualservice.destination }}
+            host: {{ $destination }}
             port:
               number: {{ .Values.web.istio.virtualservice.destinationPort }}
       {{- if .Values.web.istio.virtualservice.prefix }}
@@ -32,3 +38,5 @@ spec:
       rewrite:
         uri: {{ .Values.web.istio.virtualservice.rewriteUri }}
       {{- end }}
+{{- end }}
+{{- end }}

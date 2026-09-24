@@ -76,7 +76,7 @@ api:
   image:
     registry: ghcr.io
     repository: novuhq/novu/api
-    tag: 2.3.0
+    tag: 3.19.0
     digest: ''
     ## Specify a imagePullPolicy
     ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
@@ -371,19 +371,19 @@ api:
     ## @param api.env.MONGO_MAX_POOL_SIZE The max pool size of the MongoDB connection
     ##
     MONGO_MAX_POOL_SIZE: 50
-    ##@param api.env.SECRET_FOR_NOVU_API
-    NOVU_SECRET_KEY: secret
+    ##@param api.env.SECRET_FOR_NOVU_API (stored on the chart secret as novu-secret-key when empty)
+    NOVU_SECRET_KEY: ''
 
   ## novu api ingress parameters
   ## ref: http://kubernetes.io/docs/user-guide/ingress/
   ##
   istio:
-    enabled: true
+    enabled: false
     virtualservice:
-      enabled: true
+      enabled: false
 #      host: "novu-api.loadtest.openg2p.org"
-      gateway: "internal"
-      destination: "novu-api"
+      gateway: '{{ include "novu.istio.gatewayName" . }}'
+      destination: '{{ .Release.Name }}-novu-api'
       destinationPort: 3000
       prefix: "/"
       rewriteUri: ""
@@ -506,7 +506,7 @@ worker:
   image:
     registry: ghcr.io
     repository: novuhq/novu/worker
-    tag: 2.3.0
+    tag: 3.19.0
     digest: ''
     ## Specify a imagePullPolicy
     ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
@@ -800,7 +800,7 @@ ws:
   image:
     registry: ghcr.io
     repository: novuhq/novu/ws
-    tag: 2.3.0
+    tag: 3.19.0
     digest: ''
     ## Specify a imagePullPolicy
     ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
@@ -1184,19 +1184,21 @@ ws:
   port: 3002
 
   istio:
-    enabled: true
+    enabled: false
     virtualservice:
-      enabled: true
+      enabled: false
 #      host: "novu-ws.loadtest.openg2p.org"
-      gateway: "internal"
-      destination: "novu-ws"
+      gateway: '{{ include "novu.istio.gatewayName" . }}'
+      destination: '{{ .Release.Name }}-novu-ws'
       destinationPort: 3002
       prefix: "/"
       rewriteUri: ""
 
-## @section Novu Web Parameters
+## @section Novu Web Parameters (legacy 2.x; disabled for 3.x — use dashboard)
 ##
 web:
+  ## @param web.enabled Deploy the legacy web UI. Novu 3.x uses dashboard instead.
+  enabled: false
   ## Novu image
   ## ref: https://github.com/orgs/novuhq/packages
   ## @param web.image.registry Novu image registry
@@ -1486,8 +1488,8 @@ web:
     virtualservice:
       enabled: true
 #      host: "novu.loadtest.openg2p.org"
-      gateway: "internal"
-      destination: "novu-web"
+      gateway: '{{ include "novu.istio.gatewayName" . }}'
+      destination: '{{ .Release.Name }}-novu-web'
       destinationPort: 4200
       prefix: "/"
       rewriteUri: ""
@@ -1728,21 +1730,70 @@ metrics:
     ##
     selector: {}
 
+## @section Novu Dashboard Parameters (3.x UI; replaces web)
+##
+dashboard:
+  enabled: true
+  image:
+    registry: ghcr.io
+    repository: novuhq/novu/dashboard
+    tag: 3.19.0
+    digest: ''
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  replicaCount: 1
+  port: 4000
+  apiExternalEndpoint: https://novu-api.loadtest.openg2p.org
+  wsExternalEndpoint: https://novu-ws.loadtest.openg2p.org
+  extraEnvVars: []
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits: {}
+  istio:
+    enabled: false
+    virtualservice:
+      enabled: false
+      gateway: '{{ include "novu.istio.gatewayName" . }}'
+      destination: '{{ .Release.Name }}-novu-dashboard'
+      destinationPort: 4000
+
+## @section Shared Istio Gateway (API + WS + dashboard hosts)
+##
+istio:
+  gateway:
+    enabled: false
+    ## Default name: {{ .Release.Name }}-novu
+    name: ''
+    selector:
+      istio: ingressgateway
+    ## Empty means derive hosts from API_ROOT_URL, dashboard.wsExternalEndpoint, FRONT_BASE_URL
+    hosts: []
+
 ##@section Secrets definition
 ##
+## Leave empty to let the chart create Release.Name-novu (common.names.fullname).
 existingSecret: ''
+## Optional pre-seeded API key. The commons overlay Job writes this when empty.
+notificationApiKey: ''
+
+## First dashboard admin. Password is generated (plus Aa1!) unless set here.
+## Novu requires 8-64 chars with upper, lower, digit, and one of #?!@$%^&*()-
+bootstrap:
+  email: admin@openg2p.org
+  password: ''
 
 jwt:
-  ## @param jwt.secret The secret keybase which is used to encrypt / verify the tokens issued for authentication
-  ## Please change this for production use !
-  ##
-  secret: your-secret
+  ## @param jwt.secret JWT secret; empty means auto-generate into the chart secret
+  secret: ''
 
 store:
-  ## @param store.encryption-key The encryption key used to encrypt/decrypt provider credentials
-  ## Please change this for production use !
-  ##
-  encryption-key: '' # you need to change this !
+  ## @param store.encryption-key Provider credential encryption key; empty means auto-generate
+  encryption-key: ''
 
 ## @section Mongodb configuration
 ##
@@ -1760,12 +1811,17 @@ mongodb:
   architecture: standalone
   auth:
     enabled: true
+    # Parent-managed secret so an empty passwords list still renders.
+    # Holds mongodb-root-password, mongodb-passwords, and mongoUrl.
+    manageSecret: true
+    existingSecret: '{{ .Release.Name }}-novu-mongodb'
     usernames:
-      - novu_user
-    passwords:
-      - hshjhb8dhcbh # you need to change this !
+      - novu
+    # Used when passwords is empty. Blank means generate mongodb-passwords.
+    password: ''
+    passwords: []
     databases:
-      - novu_db
+      - novu
 
 ## @section Redis configuration
 ##
@@ -1778,10 +1834,15 @@ mongodb:
 ## refhttps://docs.bitnami.com/kubernetes/infrastructure/redis/get-started/understand-cluster-topologies/
 redis:
   enabled: true
+  nameOverride: novu-redis
   architecture: standalone
+  image:
+    registry: docker.io
+    repository: openg2p/redis
+    tag: 7.2.5-debian-12-r4
   auth:
     enabled: true
-    password: hshjhb8dhcbh # you need to change this !
+    password: 
 
 ## @section Localstack (S3) configuration
 ##
