@@ -860,4 +860,3 @@ aws_resolve_destroy_target() {
         echo "  Invalid selection, try again." >&2
     done
 }
-

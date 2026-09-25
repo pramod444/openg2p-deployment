@@ -1424,7 +1424,7 @@ redis:
     tag: 7.2.5-debian-12-r4
   auth:
     enabled: true
-    password: 
+    password:
 
 ## @section Localstack (S3) configuration
 ##
