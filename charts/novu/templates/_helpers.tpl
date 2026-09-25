@@ -6,6 +6,13 @@ Return the proper Docker Image Registry Secret Names
 {{- end -}}
 
 {{/*
+Workload name: <release>-novu-<component>, e.g. commons-novu-api.
+*/}}
+{{- define "novu.componentName" -}}
+{{- printf "%s-novu-%s" .context.Release.Name .component | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
 Return the full name of the chart
 */}}
 {{- define "novu.fullname" -}}
@@ -101,17 +108,32 @@ Return the proper image name (for the init container volume-permissions image)
 {{- end -}}
 
 {{/*
-Return the proper web image name
+Return the proper dashboard image name
 */}}
-{{- define "novu-web.image" -}}
-{{ include "common.images.image" (dict "imageRoot" .Values.web.image "global" .Values.global) }}
+{{- define "novu-dashboard.image" -}}
+{{ include "common.images.image" (dict "imageRoot" .Values.dashboard.image "global" .Values.global) }}
 {{- end -}}
 
 {{/*
-Return the proper image name (for the init container volume-permissions image)
+Secret that holds jwt / store encryption / admin bootstrap / api-key.
 */}}
-{{- define "novu-web.volumePermissions.image" -}}
-{{- include "common.images.image" ( dict "imageRoot" "global" .Values.global ) -}}
+{{- define "novu.secretName" -}}
+{{- if .Values.existingSecret -}}
+{{- .Values.existingSecret -}}
+{{- else -}}
+{{- include "common.names.fullname" . -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Istio Gateway name for API / WS / dashboard hosts.
+*/}}
+{{- define "novu.istio.gatewayName" -}}
+{{- if .Values.istio.gateway.name -}}
+{{- include "common.tplvalues.render" (dict "value" .Values.istio.gateway.name "context" $) -}}
+{{- else -}}
+{{- printf "%s-novu" .Release.Name -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -235,7 +257,13 @@ Return mongodb username
 */}}
 {{- define "novu.mongodb.password" -}}
 {{- if .Values.mongodb.enabled -}}
-    {{- print (index .Values.mongodb.auth.passwords 0) -}}
+    {{- $passwords := .Values.mongodb.auth.passwords | default (list) -}}
+    {{- if gt (len $passwords) 0 -}}
+        {{- print (index $passwords 0) -}}
+    {{- else -}}
+        {{- $secretName := include "novu.mongodb.authSecretName" . -}}
+        {{- include "common.secrets.passwords.manage" (dict "secret" $secretName "key" "mongodb-passwords" "providedValues" (list "mongodb.auth.password") "length" 16 "strong" false "skipQuote" true "context" $) | trim -}}
+    {{- end -}}
 {{- else -}}
     {{- print .Values.externalDatabase.password -}}
 {{- end -}}
@@ -256,13 +284,24 @@ Return mongodb username
 {{/*
 Return mongodb secretName
 */}}
+{{- define "novu.mongodb.authSecretName" -}}
+{{- if .Values.mongodb.auth.existingSecret -}}
+    {{- include "common.tplvalues.render" (dict "value" .Values.mongodb.auth.existingSecret "context" $) -}}
+{{- else -}}
+    {{- printf "%s-url-mongodb" (include "common.names.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return mongodb secretName
+*/}}
 {{- define "novu.mongodb.secretName" -}}
 {{- if and (not .Values.externalDatabase.existingSecret) (not .Values.mongodb.auth.existingSecret) }}
     {{- printf "%s-url-mongodb" (include "common.names.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- else if .Values.externalDatabase.existingSecret -}}
     {{- printf "%s" .Values.externalDatabase.existingSecret -}}
 {{- else if .Values.mongodb.auth.existingSecret -}}
-    {{- printf "%s" .Values.mongodb.auth.existingSecret -}}
+    {{- include "novu.mongodb.authSecretName" . -}}
 {{- end -}}
 {{- end -}}
 
@@ -317,6 +356,6 @@ Return the MongoDB Secret Name
 {{- else if .Values.externalS3.existingSecret -}}
     {{- printf "%s" .Values.externalS3.existingSecret -}}
 {{- else -}}
-    {{- printf "%s-externals3" (include "common.names.fullname" .) | trunc 63 | trimSuffix "-" -}}
+    {{- include "novu.componentName" (dict "context" $ "component" "externals3") -}}
 {{- end -}}
 {{- end -}}
