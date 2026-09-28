@@ -137,7 +137,7 @@ UI after Wireguard is up and you can reach Rancher:
 1. Rancher → Apps → Charts → `openg2p-commons-base`
 2. Then install `openg2p-commons-services` (same namespace)
 3. Point PostgreSQL at the storage private IP using secret `commons-postgresql`
-4. Pick the Commons version from the changelog:  
+4. Pick the Commons version from the changelog:
    https://openg2p.gitlab.io/versions/commons/CHANGELOG.html
 
 Do **not** use `automation/environment/` or Helm CLI scripts to install Commons
