@@ -108,7 +108,7 @@ spec:
             - name: NOVU_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "novu.secretName" . }}
+                  name: {{ include "novu.secretName" . | quote }}
                   key: novu-secret-key
             - name: REDIS_HOST
               value : "{{ include "novu.redis.host" .}}"
@@ -169,12 +169,12 @@ spec:
             - name: JWT_SECRET
               valueFrom :
                 secretKeyRef:
-                  name: {{ if .Values.existingSecret -}} {{ .Values.existingSecret }} {{- else -}} {{ include "common.names.fullname" . }} {{- end }}
+                  name: {{ include "novu.secretName" . | quote }}
                   key: jwt-secret
             - name: STORE_ENCRYPTION_KEY
               valueFrom :
                 secretKeyRef:
-                  name: {{ if .Values.existingSecret -}} {{ .Values.existingSecret }} {{- else -}} {{ include "common.names.fullname" . }} {{- end }}
+                  name: {{ include "novu.secretName" . | quote }}
                   key: store-encryption-key
             {{- if .Values.api.extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" .Values.api.extraEnvVars "context" $) | nindent 12 }}
