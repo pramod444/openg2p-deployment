@@ -108,7 +108,7 @@ spec:
             - name: NOVU_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "novu.secretName" . }}
+                  name: {{ include "novu.secretName" . | quote }}
                   key: novu-secret-key
             - name: REDIS_HOST
               value : "{{ include "novu.redis.host" .}}"
@@ -155,26 +155,30 @@ spec:
                 secretKeyRef:
                   name: {{ include "novu.s3.secretName" . }}
                   key: region
+            {{- if not (include "novu.extraEnvHas" (dict "name" "AWS_ACCESS_KEY_ID" "items" .Values.api.extraEnvVars)) }}
             - name: AWS_ACCESS_KEY_ID
               valueFrom :
                 secretKeyRef:
                   name: {{ include "novu.s3.secretName" . }}
                   key: accessKey
+            {{- end }}
+            {{- if not (include "novu.extraEnvHas" (dict "name" "AWS_SECRET_ACCESS_KEY" "items" .Values.api.extraEnvVars)) }}
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom :
                 secretKeyRef:
                   name: {{ include "novu.s3.secretName" . }}
                   key: secretKey
             {{- end }}
+            {{- end }}
             - name: JWT_SECRET
               valueFrom :
                 secretKeyRef:
-                  name: {{ if .Values.existingSecret -}} {{ .Values.existingSecret }} {{- else -}} {{ include "common.names.fullname" . }} {{- end }}
+                  name: {{ include "novu.secretName" . | quote }}
                   key: jwt-secret
             - name: STORE_ENCRYPTION_KEY
               valueFrom :
                 secretKeyRef:
-                  name: {{ if .Values.existingSecret -}} {{ .Values.existingSecret }} {{- else -}} {{ include "common.names.fullname" . }} {{- end }}
+                  name: {{ include "novu.secretName" . | quote }}
                   key: store-encryption-key
             {{- if .Values.api.extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" .Values.api.extraEnvVars "context" $) | nindent 12 }}

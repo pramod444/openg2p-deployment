@@ -119,7 +119,7 @@ Secret that holds jwt / store encryption / admin bootstrap / api-key.
 */}}
 {{- define "novu.secretName" -}}
 {{- if .Values.existingSecret -}}
-{{- .Values.existingSecret -}}
+{{- include "common.tplvalues.render" (dict "value" .Values.existingSecret "context" $) -}}
 {{- else -}}
 {{- include "common.names.fullname" . -}}
 {{- end -}}
@@ -262,7 +262,8 @@ Return mongodb username
         {{- print (index $passwords 0) -}}
     {{- else -}}
         {{- $secretName := include "novu.mongodb.authSecretName" . -}}
-        {{- include "common.secrets.passwords.manage" (dict "secret" $secretName "key" "mongodb-passwords" "providedValues" (list "mongodb.auth.password") "length" 16 "strong" false "skipQuote" true "context" $) | trim -}}
+        {{- /* manage returns a quoted base64 string. Decode once so db-secrets does not encode it again on upgrade. */ -}}
+        {{- include "common.secrets.passwords.manage" (dict "secret" $secretName "key" "mongodb-passwords" "providedValues" (list "mongodb.auth.password") "length" 16 "strong" false "context" $) | trimAll "\"" | b64dec -}}
     {{- end -}}
 {{- else -}}
     {{- print .Values.externalDatabase.password -}}
@@ -345,6 +346,20 @@ Return s3 secretKey
 {{- else -}}
     {{- print .Values.externalS3.region  -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+True when extraEnvVars already sets this env name, so the chart must not emit it again.
+*/}}
+{{- define "novu.extraEnvHas" -}}
+{{- $name := .name -}}
+{{- $hit := dict "v" false -}}
+{{- range (.items | default (list)) -}}
+{{- if eq (toString .name) $name -}}
+{{- $_ := set $hit "v" true -}}
+{{- end -}}
+{{- end -}}
+{{- if index $hit "v" -}}true{{- end -}}
 {{- end -}}
 
 {{/*
