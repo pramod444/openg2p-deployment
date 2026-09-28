@@ -349,6 +349,20 @@ Return s3 secretKey
 {{- end -}}
 
 {{/*
+True when extraEnvVars already sets this env name, so the chart must not emit it again.
+*/}}
+{{- define "novu.extraEnvHas" -}}
+{{- $name := .name -}}
+{{- $hit := dict "v" false -}}
+{{- range (.items | default (list)) -}}
+{{- if eq (toString .name) $name -}}
+{{- $_ := set $hit "v" true -}}
+{{- end -}}
+{{- end -}}
+{{- if index $hit "v" -}}true{{- end -}}
+{{- end -}}
+
+{{/*
 Return the MongoDB Secret Name
 */}}
 {{- define "novu.s3.secretName" -}}

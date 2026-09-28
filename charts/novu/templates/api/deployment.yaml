@@ -155,16 +155,20 @@ spec:
                 secretKeyRef:
                   name: {{ include "novu.s3.secretName" . }}
                   key: region
+            {{- if not (include "novu.extraEnvHas" (dict "name" "AWS_ACCESS_KEY_ID" "items" .Values.api.extraEnvVars)) }}
             - name: AWS_ACCESS_KEY_ID
               valueFrom :
                 secretKeyRef:
                   name: {{ include "novu.s3.secretName" . }}
                   key: accessKey
+            {{- end }}
+            {{- if not (include "novu.extraEnvHas" (dict "name" "AWS_SECRET_ACCESS_KEY" "items" .Values.api.extraEnvVars)) }}
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom :
                 secretKeyRef:
                   name: {{ include "novu.s3.secretName" . }}
                   key: secretKey
+            {{- end }}
             {{- end }}
             - name: JWT_SECRET
               valueFrom :
