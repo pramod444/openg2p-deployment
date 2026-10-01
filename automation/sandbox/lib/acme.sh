@@ -406,8 +406,11 @@ acme_wait_dns_propagation() {
     while [[ $elapsed -lt $timeout ]]; do
         local all_ok=true r status
         for r in $resolvers; do
+            # A dig timeout prints no "status:" line; without `|| true`,
+            # grep's non-zero exit trips `set -eo pipefail` and silently
+            # aborts the whole run instead of retrying.
             status=$(dig "@${r}" +noall +comments +time=5 +tries=1 A "$fqdn" 2>/dev/null \
-                     | grep -o "status: [A-Z]*" | head -1 | awk '{print $2}')
+                     | grep -o "status: [A-Z]*" | head -1 | awk '{print $2}') || true
             # NOERROR means the name exists (with or without an A record).
             # NXDOMAIN means a resolver still has the negative answer cached.
             if [[ "$status" != "NOERROR" ]]; then
@@ -591,7 +594,7 @@ acme_issue_cert() {
     if [[ $rc -ne 0 && $rc -ne 2 ]]; then
         log_error "Certificate issuance failed for ${primary}" \
                   "acme.sh exited with status ${rc}" \
-                  "Common causes: wrong DNS API token, the domain is not in that DNS account, or no outbound internet access" \
+                  "If the output above says 'No TXT record found' or 'secondary validation', a Let's Encrypt resolver has a stale negative (NXDOMAIN) answer cached: wait for the zone's negative TTL to expire (dig SOA ${primary#*.} — last field, 3600s on deSEC) and re-run; already-validated names are reused. Otherwise check the DNS API token, that the domain is in that DNS account, and outbound internet access." \
                   "${ACME_BIN} --issue --dns ${hook} -d ${primary} --server letsencrypt --home ${ACME_HOME} --config-home ${ACME_CONFIG_HOME} --debug"
         return 1
     fi
