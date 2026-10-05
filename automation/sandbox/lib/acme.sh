@@ -566,10 +566,13 @@ acme_issue_cert() {
     # points, against both deSEC nameservers — still reported "No TXT record
     # found" ~24s after the write. --dnssleep replaces that check with a flat
     # wait, which is slower but far more reliable on a freshly created name.
+    # deSEC's ns2.desec.org has been measured serving a new TXT ~100s after
+    # ns1, and Let's Encrypt may query a further-away anycast node, so 120s is
+    # not enough margin.
     #
     # Set tls.dns_propagation_seconds: 0 to restore acme.sh's adaptive check.
     local dns_sleep
-    dns_sleep=$(cfg 'tls.dns_propagation_seconds' '120')
+    dns_sleep=$(cfg 'tls.dns_propagation_seconds' '300')
     if [[ "$dns_sleep" != "0" ]]; then
         extra_args+=(--dnssleep "$dns_sleep")
         log_info "  Allowing ${dns_sleep}s for DNS propagation before validation."
