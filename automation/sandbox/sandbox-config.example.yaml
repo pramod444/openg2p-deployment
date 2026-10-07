@@ -110,8 +110,9 @@ tls:
   # deSEC nameservers and clear any short-lived negative cache; validating too
   # early fails with "No TXT record found" and burns a validation attempt
   # (Let's Encrypt allows only 5 failures per hostname per hour).
-  # Set to 0 to use acme.sh's adaptive DNS-over-HTTPS check instead.
-  dns_propagation_seconds: 120
+  # deSEC's second nameserver can lag ~100s behind the first, so keep a
+  # generous margin. Set to 0 to use acme.sh's adaptive DNS-over-HTTPS check.
+  dns_propagation_seconds: 300
 
   # Let's Encrypt STAGING: untrusted certificates, but very generous rate
   # limits. Use it while testing repeated installs, then set false and re-run

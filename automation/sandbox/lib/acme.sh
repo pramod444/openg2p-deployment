@@ -406,8 +406,11 @@ acme_wait_dns_propagation() {
     while [[ $elapsed -lt $timeout ]]; do
         local all_ok=true r status
         for r in $resolvers; do
+            # A dig timeout prints no "status:" line; without `|| true`,
+            # grep's non-zero exit trips `set -eo pipefail` and silently
+            # aborts the whole run instead of retrying.
             status=$(dig "@${r}" +noall +comments +time=5 +tries=1 A "$fqdn" 2>/dev/null \
-                     | grep -o "status: [A-Z]*" | head -1 | awk '{print $2}')
+                     | grep -o "status: [A-Z]*" | head -1 | awk '{print $2}') || true
             # NOERROR means the name exists (with or without an A record).
             # NXDOMAIN means a resolver still has the negative answer cached.
             if [[ "$status" != "NOERROR" ]]; then
@@ -563,10 +566,13 @@ acme_issue_cert() {
     # points, against both deSEC nameservers — still reported "No TXT record
     # found" ~24s after the write. --dnssleep replaces that check with a flat
     # wait, which is slower but far more reliable on a freshly created name.
+    # deSEC's ns2.desec.org has been measured serving a new TXT ~100s after
+    # ns1, and Let's Encrypt may query a further-away anycast node, so 120s is
+    # not enough margin.
     #
     # Set tls.dns_propagation_seconds: 0 to restore acme.sh's adaptive check.
     local dns_sleep
-    dns_sleep=$(cfg 'tls.dns_propagation_seconds' '120')
+    dns_sleep=$(cfg 'tls.dns_propagation_seconds' '300')
     if [[ "$dns_sleep" != "0" ]]; then
         extra_args+=(--dnssleep "$dns_sleep")
         log_info "  Allowing ${dns_sleep}s for DNS propagation before validation."
@@ -591,7 +597,7 @@ acme_issue_cert() {
     if [[ $rc -ne 0 && $rc -ne 2 ]]; then
         log_error "Certificate issuance failed for ${primary}" \
                   "acme.sh exited with status ${rc}" \
-                  "Common causes: wrong DNS API token, the domain is not in that DNS account, or no outbound internet access" \
+                  "If the output above says 'No TXT record found' or 'secondary validation', a Let's Encrypt resolver has a stale negative (NXDOMAIN) answer cached: wait for the zone's negative TTL to expire (dig SOA ${primary#*.} — last field, 3600s on deSEC) and re-run; already-validated names are reused. Otherwise check the DNS API token, that the domain is in that DNS account, and outbound internet access." \
                   "${ACME_BIN} --issue --dns ${hook} -d ${primary} --server letsencrypt --home ${ACME_HOME} --config-home ${ACME_CONFIG_HOME} --debug"
         return 1
     fi

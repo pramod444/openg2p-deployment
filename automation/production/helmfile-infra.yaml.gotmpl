@@ -466,23 +466,49 @@ releases:
           replicas: 1
           rootUser: {{ .Values.loki.minio.rootUser | quote }}
           rootPassword: {{ .Values.loki.minio.rootPassword | quote }}
+          # MinIO's own images (docker.io/minio/*, quay.io/minio/*) are no
+          # longer publicly pullable. openg2p/minio is a Bitnami-based build
+          # (minio + mc on PATH) that serves both the server and the chart's
+          # bucket post-job. It has no /usr/bin/docker-entrypoint.sh, which the
+          # subchart's fixed command calls — the shim below provides it.
+          image:
+            repository: docker.io/openg2p/minio
+            tag: "2023.12.23-debian-11-r2"
+          mcImage:
+            repository: docker.io/openg2p/minio
+            tag: "2023.12.23-debian-11-r2"
+          extraVolumes:
+            - name: minio-entrypoint-shim
+              configMap:
+                name: loki-minio-entrypoint-shim
+                defaultMode: 0755
+          extraVolumeMounts:
+            - name: minio-entrypoint-shim
+              mountPath: /usr/bin/docker-entrypoint.sh
+              subPath: docker-entrypoint.sh
           persistence:
             enabled: true
             size: {{ .Values.loki.minio.size | default "50Gi" | quote }}
-          buckets:
-            - name: chunks
-              policy: none
-              purge: false
-            - name: ruler
-              policy: none
-              purge: false
-            - name: admin
-              policy: none
-              purge: false
+          # Empty buckets/users stop the subchart rendering its post-job, whose
+          # scripts hardcode /usr/bin/mc (absent in the Bitnami-based image).
+          # The loki-minio-buckets release creates chunks/ruler/admin instead;
+          # Loki authenticates with the root user, so no extra users are needed.
+          buckets: []
+          users: []
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
+        extraObjects:
+          - apiVersion: v1
+            kind: ConfigMap
+            metadata:
+              name: loki-minio-entrypoint-shim
+              namespace: observability
+            data:
+              docker-entrypoint.sh: |
+                #!/bin/sh
+                exec "$@"
         # Trim the footprint — these are optional extras for large clusters.
         chunksCache:
           enabled: false
@@ -525,21 +551,21 @@ releases:
                   restartPolicy: OnFailure
                   containers:
                     - name: mc
-                      # docker.io/minio/mc is no longer publicly pullable;
-                      # use the same quay.io image the Loki MinIO chart uses.
-                      image: quay.io/minio/mc:RELEASE.2024-04-18T16-45-29Z
+                      # Same image as the Loki MinIO subchart (includes mc).
+                      image: docker.io/openg2p/minio:2023.12.23-debian-11-r2
                       env:
                         - name: HOME
                           value: /tmp
                       command: ["sh", "-c"]
+                      # This mc release rejects single-letter alias names.
                       args:
                         - >
-                          until mc alias set m http://loki-minio.observability.svc:9000
+                          until mc alias set lokiminio http://loki-minio.observability.svc:9000
                           {{ .Values.loki.minio.rootUser | quote }}
                           {{ .Values.loki.minio.rootPassword | quote }}; do
                           echo "waiting for minio..."; sleep 5; done &&
-                          mc mb -p m/chunks m/ruler m/admin &&
-                          mc ls m
+                          mc mb -p lokiminio/chunks lokiminio/ruler lokiminio/admin &&
+                          mc ls lokiminio
 
   # --- OpenTelemetry Collector — gateway (Deployment) ------------------------
   # Receives OTLP from the agents, batches, and pushes to Loki's OTLP endpoint.
