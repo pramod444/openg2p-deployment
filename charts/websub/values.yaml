@@ -355,6 +355,11 @@ istio:
 kafka:
   enabled: true
   nameOverride: websub-kafka
+  # docker.io/bitnami/kafka:3.7.1-debian-12-r4 is no longer published.
+  # Commons already mirrors that tag as openg2p/kafka.
+  image:
+    repository: openg2p/kafka
+    tag: 3.7.1-debian-12-r4
   heapOpts: ""
   extraConfig: |-
     default.replication.factor=1
@@ -367,6 +372,8 @@ kafka:
     heapOpts: ""
     replicaCount: 1
     resourcesPreset: "none"
+    persistence:
+      enabled: false
   broker:
     heapOpts: ""
     persistence:
@@ -541,15 +548,26 @@ consolidator:
   startUpCommand: |-
     #!/usr/bin/env bash
     echo "==> Copying Configs"
-    envsubst < {{ tpl .Values.consolidator.configTomlMountPath $ }} > Config.toml
+    # mosipid/consolidator-websub-service:1.3.2 has bash, not envsubst or nc.
+    src="{{ tpl .Values.consolidator.configTomlMountPath $ }}"
+    awk '{
+      while (match($0, /\$\{[A-Za-z_][A-Za-z0-9_]*\}/)) {
+        key = substr($0, RSTART + 2, RLENGTH - 3)
+        cmd = "printf %s \"${" key "}\""
+        cmd | getline val
+        close(cmd)
+        $0 = substr($0, 1, RSTART - 1) val substr($0, RSTART + RLENGTH)
+      }
+      print
+    }' "$src" > Config.toml
     echo "==> Waiting for kafka"
     RETRY_COUNT=0
     while :; do
-      if nc -z ${KAFKA_BOOTSTRAP_HOSTNAME} ${KAFKA_PORT} ; then
+      if bash -c "echo >/dev/tcp/${KAFKA_BOOTSTRAP_HOSTNAME}/${KAFKA_PORT}" 2>/dev/null; then
         break
       elif [ $RETRY_COUNT -ne 200 ]; then
-        ((RETRY_COUNT++))
-        sleep 1s
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        sleep 1
       else
         echo "Could not connect to Kafka even after retries..."
         exit 1
@@ -571,8 +589,6 @@ envVars:
   KAFKA_BOOTSTRAP_SERVER: '{{ tpl .Values.envVars.KAFKA_BOOTSTRAP_HOSTNAME $ }}:{{ tpl .Values.envVars.KAFKA_PORT $ }}'
   CONSOLIDATOR_URL: 'http://{{ include "common.names.fullname" . }}-consolidator'
   CONSOLIDATOR_HEALTH_ENDPOINT: '/consolidator/actuator/health'
-  SECURITY_JWT_ISSUER: '{{ tpl .Values.global.keycloakBaseUrl $ }}/realms/master'
-  SECURITY_JWT_ISSUER_JWKS_URL: '{{ tpl .Values.envVars.SECURITY_JWT_ISSUER $ }}/protocol/openid-connect/certs'
 
 envVarsFrom:
   hub_secret_encryption_key:
@@ -586,12 +602,6 @@ configToml: |-
   [kafkaHub.config]
   # Flag to check whether to enable/disable security
   SECURITY_ON = true
-
-  # Security: JWT Issuer URL
-  SECURITY_JWT_ISSUER = "${SECURITY_JWT_ISSUER}";
-
-  # Security: JWKS Url for the configured issuer
-  SECURITY_JWT_ISSUER_JWKS_URL = "${SECURITY_JWT_ISSUER_JWKS_URL}";
 
   # Server ID is is used to uniquely identify each server
   # Each server must have a unique ID
@@ -686,22 +696,33 @@ configToml: |-
 startUpCommand: |-
   #!/usr/bin/env bash
   echo "==> Copying Configs"
-  envsubst < {{ tpl .Values.consolidator.configTomlMountPath $ }} > Config.toml
+  # mosipid/websub-service:1.3.2 has bash and wget, not envsubst, nc, or curl.
+  src="{{ tpl .Values.configTomlMountPath $ }}"
+  awk '{
+    while (match($0, /\$\{[A-Za-z_][A-Za-z0-9_]*\}/)) {
+      key = substr($0, RSTART + 2, RLENGTH - 3)
+      cmd = "printf %s \"${" key "}\""
+      cmd | getline val
+      close(cmd)
+      $0 = substr($0, 1, RSTART - 1) val substr($0, RSTART + RLENGTH)
+    }
+    print
+  }' "$src" > Config.toml
   echo "==> Waiting for kafka"
   RETRY_COUNT=0
   while :; do
-    if nc -z ${KAFKA_BOOTSTRAP_HOSTNAME} ${KAFKA_PORT} ; then
+    if bash -c "echo >/dev/tcp/${KAFKA_BOOTSTRAP_HOSTNAME}/${KAFKA_PORT}" 2>/dev/null; then
       break
     elif [ $RETRY_COUNT -ne 200 ]; then
-      ((RETRY_COUNT++))
-      sleep 1s
+      RETRY_COUNT=$((RETRY_COUNT + 1))
+      sleep 1
     else
       echo "Could not connect to Kafka even after retries..."
       exit 1
     fi
   done
   echo "==> Waiting for consolidator"
-  if ! curl -I -s -o /dev/null -m 10 --retry 100 --retry-delay 10 --retry-all-errors "${CONSOLIDATOR_URL}${CONSOLIDATOR_HEALTH_ENDPOINT}"; then
+  if ! wget -q -O /dev/null --timeout=10 --tries=100 --waitretry=10 "${CONSOLIDATOR_URL}${CONSOLIDATOR_HEALTH_ENDPOINT}"; then
     echo "Failed connecting with consolidator after max retries..."
     exit 1
   fi
