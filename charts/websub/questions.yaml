@@ -1,0 +1,20 @@
+questions:
+- variable: hostname
+  description: Hostname under which WebSub should be accessible
+  type: string
+  label: WebSub Hostname
+
+- variable: global.keycloakBaseUrl
+  description: Required for API auth validation.
+  type: string
+  label: Keycloak Base URL
+
+- variable: kafka.enabled
+  type: boolean
+  label: Install Kafka along with WebSub?
+
+- variable: kafkaInstallationName
+  description: Name of existing Kafka Service or Statefulset
+  type: string
+  label: Existing Kafka Installation Name
+  show_if: "kafka.enabled=false"
